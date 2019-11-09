@@ -41,7 +41,9 @@ YouTube API).
 
 * If all data is sufficiently declared, then we can also generate:
 ** Specs
+** Database migrations, SQL, Datomic, etc.
 ** Data Resolvers (for the local domain database at least)
+** CRUD mutations
 ** Form UI (with a bit more declaration)
 *** Correctly display/hide/make readonly fields
 *** Fully automatic CRUD (even with nested sub-forms)
