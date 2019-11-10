@@ -12,6 +12,7 @@
 (defattr id :uuid
   ::attr/spec uuid?
   ::attr/unique :identity
+  ::attr/index? true
   ::attr/required? true
   ::db/id :production)
 

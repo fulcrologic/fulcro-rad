@@ -58,9 +58,11 @@
 (>def ::type #{:string :uuid :int :inst :ref :keyword})
 (>def ::spec any?)
 (>def ::qualified-key qualified-keyword?)
+(>def ::index? boolean?)
+(>def ::component? boolean?)
 (>def ::attribute (s/keys
                     :req [::type ::qualified-key]
-                    :opt [::spec]))
+                    :opt [::index? ::component? ::spec]))
 
 ;;(comment
 ;;  (defattr phone-number

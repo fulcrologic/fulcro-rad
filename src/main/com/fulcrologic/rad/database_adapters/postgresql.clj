@@ -66,7 +66,7 @@
           (keep
             (fn [{::attr/keys [qualified-key type target unique cardinality]}]
               (if (or (nil? cardinality) (= cardinality :one))
-                (let [column-name      (csk/->snake_case (name (log/spy :info qualified-key)))
+                (let [column-name      (csk/->snake_case (name qualified-key))
                       target-attribute (when target
                                          (schema/find-attribute schema target))
                       target-column    (attr->column-name target-attribute)
@@ -80,13 +80,13 @@
 (defrecord PostgreSQLAdapter [database-id]
   dba/DBAdapter
   (-diff->migration [this old-schema new-schema]
-    (let [diff (schema/schema-diff database-id old-schema new-schema)
-          {::schema/keys [new-entities]} diff
-          [newc newu] (new-entities->migration new-schema new-entities)]
-      (str/join "" [newc newu]))))
+    (str
+      "BEGIN;\n"
+      (let [diff (schema/schema-diff database-id old-schema new-schema)
+            {::schema/keys [new-entities]} diff
+            [newc newu] (new-entities->migration new-schema new-entities)]
+        (str/join "" [newc newu]))
+      "\nCOMMIT;\n")))
 
-(comment
-  (satisfies? dba/DBAdapter (->PostgreSQLAdapter :a))
 
-  )
 

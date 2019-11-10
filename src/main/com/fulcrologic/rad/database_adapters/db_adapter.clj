@@ -12,10 +12,7 @@
   "Convert a schema diff to a migration using the specified db adapter."
   [dbadapter old-schema new-schema]
   [::adapter ::schema/schema ::schema/schema => any?]
-  (str
-    "BEGIN;\n"
-    (-diff->migration dbadapter old-schema new-schema)
-    "COMMIT;\n"))
+  (-diff->migration dbadapter old-schema new-schema))
 
 
 
