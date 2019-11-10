@@ -6,6 +6,7 @@
 
 (>def ::id (s/with-gen keyword? #(s/gen #{:production :authorization})))
 (>def ::variant (s/with-gen keyword? #(s/gen #{:postgresql :mysql :h2})))
+(>def ::naming #{:snake_case :kebab-case :CamelCase})
 (>def ::migration-generator ifn?)
 (>def ::url string?)
 

@@ -2,42 +2,65 @@
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     [clojure.spec.alpha :as s]
+    [com.fulcrologic.guardrails.core :as gr :refer [>defn => >def >fdef]]
     [com.fulcrologic.fulcro.components :as comp]
-    [clojure.string :as str])
+    [clojure.set :as set])
   #?(:clj
-     (:import (clojure.lang IFn IDeref))))
+     (:import (clojure.lang IFn))))
 
+;; defrecord so we get map-like behavior and proper = support
 #?(:clj
-   (deftype Attribute [definition]
-     IDeref
-     (deref [this] (::keyword definition))
+   (defrecord Attribute []
      IFn
      (invoke [this m]
-       (get m (::keyword definition))))
+       (get m (::qualified-key this))))
    :cljs
-   (deftype Attribute [definition]
-     IDeref
-     (-deref [_] (::keyword definition))
+   (defrecord Attribute [definition]
      IFn
-     (-invoke [_ m]
-       (get m (::keyword definition)))))
+     (-invoke [this m]
+       (get m (::qualified-key this)))))
 
 #?(:clj
-   (defmacro defattr [sym type & {:as m}]
+   (>fdef defattr
+     [sym type & args]
+     [simple-symbol? ::type (s/* (s/cat :k qualified-keyword? :v any?)) => any?]))
+
+#?(:clj
+   (defmacro defattr
+     "Create a data model attribute. Type can be one of :string, :int, :uuid, etc. (more types are added over time,
+     so see main documentation and your database adapter for more information).
+
+     The remaining arguments are key-value pairs, and these represent an open set of options
+     that can be used to add features to attributes arbitrarily. Thus, you should consult the
+     documentation of various other modules for what to include on an attribute.
+
+     By default the following are supported:
+
+     * `::attr/spec spec` - A clojure spec for the attribute. Will cause the macro to emit a guardrails `>def`.
+
+     "
+     [sym type & {:as m}]
      (let [nspc       (if (comp/cljs? &env) (-> &env :ns :name str) (name (ns-name *ns*)))
-           spec       (::clojure-spec m)
+           spec       (::spec m)
            kw         (keyword (str nspc) (name sym))
-           spec-def   (when spec `(s/def ~kw ~spec))
+           spec-def   (when spec `(gr/>def ~kw ~spec))
            output     (-> m
                         (assoc ::type type)
-                        (assoc ::keyword kw)
-                        (dissoc ::clojure-spec))
-           definition `(def ~sym (com.fulcrologic.rad.attributes/->Attribute ~output))]
+                        (assoc ::qualified-key kw)
+                        (dissoc ::spec))
+           definition `(def ~sym (com.fulcrologic.rad.attributes/map->Attribute ~output))]
        (if spec-def
          `(do
             ~spec-def
             ~definition)
          definition))))
+
+(>def ::type #{:string :uuid :int :inst :ref :keyword})
+(>def ::spec any?)
+(>def ::qualified-key qualified-keyword?)
+(>def ::attribute (s/keys
+                    :req [::type ::qualified-key]
+                    :opt [::spec]))
 
 ;;(comment
 ;;  (defattr phone-number

@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [name])
   (:require
     [com.wsscode.pathom.connect :as pc]
-    [clojure.tools.namespace.repl :as tools-ns]
+    [com.fulcrologic.rad.entity :as entity :refer [defentity]]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.entity :as entity]
@@ -13,18 +13,18 @@
 (defattr id :uuid
   ::attr/unique :identity
   ::attr/required? true
-  ::db/database :production)
+  ::db/id :production)
 
 (defattr account :ref
   ::attr/cardinality :one
   ::attr/target :com.example.model.account/id
   ::attr/component? false
-  ::db/database :production)
+  ::db/id :production)
 
 (defattr first-name :string
   ::attr/index? true
   ::attr/required? true
-  ::db/database :production
+  ::db/id :production
   ::form/label "First Name"
   ::validation/validator (fn [v] (and (string? v) (seq v)))
   ::validation/error-message "First Name must not be empty")
@@ -32,7 +32,7 @@
 (defattr last-name :string
   ::attr/index? true
   ::attr/required? true
-  ::db/database :production
+  ::db/id :production
   ::form/label "Last Name"
   ::validation/validator (fn [v] (and (string? v) (seq v)))
   ::validation/error-message "Last Name must not be empty")
@@ -47,7 +47,7 @@
 (defattr hours-worked-today :int
   ::form/label "Hours Worked Today"
   ::attr/virtual? true
-  ::pc/input #{@id :local/date}
+  ::pc/input #{::id :local/date}
   ;; Authorization policy can be at attribute or entity level
   ;; Asking for the employee ID at the *context* level means that the attribute has to be part of the auth context
   ;; (it isn't the id of the entity being evaluated). So, in this case we're saying that when an employee logs into
@@ -57,7 +57,7 @@
   ;; requirement for a role ensures they have logged in, and the login process would add employee id to the auth
   ;; context iff they are an employee.
   ::authorization/policy {::authorization/required-contexts #{:com.example.model.account/role}
-                          ::authorization/optional-contexts #{@id}
+                          ::authorization/optional-contexts #{::id}
                           ::authorization/permissions       (fn [{:com.example.model.account/keys [role] :as context} entity]
                                                               (when (or (#{:manager :admin} role) (= (id context) (id entity)))
                                                                 #{:read}))}
@@ -66,6 +66,4 @@
                     ;; code to figure out hours based on inputs
                     9))
 
-(def entity
-  {::entity/attributes [id first-name last-name full-name
-                        hours-worked-today]})
+(defentity employee [id account first-name last-name full-name hours-worked-today])
