@@ -8,6 +8,7 @@
     [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
     [com.fulcrologic.rad.entity :as entity]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.schema :as schema]
     [com.wsscode.pathom.connect :as pc :refer [defresolver defmutation]]))
 
 (>defn entity-query
@@ -76,3 +77,10 @@
         attribute-resolvers (keep (fn [a] (attribute-resolver a)) virtual-attrs)]
     (concat entity-resolvers attribute-resolvers)))
 
+(>defn schema->resolvers
+  [database-ids {::schema/keys [entities]}]
+  [(s/every ::db/id) ::schema/schema => (s/every ::pc/resolver)]
+  (mapcat
+    (fn [dbid]
+      (mapcat (fn [entity] (entity->resolvers dbid entity)) entities))
+    database-ids))

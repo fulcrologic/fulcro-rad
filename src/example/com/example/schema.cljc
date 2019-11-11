@@ -25,4 +25,7 @@
 
   (let [adapter (psql/->PostgreSQLAdapter :production)]
     (.println System/out
-      (dba/diff->migration adapter latest schema))))
+      (dba/diff->migration adapter latest schema)))
+
+
+  )

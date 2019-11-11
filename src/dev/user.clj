@@ -8,9 +8,9 @@
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]
     [com.fulcrologic.rad.resolvers :as res]
+    [com.example.schema :as ex-schema]
     [com.example.model.employee :as employee]
-    [com.example.model.account :as account]
-    ))
+    [com.example.model.account :as account]))
 
 (set-refresh-dirs "src/main" "src/test" "src/dev" "src/example")
 (alter-var-root #'s/*explain-out* (constantly expound/printer))
@@ -25,5 +25,6 @@
 
 
 (comment
+  (res/schema->resolvers #{:production} ex-schema/schema)
   (res/entity->resolvers :production employee/employee)
   (res/entity->resolvers :production account/account))
