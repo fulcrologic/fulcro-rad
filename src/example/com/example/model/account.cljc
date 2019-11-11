@@ -29,8 +29,7 @@
   ::pc/input #{::id}
   ::attr/resolver (fn [env input]
                     ;; code to determine role
-                    :user)
-  ::attr/virtual? true)
+                    :user))
 
 (defn admin? [context]
   (= :admin (role context)))
@@ -53,7 +52,6 @@
 (defattr last-login :inst
   ::attr/spec inst?
   ;; doesn't go in db, no resolver auto-generation
-  ::attr/virtual? true
   ::authorization/required-contexts #{id}
   ::authorization/permissions (fn [context entity]
                                 (owned-by context entity)))

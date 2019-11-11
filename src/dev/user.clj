@@ -25,4 +25,5 @@
 
 
 (comment
+  (res/entity->resolvers :production employee/employee)
   (res/entity->resolvers :production account/account))

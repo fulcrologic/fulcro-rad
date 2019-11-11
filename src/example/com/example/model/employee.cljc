@@ -39,14 +39,12 @@
 
 (defattr full-name :string
   ::form/label "Name"
-  ::attr/virtual? true
   ::pc/input #{::first-name ::last-name}
-  ::attr/resolver (fn [_ {::keys [first-name last-name]}]
+  ::attr/resolver (fn full-name-resolver [_ {::keys [first-name last-name]}]
                     (str first-name " " last-name)))
 
 (defattr hours-worked-today :int
   ::form/label "Hours Worked Today"
-  ::attr/virtual? true
   ::pc/input #{::id :local/date}
   ;; Authorization policy can be at attribute or entity level
   ;; Asking for the employee ID at the *context* level means that the attribute has to be part of the auth context
@@ -61,8 +59,8 @@
                           ::authorization/permissions       (fn [{:com.example.model.account/keys [role] :as context} entity]
                                                               (when (or (#{:manager :admin} role) (= (id context) (id entity)))
                                                                 #{:read}))}
-  ::attr/resolver (fn [{:keys [db]} {::keys      [id]
-                                     :local/keys [date]}]
+  ::attr/resolver (fn hours-worked-resolver [env {::keys      [id]
+                                                  :local/keys [date]}]
                     ;; code to figure out hours based on inputs
                     9))
 
