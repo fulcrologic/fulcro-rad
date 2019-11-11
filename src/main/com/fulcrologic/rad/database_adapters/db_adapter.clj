@@ -17,7 +17,7 @@
 ;; to be completely authoritative.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(>def ::adapter (fn [v] (satisfies? DBAdapter v)))
+(>def ::adapter (fn [v] (satisfies? dbp/DBAdapter v)))
 (>def ::adapters (s/map-of ::db/id ::adapter))
 
 (>defn get-by-ids

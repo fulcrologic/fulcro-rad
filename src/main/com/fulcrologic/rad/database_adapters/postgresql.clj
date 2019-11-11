@@ -84,7 +84,7 @@
       "BEGIN;\n"
       (let [diff (schema/schema-diff database-id old-schema new-schema)
             {::schema/keys [new-entities]} diff
-            [newc newu] (new-entities->migration new-schema new-entities)]
+            [newc newu] (when (seq new-entities) (new-entities->migration new-schema new-entities))]
         (str/join "" [newc newu]))
       "\nCOMMIT;\n"))
   (get-by-ids [this entity id-attr ids desired-output]

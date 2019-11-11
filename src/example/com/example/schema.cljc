@@ -23,9 +23,14 @@
     (pprint
       (dba/diff->migration adapter latest schema)))
 
-  (let [adapter (psql/->PostgreSQLAdapter :production)]
-    (.println System/out
+  (let [adapter (datomic/->DatomicAdapter :old-database)]
+    (pprint
       (dba/diff->migration adapter latest schema)))
 
+  (let [adapter (psql/->PostgreSQLAdapter :production)]
+    (print
+      (dba/diff->migration adapter latest schema)))
 
-  )
+  (let [adapter (psql/->PostgreSQLAdapter :old-database)]
+    (print
+      (dba/diff->migration adapter latest schema))))

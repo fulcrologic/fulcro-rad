@@ -16,11 +16,20 @@
   ::attr/required? true
   ::db/id :production)
 
+(defattr legacy-id :int
+  ::attr/unique :identity
+  ::attr/index? true
+  ::db/id :old-database)
+
+(defattr bullshit :string
+  ::attr/index? true
+  ::db/id :old-database)
+
 (defattr name :string
+  ::db/id :production
   ::attr/spec string?
   ::attr/index? true
   ::attr/required? true
-  ::db/id :production
   ::validation/validator :spec
   ::validation/error-message "Name must not be empty")
 
@@ -56,5 +65,6 @@
   ::authorization/permissions (fn [context entity]
                                 (owned-by context entity)))
 
-(defentity account [id name role last-login])
+(defentity account [id name role last-login legacy-id bullshit]
+  ::entity/onCreate (fn [env new-entity] (assoc new-entity :entity/firm (:current/firm env))))
 
