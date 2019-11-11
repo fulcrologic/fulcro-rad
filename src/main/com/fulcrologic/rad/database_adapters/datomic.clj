@@ -1,11 +1,10 @@
 (ns com.fulcrologic.rad.database-adapters.datomic
   (:require
-    [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
+    [com.fulcrologic.rad.database-adapters.protocols :as dbp]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.entity :as entity]
     [com.fulcrologic.rad.schema :as schema]
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
-    [clojure.string :as str]
     [clojure.spec.alpha :as s]
     [taoensso.timbre :as log]))
 
@@ -35,9 +34,9 @@
                        :db/cardinality datomic-cardinality}
                 (and (= :ref type) component?) (assoc :db/isComponent true)
                 index? (->
-                           (assoc :db/index true)
-                           (cond->
-                             (= :string type) (assoc :db/fulltext true)))
+                         (assoc :db/index true)
+                         (cond->
+                           (= :string type) (assoc :db/fulltext true)))
                 unique (assoc :db/unique (keyword "db.unique" (name unique)))))))
         txn
         attributes))
@@ -45,8 +44,11 @@
     new-entities))
 
 (defrecord DatomicAdapter [database-id]
-  dba/DBAdapter
-  (-diff->migration [this old-schema new-schema]
+  dbp/DBAdapter
+  (get-by-ids [this entity id-attr ids desired-output]
+    (log/error "get by IDs not yet implemented on Datomic")
+    [])
+  (diff->migration [this old-schema new-schema]
     (let [diff (schema/schema-diff database-id old-schema new-schema)
           {::schema/keys [new-entities]} diff
           txn  (new-entities->migration new-schema new-entities)]

@@ -67,3 +67,7 @@
                     9))
 
 (defentity employee [id account first-name last-name full-name hours-worked-today])
+
+(comment
+  (attr/attributes->eql :production [id account first-name last-name full-name hours-worked-today])
+  )

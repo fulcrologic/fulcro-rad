@@ -3,6 +3,7 @@
   (:require
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :as gr :refer [>defn => >def >fdef]]
+    [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.fulcro.components :as comp]
     [clojure.set :as set])
   #?(:clj
@@ -11,6 +12,9 @@
 ;; defrecord so we get map-like behavior and proper = support
 #?(:clj
    (defrecord Attribute []
+     Object
+     (toString [this]
+       (str "Attribute: " (::qualified-key this)))
      IFn
      (invoke [this m]
        (get m (::qualified-key this))))
@@ -56,6 +60,7 @@
          definition))))
 
 (>def ::type #{:string :uuid :int :inst :ref :keyword})
+(>def ::target qualified-keyword?)
 (>def ::spec any?)
 (>def ::qualified-key qualified-keyword?)
 (>def ::index? boolean?)
@@ -64,14 +69,17 @@
                     :req [::type ::qualified-key]
                     :opt [::index? ::component? ::spec]))
 
-;;(comment
-;;  (defattr phone-number
-;;    {::clojure-spec (s/with-gen string? #(s/gen #{"5415551212" "4689991122"}))
-;;     ::database/id  :production
-;;     ::type         :string
-;;     ::chrome       [:phone-number :string]
-;;     ::normalizer   (fn [v] (str/replace v #"\D" ""))
-;;     ::validator    (fn [v] (boolean (re-matches #"\d{10}" v)))
-;;     ::formatter    (fn [v] (let [[_ area prefix number] (re-matches #"(\d{3})(\d{3})(\d{4})" v)]
-;;                              (str "(" area ") " prefix "-" number)))
-;;     :other         1}))
+(>defn attributes->eql
+  "Returns an EQL query for all of the attributes that are available for the given database-id"
+  [database-id attrs]
+  [::db/id (s/every ::attribute) => vector?]
+  (reduce
+    (fn [outs {::keys [qualified-key type target]}]
+      (if (and target (= :ref type))
+        (conj outs {qualified-key [target]})
+        (conj outs qualified-key)))
+    []
+    (filter
+      (fn [{::db/keys [id]}] (= id database-id))
+      attrs)))
+

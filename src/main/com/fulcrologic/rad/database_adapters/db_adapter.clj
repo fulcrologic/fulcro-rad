@@ -1,18 +1,36 @@
 (ns com.fulcrologic.rad.database-adapters.db-adapter
   (:require
     [com.fulcrologic.rad.schema :as schema]
-    [com.fulcrologic.guardrails.core :refer [>defn => >def]]))
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.entity :as entity]
+    [com.fulcrologic.rad.database :as db]
+    [com.fulcrologic.rad.database-adapters.protocols :as dbp :refer [DBAdapter]]
+    [com.fulcrologic.guardrails.core :refer [>defn => >def]]
+    [clojure.spec.alpha :as s]))
 
-(defprotocol DBAdapter
-  (-diff->migration [this old-schema new-schema] "Returns a migration that should work to apply the given changes to the database in question."))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; The long-term goal is for the developer (and RAD) to be able to rely on attribute
+;; declarations in the *current source* as the source of truth for the schema.
+;; A major production pain is to have to construct code artifacts based on reading
+;; a series of migrations from the beginning of time (useless) or having to go
+;; physically query the database to see what is there. We want the code declarations
+;; to be completely authoritative.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (>def ::adapter (fn [v] (satisfies? DBAdapter v)))
+(>def ::adapters (s/map-of ::db/id ::adapter))
+
+(>defn get-by-ids
+  "Run a query to find an entity that has the given id-attr, returning the desired output."
+  [dbadapter entity-definition id-attribute ids eql-query]
+  [::adapter ::entity/entity ::attr/attribute sequential? vector? => map?]
+  (dbp/get-by-ids dbadapter entity-definition id-attribute ids eql-query))
 
 (>defn diff->migration
   "Convert a schema diff to a migration using the specified db adapter."
   [dbadapter old-schema new-schema]
   [::adapter ::schema/schema ::schema/schema => any?]
-  (-diff->migration dbadapter old-schema new-schema))
+  (dbp/diff->migration dbadapter old-schema new-schema))
 
 
 

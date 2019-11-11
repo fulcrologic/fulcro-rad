@@ -1,6 +1,6 @@
 (ns com.fulcrologic.rad.database-adapters.postgresql
   (:require
-    [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
+    [com.fulcrologic.rad.database-adapters.protocols :as dbp]
     [camel-snake-kebab.core :as csk]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.entity :as entity]
@@ -78,15 +78,18 @@
     [(.toString creates) (.toString updates)]))
 
 (defrecord PostgreSQLAdapter [database-id]
-  dba/DBAdapter
-  (-diff->migration [this old-schema new-schema]
+  dbp/DBAdapter
+  (diff->migration [this old-schema new-schema]
     (str
       "BEGIN;\n"
       (let [diff (schema/schema-diff database-id old-schema new-schema)
             {::schema/keys [new-entities]} diff
             [newc newu] (new-entities->migration new-schema new-entities)]
         (str/join "" [newc newu]))
-      "\nCOMMIT;\n")))
+      "\nCOMMIT;\n"))
+  (get-by-ids [this entity id-attr ids desired-output]
+    (log/error "get by IDs not yet implemented on PostgreSQL")
+    []))
 
 
 
