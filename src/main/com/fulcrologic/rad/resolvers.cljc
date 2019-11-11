@@ -11,6 +11,9 @@
     [com.fulcrologic.rad.schema :as schema]
     [com.wsscode.pathom.connect :as pc :refer [defresolver defmutation]]))
 
+;; TODO: This is really CLJ stuff, meant for satisfying queries from the server. We also need a client-side
+;; set of functions to generate resolvers for network dbs, like firebase, GraphQL, etc.
+
 (>defn entity-query
   [dbid entity id-attr env input]
   [::db/id ::entity/entity ::attr/attribute map? (s/or :one map? :many sequential?)

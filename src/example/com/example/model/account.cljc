@@ -66,5 +66,6 @@
                                 (owned-by context entity)))
 
 (defentity account [id name role last-login legacy-id bullshit]
-  ::entity/onCreate (fn [env new-entity] (assoc new-entity :entity/firm (:current/firm env))))
+  ::entity/beforeCreate (fn [env new-entity]
+                          #_(attr/set! new-entity company (:current/firm env))))
 
