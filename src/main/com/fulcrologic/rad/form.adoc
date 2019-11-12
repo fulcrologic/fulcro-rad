@@ -5,6 +5,7 @@ Desired features:
 * Graph-based composition: A single form should be able to let you edit anything
 that is reachable from the main form's target identit(y/ies).
 * Composition: Forms should be able to nest.
+.. To-one and to-many support
 * Tight integration with authorization system
 .. Query analysis that determines (via attributes) what auth is required
 .. Integration with routing so that auth can be automated (imagine routing

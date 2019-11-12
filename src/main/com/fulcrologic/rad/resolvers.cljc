@@ -72,7 +72,7 @@
 (>defn entity->resolvers
   "Convert a given entity into the resolvers for the entity itself (accessible from unique identities)
    as well as any virtual attributes."
-  [database-id {::entity/keys [qualified-key attributes] :as entity}]
+  [database-id {::entity/keys [attributes] :as entity}]
   [::db/id ::entity/entity => (s/every ::pc/resolver)]
   (let [identity-attrs      (filter (fn [{::attr/keys [unique]}] (= :identity unique)) attributes)
         virtual-attrs       (remove ::db/id attributes)
