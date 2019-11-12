@@ -1,0 +1,26 @@
+= Form Support
+
+Desired features:
+
+* Graph-based composition: A single form should be able to let you edit anything
+that is reachable from the main form's target identit(y/ies).
+* Composition: Forms should be able to nest.
+* Tight integration with authorization system
+.. Query analysis that determines (via attributes) what auth is required
+.. Integration with routing so that auth can be automated (imagine routing
+to a form from HTML5 route, but not yet logged in. Login should happen, then
+route continues).  This feature is probably more global to the entire app, since
+any screen that works with protected data would need to do the same.
+.. Automatic redaction of protected data on reads (really enforced by resolvers)
+.. Automatic field and entity-level security at API level.
+* Lifecycle: A form (including the nested elements) should support:
+.. Creation:
+... Setting defaults client-side
+... Server-centric augmentations with an incoming save.
+... Temporary IDs, including client-generated UUIDs, along with client remappings
+.. Updates:
+... Minimal diff
+.. Deletes
+... Master-detail kind of control for deleting an entity.
+... To-one or to-many form relations that can be easily configured to allow
+the add/remove of a child. (along with support for cascading delete)
