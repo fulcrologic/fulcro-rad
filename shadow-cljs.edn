@@ -1,0 +1,32 @@
+{:deps     {:aliases [:dev :test]}
+ :nrepl    {:port 9000}
+ :dev-http {8080 "resources/public"}
+ :jvm-opts ["-Xmx2G"]
+ :builds   {:example  {:target     :browser
+                       :output-dir "resources/public/js/example"
+                       :asset-path "/js/eample"
+                       :dev        {:compiler-options {:external-config {:guardrails {}}}}
+                       :modules    {:main {:entries [com.example.client]}}
+                       :devtools   {:preloads   [com.fulcrologic.fulcro.inspect.preload]
+                                    :after-load com.example.client/start}}
+
+            :test     {:target           :browser-test
+                       :test-dir         "resources/public/js/test"
+                       :ns-regexp        "-spec$"
+                       :compiler-options {:static-fns      false
+                                          :external-config {:guardrails {:throw? true :emit-spec? true}}}
+                       :js-options       {:resolve {"react-dom" {:target  :npm
+                                                                 :require "react-dom/cjs/react-dom.production.min.js"}
+                                                    "react"     {:target  :npm
+                                                                 :require "react/cjs/react.production.min.js"}}}
+                       :devtools         {:http-port          8081
+                                          :http-resource-root "public"
+                                          :http-root          "resources/public/js/test"}}
+
+            :ci-tests {:target           :karma
+                       :js-options       {:js-provider :shadow}
+                       :compiler-options {:static-fns      false ; required for mocking to work
+                                          :external-config {:guardrails {:throw? true :emit-spec? true}}}
+                       :output-to        "target/ci.js"
+                       :ns-regexp        "-spec$"}}}
+

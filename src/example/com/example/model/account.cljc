@@ -2,7 +2,6 @@
   (:refer-clojure :exclude [name])
   (:require
     [com.wsscode.pathom.connect :as pc]
-    [clojure.tools.namespace.repl :as tools-ns]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.entity :as entity :refer [defentity]]
     [com.fulcrologic.rad.validation :as validation]

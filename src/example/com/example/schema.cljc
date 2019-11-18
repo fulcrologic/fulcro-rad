@@ -2,9 +2,6 @@
   (:require
     [clojure.pprint :refer [pprint]]
     [com.fulcrologic.rad.database :as database]
-    [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
-    [com.fulcrologic.rad.database-adapters.postgresql :as psql]
-    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
     [com.example.model.account :as account]
     [com.example.model.employee :as employee]
     [com.fulcrologic.rad.schema :as schema]))
@@ -18,19 +15,3 @@
    ::schema/entities     [account/account
                           employee/employee]})
 
-(comment
-  (let [adapter (datomic/->DatomicAdapter :production)]
-    (pprint
-      (dba/diff->migration adapter latest schema)))
-
-  (let [adapter (datomic/->DatomicAdapter :old-database)]
-    (pprint
-      (dba/diff->migration adapter latest schema)))
-
-  (let [adapter (psql/->PostgreSQLAdapter :production)]
-    (print
-      (dba/diff->migration adapter latest schema)))
-
-  (let [adapter (psql/->PostgreSQLAdapter :old-database)]
-    (print
-      (dba/diff->migration adapter latest schema))))

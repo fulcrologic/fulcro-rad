@@ -5,6 +5,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]))
 
 (defn config [env] (uism/retrieve env :config))
+
 (defn attr-value [env]
   [(-> env ::uism/event-data ::attr/attribute)
    (-> env ::uism/event-data :value)])

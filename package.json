@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "description": "= Fulcro Rapid Application Development Tools",
   "main": "index.js",
-  "scripts": {
-  },
+  "scripts": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/fulcrologic/fulcro-rad.git"
@@ -14,5 +13,11 @@
   "bugs": {
     "url": "https://github.com/fulcrologic/fulcro-rad/issues"
   },
-  "homepage": "https://github.com/fulcrologic/fulcro-rad#readme"
+  "homepage": "https://github.com/fulcrologic/fulcro-rad#readme",
+  "dependencies": {
+    "react": "^16.12.0",
+    "react-dom": "^16.12.0",
+    "semantic-ui-react": "^0.88.1",
+    "shadow-cljs": "2.8.69"
+  }
 }

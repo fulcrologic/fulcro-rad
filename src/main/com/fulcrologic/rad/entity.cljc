@@ -1,4 +1,5 @@
 (ns com.fulcrologic.rad.entity
+  #?(:cljs (:require-macros com.fulcrologic.rad.entity))
   (:require
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.attributes :as attr]
