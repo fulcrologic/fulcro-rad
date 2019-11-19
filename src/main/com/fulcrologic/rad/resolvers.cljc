@@ -19,7 +19,10 @@
   [::db/id ::entity/entity ::attr/attribute map? (s/or :one map? :many sequential?)
    => (? (s/or :many vector? :one map?))]
   (enc/if-let [dbadapter (get-in env [::dba/adapters dbid])
-               query     (or (get env :com.wsscode.pathom.core/parent-query) [(::attr/qualified-key id-attr)])
+               query     (or
+                           (get env :com.wsscode.pathom.core/parent-query)
+                           (get env ::default-query)
+                           )
                ids       (if (sequential? input)
                            (into #{} (keep #(id-attr %) input))
                            #{(id-attr input)})]
@@ -35,13 +38,15 @@
    {::entity/keys [qualified-key attributes] :as entity}
    {id-key ::attr/qualified-key :as id-attr}]
   [::db/id ::entity/entity ::attr/attribute => ::pc/resolver]
-  (let [outputs (attr/attributes->eql database-id attributes)]
+  (log/info "Building ID resolver for" qualified-key)
+  (let [data-attributes (filter #(not= id-attr %) attributes)
+        outputs         (attr/attributes->eql database-id data-attributes)]
     {::pc/sym     (symbol
                     (str (name database-id) "." (namespace qualified-key))
                     (str (name qualified-key) "-resolver"))
      ::pc/output  outputs
      ::pc/batch?  true
-     ::pc/resolve (fn [env input] (entity-query database-id entity id-attr env input))
+     ::pc/resolve (fn [env input] (entity-query database-id entity id-attr (assoc env ::default-query outputs) input))
      ::pc/input   #{id-key}}))
 
 (defn just-pc-keys [m]
@@ -56,14 +61,14 @@
 (>defn attribute-resolver
   [attr]
   [::attr/attribute => (? ::pc/resolver)]
-  (log/info "Make" (::attr/qualified-key attr))
+  (log/info "Building attribute resolver for" (::attr/qualified-key attr))
   (enc/if-let [resolver (::attr/resolver attr)
                k        (::attr/qualified-key attr)
                output   [k]]
     (merge
+      {::pc/output output}
       (just-pc-keys attr)
       {::pc/sym     (symbol (str k "-resolver"))
-       ::pc/output  output
        ::pc/resolve resolver})
     (do
       (log/error "Virtual attribute " attr " is missing ::attr/resolver key.")

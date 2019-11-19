@@ -1,5 +1,6 @@
 (ns com.example.components.parser
   (:require
+    [clojure.pprint :refer [pprint]]
     [clojure.walk :as walk]
     [com.example.components.datomic :refer [production-database]]
     [com.example.components.auto-resolvers :refer [automatic-resolvers]]
@@ -105,11 +106,12 @@
 (defn log-response
   [env input]
   (let [{:current/keys [user-id firm-id]} (env-with-current-info env)]
-    (binding [*print-level* 4 *print-length* 4]
-      (log/info "user-id:" user-id "firm-id:" firm-id "response"
-        (if (map? input)
-          (dissoc input :com.wsscode.pathom/trace)
-          input)))
+    (binding [*print-level* 4 *print-length* 4])
+    (log/info "user-id:" user-id "firm-id:" firm-id "response"
+      )
+    (pprint (if (map? input)
+              (dissoc input :com.wsscode.pathom/trace)
+              input))
     input))
 
 (defn add-empty-vectors
@@ -148,7 +150,6 @@
                 (p/env-plugin {::p/process-error process-error})
                 (p/env-wrap-plugin (fn [env]
                                      (assoc env
-                                       ;; :connection s.database/connection
                                        :config s.config/config)))
                 (preprocess-parser-plugin log-requests)
                 (preprocess-parser-plugin add-current-info)
@@ -156,9 +157,9 @@
                 (p/post-process-parser-plugin p/elide-not-found)
                 (p/post-process-parser-plugin elide-reader-errors)
                 (post-process-parser-plugin-with-env log-response)
-                query-params-to-env-plugin
+                #_query-params-to-env-plugin
                 p/error-handler-plugin
-                p/trace-plugin]})
+                #_p/trace-plugin]})
 
 (defstate parser
   :start
