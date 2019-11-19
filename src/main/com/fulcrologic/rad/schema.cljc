@@ -13,10 +13,11 @@
 ;; TODO: Index support
 (>def ::index map?)
 (>def ::indexes (s/every ::index))
+(>def ::roots (s/every ::attributes/attribute))
 
 (>def ::schema (s/keys
                  :req [::entities]
-                 :opt [::indexes]))
+                 :opt [::indexes ::roots]))
 
 (>defn find-attribute
   [schema attribute]

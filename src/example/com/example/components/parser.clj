@@ -1,6 +1,8 @@
 (ns com.example.components.parser
   (:require
     [clojure.walk :as walk]
+    [com.example.components.datomic :refer [production-database]]
+    [com.example.components.auto-resolvers :refer [automatic-resolvers]]
     [com.example.components.config :as s.config]
     [com.example.model.account :as account]
     [com.wsscode.common.async-clj :refer [let-chan]]
@@ -8,7 +10,8 @@
     [com.wsscode.pathom.core :as p]
     [edn-query-language.core :as eql]
     [mount.core :refer [defstate]]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [datomic.api :as d]))
 
 (defn preprocess-parser-plugin
   "Helper to create a plugin that can view/modify the env/tx of a top-level request.
@@ -55,11 +58,13 @@
 (defn env-with-current-info
   "Adds stuff to mutation/resolver env."
   [env]
-  (let [;db      (d/db s.database/connection)
+  (let [c       (:connection production-database)
+        db      (d/db c)
         request (:request env)
-        env*    (assoc env
-                  ;; :db-atom (atom db)
-                  ;; :conn s.database/connection
+        env*    (assoc
+                  (merge env production-database)
+                  :db db
+                  :db-atom (atom db)
                   :request request)]
     env*))
 
@@ -134,12 +139,12 @@
              env          (assoc env :query-params query-params)]
          (parser env tx))))})
 
-(def parser-args
+(defn parser-args []
   {::p/mutate  pc/mutate
    ::p/env     {::p/reader               [p/map-reader pc/reader2 pc/index-reader
                                           pc/open-ident-reader p/env-placeholder-reader]
                 ::p/placeholder-prefixes #{">"}}
-   ::p/plugins [(pc/connect-plugin {::pc/register [account/login]})
+   ::p/plugins [(pc/connect-plugin {::pc/register [account/login automatic-resolvers]})
                 (p/env-plugin {::p/process-error process-error})
                 (p/env-wrap-plugin (fn [env]
                                      (assoc env
@@ -157,7 +162,7 @@
 
 (defstate parser
   :start
-  (let [real-parser (p/parser parser-args)
+  (let [real-parser (p/parser (parser-args))
         trace?      (not (nil? (System/getProperty "trace")))]
     (fn wrapped-parser [env tx]
       (real-parser env (if trace?

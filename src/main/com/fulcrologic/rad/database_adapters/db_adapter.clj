@@ -23,7 +23,7 @@
 (>defn get-by-ids
   "Run a query to find an entity that has the given id-attr, returning the desired output."
   [dbadapter entity-definition id-attribute ids eql-query]
-  [::adapter ::entity/entity ::attr/attribute sequential? vector? => map?]
+  [::adapter ::entity/entity ::attr/attribute (s/coll-of any?) vector? => (s/? (s/or :v vector? :m map?))]
   (dbp/get-by-ids dbadapter entity-definition id-attribute ids eql-query))
 
 (>defn diff->migration

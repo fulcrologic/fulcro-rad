@@ -22,16 +22,6 @@
   ::auth/authority :local
   ::db/id :production)
 
-(defattr legacy-id :int
-  ::attr/unique :identity
-  ::attr/index? true
-  ::auth/authority :local
-  ::db/id :old-database)
-
-(defattr bullshit :string
-  ::attr/index? true
-  ::db/id :old-database)
-
 (defattr name :string
   ::db/id :production
   ::auth/authority :local
@@ -70,12 +60,14 @@
 (defattr last-login :inst
   ::attr/spec inst?
   ;; doesn't go in db, no resolver auto-generation
+  ::attr/resolver (fn [env input] #?(:clj {::last-login (java.util.Date.)}))
   ::auth/authority :local
   ::auth/required-contexts #{id}
   ::auth/permissions (fn [context entity]
                        (owned-by context entity)))
 
 (defattr all-accounts :ref
+  ::db/id :production
   ::attr/cardinality :many
   ::attr/target :com.example.model.account/id
   ::auth/authority :local
@@ -83,12 +75,12 @@
   ::attr/resolver (fn [env input]
                     #?(:clj
                        (let [{:keys [db]} env
-                             ids (d/q '[:find [?uuid ...]
-                                        :where
-                                        [?dbid :account/id ?uuid]] db)]
+                             ids (d/q [:find '[?uuid ...]
+                                       :where
+                                       ['?dbid ::id '?uuid]] db)]
                          {::all-accounts (mapv (fn [id] {::id id}) ids)}))))
 
-(defentity account [id name role last-login legacy-id bullshit]
+(defentity account [id name role last-login]
   ::auth/authority :local
   ::entity/beforeCreate (fn [env new-entity]
                           #_(attr/set! new-entity company (:current/firm env))))

@@ -18,17 +18,16 @@
   [dbid entity id-attr env input]
   [::db/id ::entity/entity ::attr/attribute map? (s/or :one map? :many sequential?)
    => (? (s/or :many vector? :one map?))]
-  (log/debug "Running entity query for" id-attr)
   (enc/if-let [dbadapter (get-in env [::dba/adapters dbid])
-               query     (or (get env :query) [(::attr/qualified-key id-attr)])
+               query     (or (get env :com.wsscode.pathom.core/parent-query) [(::attr/qualified-key id-attr)])
                ids       (if (sequential? input)
                            (into #{} (keep #(id-attr %) input))
                            #{(id-attr input)})]
     (do
-      (log/debug "Running" query "on entities with " id-attr ":" ids)
+      (log/info "Running" query "on entities with " id-attr ":" ids)
       (dba/get-by-ids dbadapter entity id-attr ids query))
     (do
-      (log/error "Unable to complete query because the database adapter was missing.")
+      (log/info "Unable to complete query because the database adapter was missing.")
       nil)))
 
 (>defn id-resolver
@@ -57,6 +56,7 @@
 (>defn attribute-resolver
   [attr]
   [::attr/attribute => (? ::pc/resolver)]
+  (log/info "Make" (::attr/qualified-key attr))
   (enc/if-let [resolver (::attr/resolver attr)
                k        (::attr/qualified-key attr)
                output   [k]]
@@ -77,13 +77,21 @@
   (let [identity-attrs      (filter (fn [{::attr/keys [unique]}] (= :identity unique)) attributes)
         virtual-attrs       (remove ::db/id attributes)
         entity-resolvers    (keep (fn [a] (id-resolver database-id entity a)) identity-attrs)
-        attribute-resolvers (keep (fn [a] (attribute-resolver a)) virtual-attrs)]
+        ;; TODO: Make this not suck
+        pk                  (some-> identity-attrs first ::attr/qualified-key)
+        attribute-resolvers (keep (fn [a] (attribute-resolver (assoc a ::pc/input #{pk}))) virtual-attrs)]
     (concat entity-resolvers attribute-resolvers)))
 
 (>defn schema->resolvers
-  [database-ids {::schema/keys [entities]}]
+  [database-ids {::schema/keys [entities roots]}]
   [(s/every ::db/id) ::schema/schema => (s/every ::pc/resolver)]
-  (mapcat
-    (fn [dbid]
-      (mapcat (fn [entity] (entity->resolvers dbid entity)) entities))
-    database-ids))
+  (let [database-ids (set database-ids)]
+    (vec
+      (concat
+        (mapcat
+          (fn [dbid]
+            (mapcat (fn [entity] (entity->resolvers dbid entity)) entities))
+          database-ids)
+        (keep (fn [attr]
+                (when (contains? database-ids (::db/id attr))
+                  (attribute-resolver attr))) roots)))))

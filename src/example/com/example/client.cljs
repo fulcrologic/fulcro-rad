@@ -6,7 +6,7 @@
     [com.fulcrologic.fulcro.networking.http-remote :as http]
     [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.schema :as schema]
-    [com.example.schema :refer [schema]]
+    [com.example.schema :refer [latest-schema]]
     [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.components :as comp]))
@@ -15,7 +15,7 @@
                               :client-did-mount (fn [app]
                                                   (auth/start! app {:local (uism/with-actor-class (comp/get-ident LoginForm {}) LoginForm)})
                                                   (controller/start! app
-                                                    {::schema/schema     schema
+                                                    {::schema/schema     latest-schema
                                                      ::controller/router ui/MainRouter
                                                      ::controller/id     ::main-controller}))}))
 
