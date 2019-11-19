@@ -39,12 +39,16 @@
         target-route (log/spy :info (or target-route (uism/retrieve env :target-route)))]
     (if (empty? target-route)
       (uism/activate env :state/idle)
+      ;; The main thing we end up needing to know is the target class, and from
+      ;; that we can pull the information we need to do the remaining steps.
+      ;; I.e. Load, create a new, etc.
       (let [controller (uism/actor-class env :actor/crud-controller)
             {:keys [target]} (dr/route-target controller target-route)
             prepare!   (comp/component-options target :prepare-route!)]
         (if prepare!
           (do
-            (prepare! fulcro-app target-route)
+            ;; TODO: Split off just the correct number of elements that represent the rou
+            (prepare! fulcro-app {::target-route target-route})
             (-> env
               (uism/store :target-route target-route)
               (uism/activate :state/routing)))
@@ -108,3 +112,8 @@
 
 (defn route-to! [app path]
   (uism/trigger! app machine-id :event/route {:target-route path}))
+
+(defn io-complete!
+  "Notify the controller that the I/O is done for a given route, and that routing can continue."
+  [app target-route]
+  (uism/trigger! app machine-id :event/route-loaded {:target-route route-segment}))
