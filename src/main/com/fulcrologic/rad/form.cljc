@@ -1,7 +1,9 @@
 (ns com.fulcrologic.rad.form
   (:require
+    [com.fulcrologic.rad.rendering.data-field :refer [render-field]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]))
 
 (defn config [env] (uism/retrieve env :config))
@@ -73,7 +75,8 @@
     }})
 
 (defn render-form [this props]
-  (let [{::keys [attributes]} props]
-    (
-      )
-    ))
+  (let [{::attr/keys [attributes]} (comp/component-options this)]
+    (mapv
+      (fn [attribute]
+        (render-field this attribute props))
+      attributes)))

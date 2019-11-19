@@ -1,10 +1,11 @@
 (ns com.example.model.account
   (:refer-clojure :exclude [name])
   (:require
-    #?(:clj
-       [com.wsscode.pathom.connect :as pc :refer [defmutation]]
-       :cljs
-       [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]])
+    #?@(:clj
+        [[datomic.api :as d]
+         [com.wsscode.pathom.connect :as pc :refer [defmutation]]]
+        :cljs
+        [[com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]])
     [com.wsscode.pathom.connect :as pc]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.entity :as entity :refer [defentity]]
@@ -73,6 +74,19 @@
   ::auth/required-contexts #{id}
   ::auth/permissions (fn [context entity]
                        (owned-by context entity)))
+
+(defattr all-accounts :ref
+  ::attr/cardinality :many
+  ::attr/target :com.example.model.account/id
+  ::auth/authority :local
+  ::pc/output [{::all-accounts [::id]}]
+  ::attr/resolver (fn [env input]
+                    #?(:clj
+                       (let [{:keys [db]} env
+                             ids (d/q '[:find [?uuid ...]
+                                        :where
+                                        [?dbid :account/id ?uuid]] db)]
+                         {::all-accounts (mapv (fn [id] {::id id}) ids)}))))
 
 (defentity account [id name role last-login legacy-id bullshit]
   ::auth/authority :local

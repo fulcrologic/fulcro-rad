@@ -116,8 +116,7 @@
 (defstatemachine auth-machine
   {::uism/aliases
    {:username [:actor/auth-dialog :ui/username]
-    :password [:actor/auth-dialog :ui/password]
-    :context  [:actor/controller :ui/auth-context]}
+    :password [:actor/auth-dialog :ui/password]}
 
    ::uism/states
    {:initial
@@ -154,3 +153,8 @@
       :event/logout    {::uism/handler logged-out}
       :event/logged-in {::uism/handler logged-in}}}}})
 
+(defn start!
+  "Start the authentication system and set it to use the given authorities (a map from authority name to the UI
+  actors that provides authentication service)"
+  [app authorities]
+  (uism/begin! app auth-machine machine-id authorities))

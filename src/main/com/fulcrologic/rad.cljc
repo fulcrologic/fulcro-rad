@@ -10,7 +10,7 @@
 (>def ::id string?)
 (>def ::tempid (s/or :fulcro-tempid tempid/tempid? :uuid uuid?))
 (>def ::target-route (s/coll-of string? :kind vector?))
-(>def ::list-item comp/component-class?)
+(>def ::ListItem comp/component-class?)
 (>def ::source-attribute qualified-keyword?)
 (>def ::load! ifn?)
 (>def ::start-edit! ifn?)
