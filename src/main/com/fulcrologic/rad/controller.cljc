@@ -12,7 +12,7 @@
 
 (defn authorities-required-for-route
   "Returns a set of providers that are required to properly render the given route"
-  [{::uism/keys [event-data state-map] :as env}]
+  [{::uism/keys [event-data] :as env}]
   ;; TODO: Calculate providers from attributes that are on the query of the given route
   (log/spy :info event-data)
   (let [{:keys [target-route]} event-data]
@@ -27,18 +27,28 @@
                                          attributes))]
         authorities))))
 
-(defn load-data-for-route [env]
-  env)
-
-(defn initialize-route-data [env]
-  (-> env
-    (load-data-for-route)
-    (uism/activate :state/routing)))
+(defn initialize-route-data [{::uism/keys [fulcro-app event-data] :as env}]
+  (let [{:keys [target-route]} event-data]
+    (if (empty? target-route)
+      (uism/activate env :state/idle)
+      (let [controller (uism/actor-class env :actor/crud-controller)
+            target     (dr/route-target controller target-route)
+            prepare!   (comp/component-options target :prepare-route!)]
+        (if prepare!
+          (do
+            (prepare! fulcro-app target-route)
+            (-> env
+              (uism/store :target-route target-route)
+              (uism/activate :state/routing)))
+          (do
+            (dr/change-route fulcro-app target-route)
+            (uism/activate env :state/idle)))))))
 
 (defn prepare-for-route [{::uism/keys [fulcro-app] :as env}]
   (let [necessary-authorities (authorities-required-for-route env)
         current-authorities   (auth/verified-authorities fulcro-app)
         missing-authorities   (set/difference necessary-authorities current-authorities)]
+    ;; TODO: cancel any in-progress route loading (could be a route while a route was loading)
     (if (empty? missing-authorities)
       (initialize-route-data env)
       (-> env
@@ -58,14 +68,24 @@
 
     :state/gathering-permissions
     {::uism/events
-     {:event/authenticated {::uism/handler prepare-for-route}}}
+     {:event/route         {::uism/handler prepare-for-route}
+      :event/authenticated {::uism/handler prepare-for-route}}}
 
     :state/routing
-    {::uism/handler (fn [env] env)}
+    {::uism/events
+     {:event/route        {::uism/handler prepare-for-route}
+      :event/route-loaded {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
+                                            (let [loaded-route (log/spy :debug (get event-data :target-route))
+                                                  target-route (log/spy :debug (uism/retrieve env :target-route))]
+                                              (if (= loaded-route target-route)
+                                                (do
+                                                  (dr/change-route fulcro-app target-route)
+                                                  (uism/activate env :state/idle))
+                                                env)))}}}
 
     :state/idle
     {::uism/events
-     {:event/list {::uism/handler (fn [env] env)}
+     {:event/route {::uism/handler prepare-for-route}
       }}}})
 
 (defn start! [app {:keys [auth

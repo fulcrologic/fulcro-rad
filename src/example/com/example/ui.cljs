@@ -7,6 +7,7 @@
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-header :refer [ui-modal-header]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-content :refer [ui-modal-content]]
     [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
@@ -16,7 +17,8 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.mutations :as m]
-    [clojure.set :as set]))
+    [clojure.set :as set]
+    [com.fulcrologic.fulcro.data-fetch :as df]))
 
 (defsc AccountForm [this props]
   {::schema/schema   schema
@@ -33,18 +35,24 @@
    :ident ::acct/id}
   (dom/div
     (dom/div {:onClick (fn []
-                         (uism/trigger! this :some-machine-id :event/edit {:id id}))}
+                         ;; TODO: Edit link
+                         )}
       "Name: " name)))
 
-(def ui-account-list-item (comp/factory AccountListItem {:keyfn :id}))
+(def ui-account-list-item (comp/factory AccountListItem {:keyfn ::acct/id}))
 
 (defsc AccountList [this {:keys [::acct/all-accounts] :as props}]
   {:query [{::acct/all-accounts (comp/get-query AccountListItem)}]
+   :load! (fn [app options]
+            (df/load! app ::acct/all-accounts AccountListItem
+              (merge
+                options
+                {:target [:component/id ::account-list ::acct/all-accounts]})))
    :ident (fn [] [:component/id ::account-list])}
   (dom/div
     (map ui-account-list-item all-accounts)))
 
-(def ui-account-list (comp/factory AccountList {:keyfn ::acct/all-accounts}))
+(def ui-account-list (comp/factory AccountList))
 
 (defsc AccountMaster
   "This is intended to be used as a singleton (only ever on-screen once at a time). The state machine ID can therefore
@@ -54,34 +62,45 @@
   The idea is that this master might be able to show a list of the items in question"
   [this {:ui/keys [route-id]
          ::keys   [form list]}]
-  {:query          [:ui/route-id
-                    [::uism/asm-id '_]
-                    {::form (comp/get-query AccountForm)}
-                    {::list (comp/get-query AccountList)}]
-   :ident          (fn [] [:component/id ::AccountMaster])
-   :route-segment  ["accounts" :id]
-   :will-enter     (fn [app {:keys [id]}]
-                     (let [ident (comp/get-ident AccountMaster {})]
-                       (dr/route-deferred ident
-                         (fn []
-                           (comp/transact! app [(m/set-props {:ui/route-id id})
-                                                (dr/target-ready {:target ident})] {:ref ident})))))
-   :initial-state  {:ui/route-id "all"
-                    ::form       {}
-                    ::list       {}}
+  {:query            [:ui/route-id
+                      [::uism/asm-id '_]
+                      {::form (comp/get-query AccountForm)}
+                      {::list (comp/get-query AccountList)}]
+   :ident            (fn [] [:component/id ::AccountMaster])
 
-   :initLocalState (fn [this]
-                     {:list-factory (comp/factory AccountList)
-                      :form-factory (comp/factory AccountForm)})
+   ;; A pure list of all recursive attributes derived (recursively) at compile time from the Form, List, etc.
+   ::attr/attributes [acct/id acct/name]
+
+   :route-segment    ["accounts" :id]
+
+   :prepare-route!   (fn [app [_ id :as route-segment]]
+                       (let [load! (comp/component-options AccountList :load!)]
+                         (cond
+                           (and load! (= "all" id)) (load! app {:post-action (fn [{:keys [app]}]
+                                                                               (uism/trigger! app
+                                                                                 controller/machine-id :event/route-loaded
+                                                                                 {:target-route route-segment}))})
+                           ;; TODO: new and load existing item
+                           #_#_#_#_(= "new" id) (comp/transact! app [])
+                               :otherwise (df/load! app [::acct/id id] AccountForm
+                                            {:target [:component/id ::AccountMaster ::form]}))))
+
+   :initial-state    {:ui/route-id "all"
+                      ::form       {}
+                      ::list       {}}
+
+   :initLocalState   (fn [this]
+                       {:list-factory (comp/factory AccountList)
+                        :form-factory (comp/factory AccountForm)})
 
    ; :state-machine-id         ::AccountMaster
    ; :state-machine-definition ::form/form-machine
 
    ;; The main detail form for editing an instance. The ident of the form, of course, will vary based on what is
    ;; actively being edited.
-   :actor/form     AccountForm
+   :actor/form       AccountForm
    ;; actor list is expected to have a constant ident
-   :actor/list     AccountList}
+   :actor/list       AccountList}
   (let [{:keys [list-factory form-factory]} (comp/get-state this)]
     (cond
       (and (= "all" route-id) list) (list-factory list)
@@ -109,7 +128,7 @@
                                     [::uism/asm-id '_]]
    ::auth/authentication-providers {:local LoginForm}
    :ident                          (fn [] [:component/id ::AuthController])
-   :initial-state                  {:local      {}
+   :initial-state                  {:local           {}
                                     :ui/auth-context nil}}
   ;; TODO: Logic to choose the correct factory for the provider being used
   (let [state           (uism/get-active-state this auth/machine-id)
