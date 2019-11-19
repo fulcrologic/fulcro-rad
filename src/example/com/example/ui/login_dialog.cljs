@@ -6,13 +6,16 @@
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-content :refer [ui-modal-content]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.dom :refer [div label input]]
-    [com.fulcrologic.fulcro.mutations :as m]))
+    [com.fulcrologic.fulcro.mutations :as m]
+    [taoensso.timbre :as log]))
 
-(defsc LoginForm [this {:ui/keys [username password]} {:keys [visible?]}]
+(defsc LoginForm [this {:ui/keys [username password] :as props} {:keys [visible?]}]
   {:query         [:ui/username
                    :ui/password]
    :initial-state {}
    :ident         (fn [] [:component/id ::LoginForm])}
+  (log/spy :info props)
+  (log/spy :info visible?)
   (ui-modal {:open (boolean visible?) :dimmer true}
     (ui-modal-header {} "Please Log In")
     (ui-modal-content {}

@@ -9,7 +9,6 @@
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.entity :as entity :refer [defentity]]
     [com.fulcrologic.rad.validation :as validation]
-    [com.fulcrologic.rad.authorization :as authorization]
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
     [com.fulcrologic.rad.authorization :as auth]
     [taoensso.timbre :as log]))
@@ -19,11 +18,13 @@
   ::attr/unique :identity
   ::attr/index? true
   ::attr/required? true
+  ::auth/authority :local
   ::db/id :production)
 
 (defattr legacy-id :int
   ::attr/unique :identity
   ::attr/index? true
+  ::auth/authority :local
   ::db/id :old-database)
 
 (defattr bullshit :string
@@ -32,6 +33,7 @@
 
 (defattr name :string
   ::db/id :production
+  ::auth/authority :local
   ::attr/spec string?
   ::attr/index? true
   ::attr/required? true
@@ -40,6 +42,7 @@
 
 (defattr role :keyword
   ::attr/spec #{:user :admin :support :manager}
+  ::auth/authority :local
   ::pc/input #{::id}
   ::attr/resolver (fn [env input]
                     ;; code to determine role
@@ -66,11 +69,13 @@
 (defattr last-login :inst
   ::attr/spec inst?
   ;; doesn't go in db, no resolver auto-generation
-  ::authorization/required-contexts #{id}
-  ::authorization/permissions (fn [context entity]
-                                (owned-by context entity)))
+  ::auth/authority :local
+  ::auth/required-contexts #{id}
+  ::auth/permissions (fn [context entity]
+                       (owned-by context entity)))
 
 (defentity account [id name role last-login legacy-id bullshit]
+  ::auth/authority :local
   ::entity/beforeCreate (fn [env new-entity]
                           #_(attr/set! new-entity company (:current/firm env))))
 

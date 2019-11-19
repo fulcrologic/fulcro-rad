@@ -8,9 +8,10 @@
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-content :refer [ui-modal-content]]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :refer [defrouter]]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [taoensso.timbre :as log]
@@ -19,7 +20,7 @@
 
 (defsc AccountForm [this props]
   {::schema/schema   schema
-   ::form/attributes [acct/name]
+   ::attr/attributes [acct/name]
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
    :form-fields      #{::acct/name}
@@ -51,28 +52,51 @@
   controller, and therefore the lifecycle of the state machine is disconnected from its on-screen presence.
 
   The idea is that this master might be able to show a list of the items in question"
-  [this {::keys [form list]}]
-  {:query         [{::form (comp/get-query AccountForm)}
-                   {::list (comp/get-query AccountList)}]
-   :ident         (fn [] [:component/id ::AccountMaster])
-   :route-segment ["accounts"]
-   :initial-state {::form {}
-                   ::list {}}
+  [this {:ui/keys [route-id]
+         ::keys   [form list]}]
+  {:query          [:ui/route-id
+                    [::uism/asm-id '_]
+                    {::form (comp/get-query AccountForm)}
+                    {::list (comp/get-query AccountList)}]
+   :ident          (fn [] [:component/id ::AccountMaster])
+   :route-segment  ["accounts" :id]
+   :will-enter     (fn [app {:keys [id]}]
+                     (let [ident (comp/get-ident AccountMaster {})]
+                       (dr/route-deferred ident
+                         (fn []
+                           (comp/transact! app [(m/set-props {:ui/route-id id})
+                                                (dr/target-ready {:target ident})] {:ref ident})))))
+   :initial-state  {:ui/route-id "all"
+                    ::form       {}
+                    ::list       {}}
+
+   :initLocalState (fn [this]
+                     {:list-factory (comp/factory AccountList)
+                      :form-factory (comp/factory AccountForm)})
 
    ; :state-machine-id         ::AccountMaster
    ; :state-machine-definition ::form/form-machine
 
    ;; The main detail form for editing an instance. The ident of the form, of course, will vary based on what is
    ;; actively being edited.
-   :actor/form    AccountForm
+   :actor/form     AccountForm
    ;; actor list is expected to have a constant ident
-   :actor/list    AccountList}
-  (dom/div
-    "Master. No route requested."))
+   :actor/list     AccountList}
+  (let [{:keys [list-factory form-factory]} (comp/get-state this)]
+    (cond
+      (and (= "all" route-id) list) (list-factory list)
+      (and route-id form) (form-factory form)
+      :else (div :.ui.active.loader ""))))
 
-(defrouter CRUDController
-  [this {:keys [:active-master] :as props}]
-  {:router-targets [AccountMaster]})
+(defsc LandingPage [this props]
+  {:query         ['*]
+   :ident         (fn [] [:component/id ::LandingPage])
+   :initial-state {}
+   :route-segment ["landing-page"]}
+  (dom/div "Hello World"))
+
+(defrouter CRUDController [this props]
+  {:router-targets [LandingPage AccountMaster]})
 
 (def ui-crud-controller (comp/factory CRUDController))
 
@@ -81,77 +105,33 @@
 (defsc AuthController [this {:ui/keys [auth-context] :as props}]
   ;; TODO: query is generated from the authentication providers
   {:query                          [:ui/auth-context
-                                    {:production (comp/get-query LoginForm)}
+                                    {:local (comp/get-query LoginForm)}
                                     [::uism/asm-id '_]]
-   ::auth/authentication-providers {:production LoginForm}
+   ::auth/authentication-providers {:local LoginForm}
    :ident                          (fn [] [:component/id ::AuthController])
-   :initial-state                  {}}
+   :initial-state                  {:local      {}
+                                    :ui/auth-context nil}}
   ;; TODO: Logic to choose the correct factory for the provider being used
-  (let [state           (uism/get-active-state this ::auth-machine)
+  (let [state           (uism/get-active-state this auth/machine-id)
         authenticating? (= :state/gathering-credentials state)
-        {:keys [production]} props
+        {:keys [local]} props
         factory         (comp/computed-factory LoginForm)]
-    (factory production {:visible? authenticating?})))
+    (factory local {:visible? authenticating?})))
 
 (def ui-auth-controller (comp/factory AuthController {:keyfn :id}))
 
 (defsc Root [this {:keys [auth-controller crud-controller]}]
   {:query         [{:auth-controller (comp/get-query AuthController)}
                    {:crud-controller (comp/get-query CRUDController)}]
-   :initial-state {:crud-controller {}}}
-  (dom/div {}
-    (dom/h3 "Main Layout")
-    (ui-auth-controller auth-controller)
-    (ui-crud-controller crud-controller)))
+   :initial-state {:crud-controller {}
+                   :auth-controller {}}}
+  (dom/div
+    (div :.ui.top.menu
+      (div :.ui.item "Demo Application")
+      (dom/a :.ui.item {:onClick (fn [])} "Accounts"))
+    (div :.ui.container.segment
+      (ui-auth-controller auth-controller)
+      (ui-crud-controller crud-controller))))
 
 (def ui-root (comp/factory Root))
 
-(defn providers-on-route
-  "Returns a set of providers that are required to properly render the given route"
-  [{::uism/keys [event-data] :as env}]
-  ;; TODO: Calculate providers from attributes that are on the query of the given route
-  #{:production})
-
-(defn initialize-route-data [env]
-  (uism/activate env :state/routing))
-
-(defn prepare-for-route [{::uism/keys [fulcro-app] :as env}]
-  (let [necessary-providers (providers-on-route env)
-        current-providers   (auth/current-providers fulcro-app)
-        missing-providers   (set/difference current-providers necessary-providers)]
-    (if (empty? missing-providers)
-      (initialize-route-data env)
-      (-> env
-        (auth/authenticate :production ::crud-machine)
-        (uism/activate :state/gathering-permissions)))))
-
-(defstatemachine crud-machine
-  {::uism/aliases
-   {}
-
-   ::uism/states
-   {:state/initial
-    {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                      (-> env
-                        (uism/store :config event-data)
-                        (prepare-for-route)))}
-
-    :state/gathering-permissions
-    {}
-
-    :state/routing
-    {}
-
-    :state/idle
-    {::uism/events
-     {:event/list {::uism/handler (fn [env] env)}
-      }}}})
-
-(defn start! [app config]
-  (uism/begin! app auth/auth-machine auth/machine-id
-    {:actor/controller AuthController})
-
-  (uism/begin! app crud-machine ::crud-machine
-    {:actor/auth-controller AuthController
-     :actor/crud-controller CRUDController}
-    {:default-route ["accounts"]}))

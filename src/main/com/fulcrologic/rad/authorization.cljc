@@ -19,7 +19,7 @@
            ::effective-user]
    :ident [::authorization ::provider]})
 
-(defn current-providers
+(defn verified-authorities
   "Returns the providers that are currently authenticated."
   [app-ish]
   (let [state-map (app/current-state app-ish)
@@ -81,6 +81,7 @@
 
 (defn- -reply-to-initiator [env event]
   (let [source-machine-id (uism/retrieve env :source-machine-id)]
+    (log/info "Sending" event "to" source-machine-id)
     (cond-> (uism/store env :source-machine-id nil)
       source-machine-id (uism/trigger source-machine-id event))))
 
