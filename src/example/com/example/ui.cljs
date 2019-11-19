@@ -1,15 +1,16 @@
 (ns com.example.ui
   (:require
     [com.example.model.account :as acct]
-    [com.example.schema :as schema :refer [schema]]
     [com.example.ui.login-dialog :refer [LoginForm]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal :refer [ui-modal]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-header :refer [ui-modal-header]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-content :refer [ui-modal-content]]
+    [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
@@ -18,27 +19,63 @@
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.mutations :as m]
     [clojure.set :as set]
-    [com.fulcrologic.fulcro.data-fetch :as df]))
+    [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.fulcro.algorithms.merge :as merge]
+    [com.fulcrologic.fulcro.algorithms.form-state :as fs]))
 
 (defsc AccountForm [this props]
-  {::schema/schema   schema
-   ::attr/attributes [acct/id acct/name]
+  {
+   ::attr/attributes   [acct/id acct/name]
 
    ;; intention is action can be "edit", "create", "view". ID can be the real ID, or some constant for create (so
    ;; bookmarking works?).
    ;; Could also use new tempid on create and do a check for existence
-   :route-segment    ["account" :action :id]
+   :route-segment      ["account" :action :id]
+   :will-enter         (fn [app {:keys [id]}] (dr/route-immediate [::acct/id id]))
 
-   :start-edit!      (fn [app options])
-   :start-create!    (fn [app options])
+   ::rad/start-edit!   (fn [app {:rad/keys [id target-route]}]
+                         (log/info "START ACCOUNT EDIT")
+                         (let [id (uuid id)]
+                           (df/load! app [::acct/id id] AccountForm
+                             {:post-action (fn [{:keys [state]}]
+                                             (log/info "Marking the form complete")
+                                             (fns/swap!-> state
+                                               (assoc-in [::acct/id id :ui/new?] false)
+                                               (fs/mark-complete* [::acct/id id]))
+                                             (controller/io-complete! app target-route))})))
 
-   :pre-merge        (fn [{:keys [data-tree current-normalized]}])
+   ;; TODO: ID generation pluggable? Use tempids?  NOTE: The controller has to generate the ID because the incoming
+   ;; route is already determined
+   ::rad/start-create! (fn [app {::rad/keys [target-route tempid]}]
+                         (log/info "START ACCOUNT CREATE")
+                         (let [ident         [::acct/id tempid]
+                               fields        (comp/component-options AccountForm ::attr/attributes)
+                               initial-value (into {:ui/new? true}
+                                               (keep (fn [{::attr/keys [qualified-key default-value unique]}]
+                                                       (cond
+                                                         (= unique :identity) [qualified-key tempid]
+                                                         default-value [qualified-key default-value])))
+                                               fields)
+                               filled-fields (keys initial-value)
+                               tx            (into []
+                                               (map (fn [k]
+                                                      (fs/mark-complete! {:entity-ident ident
+                                                                          :field        k})))
+                                               filled-fields)]
+                           (merge/merge-component! app AccountForm initial-value)
+                           (when (seq tx)
+                             (log/info "Marking fields with default values complete")
+                             (comp/transact! app tx))
+                           (controller/io-complete! app target-route)))
 
+   :pre-merge          (fn [{:keys [data-tree]}]
+                         (fs/add-form-config AccountForm data-tree))
 
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
-   :query            [:ui/new? [::uism/asm-id '_] ::acct/id ::acct/name]
-   :ident            ::acct/id}
+   :form-fields        #{::acct/id ::acct/name}
+   :query              [:ui/new? [::uism/asm-id '_] ::acct/id ::acct/name]
+   :ident              ::acct/id}
   (form/render-form this props))
 
 (defsc AccountListItem [this {::acct/keys [id name] :as props}]
@@ -59,22 +96,23 @@
 (def ui-account-list-item (comp/factory AccountListItem {:keyfn ::acct/id}))
 
 (defsc AccountList [this {:keys [::acct/all-accounts] :as props}]
-  {:list-item        AccountListItem
-   :source-attribute ::acct/all-accounts
-   :route-segment    ["accounts"]
+  {::rad/list-item        AccountListItem
+   ::rad/source-attribute ::acct/all-accounts
+
+   :route-segment         ["accounts"]
 
    ;; This can be autogenerated, but it could also be overloaded
-   :load!            (fn [app {::controller/keys [target-route] :as options}]
-                       (log/info "Loading all accounts")
-                       (df/load! app ::acct/all-accounts AccountListItem
-                         (merge
-                           options
-                           {:post-action (fn [{:keys [app]}] (controller/io-complete! app target-route))
-                            :target      [:component/id ::account-list ::acct/all-accounts]})))
+   ::rad/load!            (fn [app {::rad/keys [target-route] :as options}]
+                            (log/info "Loading all accounts")
+                            (df/load! app ::acct/all-accounts AccountListItem
+                              (merge
+                                options
+                                {:post-action (fn [{:keys [app]}] (controller/io-complete! app target-route))
+                                 :target      [:component/id ::account-list ::acct/all-accounts]})))
 
    ;; Our macro can generate these:
-   :query            [{::acct/all-accounts (comp/get-query AccountListItem)}]
-   :ident            (fn [] [:component/id ::account-list])}
+   :query                 [{::acct/all-accounts (comp/get-query AccountListItem)}]
+   :ident                 (fn [] [:component/id ::account-list])}
   ;; Body could be auto-generated
   (dom/div :.ui.middle.aligned.divided.list
     (map ui-account-list-item all-accounts)))
@@ -90,7 +128,7 @@
 
 ;; This will just be a normal router...but there can be many of them.
 (defrouter CRUDController [this props]
-  {:router-targets [LandingPage AccountMaster]})
+  {:router-targets [LandingPage AccountList AccountForm]})
 
 (def ui-crud-controller (comp/factory CRUDController))
 
