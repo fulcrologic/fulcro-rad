@@ -14,7 +14,8 @@
     [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [taoensso.timbre :as log]
-    [com.fulcrologic.fulcro.mutations :as m]))
+    [com.fulcrologic.fulcro.mutations :as m]
+    [clojure.set :as set]))
 
 (defsc AccountForm [this props]
   {::schema/schema   schema
@@ -109,32 +110,28 @@
   "Returns a set of providers that are required to properly render the given route"
   [{::uism/keys [event-data] :as env}]
   ;; TODO: Calculate providers from attributes that are on the query of the given route
-  (let [required-providers (providers-on-route env)]
-    #{:production}))
+  #{:production})
 
-(defn current-providers
-  "Returns a set of auth providers that the auth controller already has permission for"
-  ())
+(defn initialize-route-data [env]
+  (uism/activate env :state/routing))
 
-(defn prepare-for-route [env]
+(defn prepare-for-route [{::uism/keys [fulcro-app] :as env}]
   (let [necessary-providers (providers-on-route env)
         current-providers   (auth/current-providers fulcro-app)
-        ]
-    (-> env
-      (uism/trigger auth/machine-id :event/authenticate {:provider :production}))))
+        missing-providers   (set/difference current-providers necessary-providers)]
+    (if (empty? missing-providers)
+      (initialize-route-data env)
+      (-> env
+        (auth/authenticate :production ::crud-machine)
+        (uism/activate :state/gathering-permissions)))))
 
 (defstatemachine crud-machine
-  {::uism/actors
-   #{:actor/auth-controller
-     :actor/crud-controller}
-
-   ::uism/aliases
+  {::uism/aliases
    {}
 
    ::uism/states
    {:state/initial
-    {::uism/handler (fn [env
-                         ]
+    {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                       (-> env
                         (uism/store :config event-data)
                         (prepare-for-route)))}
@@ -151,11 +148,10 @@
       }}}})
 
 (defn start! [app config]
-  ;; this stuff would come from config...hard coded for playing
+  (uism/begin! app auth/auth-machine auth/machine-id
+    {:actor/controller AuthController})
+
   (uism/begin! app crud-machine ::crud-machine
     {:actor/auth-controller AuthController
      :actor/crud-controller CRUDController}
-    {:default-route ["accounts"]})
-
-  (uism/begin! app auth/auth-machine auth/machine-id
-    {:actor/controller AuthController}))
+    {:default-route ["accounts"]}))

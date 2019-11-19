@@ -26,6 +26,23 @@
         env       (uism/state-machine-env state-map machine-id)]
     (uism/retrieve env :authenticated)))
 
+(defn authenticate!
+  "Start an authentication sequence for the given provider, and report results to the source-machine-id.
+
+  Sends and :event/authenticated or :event/authentication-failed to that source machine when done."
+  [app-ish provider source-machine-id]
+  (uism/trigger! app-ish machine-id :event/authenticate {:source-machine-id source-machine-id
+                                                         :provider          provider}))
+
+(defn authenticate
+  "Start an authentication sequence for the given provider, and report results to the source-machine-id. This version
+   is identical to authenticate!, but accepts any state machine env as the first parameter.
+
+  Sends and :event/authenticated or :event/authentication-failed to that source machine when done."
+  [any-sm-env provider source-machine-id]
+  (uism/trigger any-sm-env machine-id :event/authenticate {:source-machine-id source-machine-id
+                                                           :provider          provider}))
+
 (defn logged-in!
   "Tell the auth system that the given provider succeeded."
   [app-ish provider]
@@ -51,7 +68,7 @@
                                                                (comp/get-ident provider-ui {})
                                                                provider-ui)))))
 
-(defn- authenticate
+(defn- -authenticate
   "Start the process of authenticating for a given provider"
   [{::uism/keys [event-data] :as env}]
   (let [{:keys [provider source-machine-id]} event-data]
@@ -62,12 +79,12 @@
       (uism/assoc-aliased :password "")
       (uism/activate :state/gathering-credentials))))
 
-(defn- reply-to-initiator [env event]
+(defn- -reply-to-initiator [env event]
   (let [source-machine-id (uism/retrieve env :source-machine-id)]
     (cond-> (uism/store env :source-machine-id nil)
       source-machine-id (uism/trigger source-machine-id event))))
 
-(defn- add-authenticated-provider [env p]
+(defn- -add-authenticated-provider [env p]
   (let [current (uism/retrieve env :authenticated)]
     (uism/store env :authenticated (set/union (or current #{}) #{p}))))
 
@@ -81,8 +98,8 @@
     (when (not= provider expected-provider)
       (log/error "Provider mismatch" provider expected-provider))
     (-> env
-      (add-authenticated-provider (or provider expected-provider))
-      (reply-to-initiator :event/authenticated)
+      (-add-authenticated-provider (or provider expected-provider))
+      (-reply-to-initiator :event/authenticated)
       (uism/activate :state/idle))))
 
 (defn- logged-out [env]
@@ -92,7 +109,7 @@
       (log/error "Provider mismatch" provider expected-provider))
     (-> env
       (remove-authenticated-provider (or provider expected-provider))
-      (reply-to-initiator :event/authentication-failed)
+      (-reply-to-initiator :event/authentication-failed)
       (uism/activate :state/idle))))
 
 (defstatemachine auth-machine
@@ -125,10 +142,10 @@
                                            (if (contains? authenticated provider)
                                              (do
                                                (log/debug "Already authenticated")
-                                               (reply-to-initiator env :event/authenticated))
+                                               (-reply-to-initiator env :event/authenticated))
                                              (-> env
                                                (uism/store :provider provider)
-                                               (authenticate)))))}}}
+                                               (-authenticate)))))}}}
 
     :state/gathering-credentials
     {::uism/events
