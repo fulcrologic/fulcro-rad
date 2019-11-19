@@ -33,23 +33,25 @@
 (defsc AccountListItem [this {::acct/keys [id name] :as props}]
   {:query [::acct/id ::acct/name]
    :ident ::acct/id}
-  (dom/div
-    (dom/div {:onClick (fn []
-                         ;; TODO: Edit link
-                         )}
-      "Name: " name)))
+  (dom/div :.item
+    (div :.content
+      (dom/a :.header {:onClick (fn []
+                                  ;; TODO: Edit link
+                                  )}
+        "Name: " name))))
 
 (def ui-account-list-item (comp/factory AccountListItem {:keyfn ::acct/id}))
 
 (defsc AccountList [this {:keys [::acct/all-accounts] :as props}]
   {:query [{::acct/all-accounts (comp/get-query AccountListItem)}]
    :load! (fn [app options]
+            (log/info "Loading all accounts")
             (df/load! app ::acct/all-accounts AccountListItem
               (merge
                 options
                 {:target [:component/id ::account-list ::acct/all-accounts]})))
    :ident (fn [] [:component/id ::account-list])}
-  (dom/div
+  (dom/div :.ui.middle.aligned.divided.list
     (map ui-account-list-item all-accounts)))
 
 (def ui-account-list (comp/factory AccountList))
@@ -74,6 +76,7 @@
    :route-segment    ["accounts" :id]
 
    :prepare-route!   (fn [app [_ id :as route-segment]]
+                       (log/info "Preparing" route-segment)
                        (let [load! (comp/component-options AccountList :load!)]
                          (cond
                            (and load! (= "all" id)) (load! app {:post-action (fn [{:keys [app]}]
@@ -147,7 +150,8 @@
   (dom/div
     (div :.ui.top.menu
       (div :.ui.item "Demo Application")
-      (dom/a :.ui.item {:onClick (fn [])} "Accounts"))
+      (dom/a :.ui.item {:onClick (fn []
+                                   (controller/route-to! this ["accounts" "all"]))} "Accounts"))
     (div :.ui.container.segment
       (ui-auth-controller auth-controller)
       (ui-crud-controller crud-controller))))

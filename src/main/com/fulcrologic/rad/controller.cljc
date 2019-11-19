@@ -19,20 +19,28 @@
     (if (empty? target-route)
       #{}
       (let [controller  (uism/actor-class env :actor/crud-controller)
-            target      (log/spy :info (dr/route-target controller target-route))
+            {:keys [target]} (log/spy :info (dr/route-target controller target-route))
             ;; TODO: Nested form permissions
-            attributes  (log/spy :info (some-> target comp/component-options ::attr/attributes))
+            attributes  (log/spy :info (some-> target (comp/component-options ::attr/attributes)))
             authorities (log/spy :info (into #{}
-                                         (keep ::attr/authority)
+                                         (keep ::auth/authority)
                                          attributes))]
         authorities))))
 
+(defn activate-route [{::uism/keys [fulcro-app] :as env} target-route]
+  (dr/change-route fulcro-app target-route)
+  (-> env
+    (uism/store :target-route nil)
+    (uism/activate :state/idle)))
+
 (defn initialize-route-data [{::uism/keys [fulcro-app event-data] :as env}]
-  (let [{:keys [target-route]} event-data]
+  (log/info "Initializing route data")
+  (let [{:keys [target-route]} event-data
+        target-route (log/spy :info (or target-route (uism/retrieve env :target-route)))]
     (if (empty? target-route)
       (uism/activate env :state/idle)
       (let [controller (uism/actor-class env :actor/crud-controller)
-            target     (dr/route-target controller target-route)
+            {:keys [target]} (dr/route-target controller target-route)
             prepare!   (comp/component-options target :prepare-route!)]
         (if prepare!
           (do
@@ -40,18 +48,19 @@
             (-> env
               (uism/store :target-route target-route)
               (uism/activate :state/routing)))
-          (do
-            (dr/change-route fulcro-app target-route)
-            (uism/activate env :state/idle)))))))
+          (activate-route env target-route))))))
 
-(defn prepare-for-route [{::uism/keys [fulcro-app] :as env}]
-  (let [necessary-authorities (authorities-required-for-route env)
+(defn prepare-for-route [{::uism/keys [fulcro-app event-data] :as env}]
+  (log/info "Preparing for route")
+  (let [target-route          (:target-route event-data)
+        necessary-authorities (authorities-required-for-route env)
         current-authorities   (auth/verified-authorities fulcro-app)
         missing-authorities   (set/difference necessary-authorities current-authorities)]
     ;; TODO: cancel any in-progress route loading (could be a route while a route was loading)
     (if (empty? missing-authorities)
       (initialize-route-data env)
       (-> env
+        (uism/store :target-route target-route)
         (auth/authenticate (first missing-authorities) machine-id)
         (uism/activate :state/gathering-permissions)))))
 
@@ -78,9 +87,7 @@
                                             (let [loaded-route (log/spy :debug (get event-data :target-route))
                                                   target-route (log/spy :debug (uism/retrieve env :target-route))]
                                               (if (= loaded-route target-route)
-                                                (do
-                                                  (dr/change-route fulcro-app target-route)
-                                                  (uism/activate env :state/idle))
+                                                (activate-route env target-route)
                                                 env)))}}}
 
     :state/idle
@@ -98,3 +105,6 @@
     {:actor/auth-controller auth
      :actor/crud-controller controller}
     {:target-route target-route}))
+
+(defn route-to! [app path]
+  (uism/trigger! app machine-id :event/route {:target-route path}))

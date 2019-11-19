@@ -83,13 +83,13 @@
    (defmutation login [env {:keys [username password]}]
      {::pc/params #{:username :password}}
      (log/info "Attempt to login for " username)
-     {::auth/provider  :production
+     {::auth/provider  :local
       ::auth/real-user "Tony"})
    :cljs
    (defmutation login [params]
      (ok-action [{:keys [app result]}]
        (log/info "Login result" result)
-       (auth/logged-in! app :production))
+       (auth/logged-in! app :local))
      (remote [env]
        (-> env
          (m/returning auth/Session)))))
