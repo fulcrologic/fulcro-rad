@@ -2,11 +2,14 @@
   (:require
     [com.example.model.account :as acct]
     [com.example.schema :as schema :refer [schema]]
+    [com.example.ui.login-dialog :refer [LoginForm]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal :refer [ui-modal]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-header :refer [ui-modal-header]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-content :refer [ui-modal-content]]
     [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :refer [defrouter]]
     [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
@@ -68,97 +71,31 @@
 
 (defrouter CRUDController
   [this {:keys [:active-master] :as props}]
-  {:router-targets [AccountMaster]
-
-   })
+  {:router-targets [AccountMaster]})
 
 (def ui-crud-controller (comp/factory CRUDController))
 
-(defn set-authentication-actor
-  "Change the actor that acts as the UI for gathering the credentials based on env provider"
-  [env]
-  ;; TODO: swap actors for authentication provider
-  env)
-
-(defn authenticate [env]
-  (-> env
-    (set-authentication-actor)
-    (uism/assoc-aliased :username "")
-    (uism/assoc-aliased :password "")
-    (uism/activate :state/gathering-credentials)))
-
-(defstatemachine auth-machine
-  {::uism/aliases
-   {:username [:actor/auth-dialog :ui/username]
-    :password [:actor/auth-dialog :ui/password]}
-
-   ::uism/states
-   {:initial
-    {::uism/handler (fn [env]
-                      (-> env
-                        ;; TODO: Ping auth providers to see if we already have auth
-                        (uism/store :authenticated #{})
-                        (uism/activate :state/idle)))}
-
-    :state/idle
-    {::uism/events
-     {:event/authenticate
-      {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                        (let [{:keys [provider source-machine-id]} event-data
-                              authenticated (uism/retrieve env :authenticated)]
-                          (log/debug "Checking for authentication ")
-                          (if (contains? authenticated provider)
-                            (do
-                              (log/debug "Already authenticated")
-                              (uism/trigger env source-machine-id :event/authenticated))
-                            (authenticate env))))}}}
-
-    :state/gathering-credentials
-    {::uism/events
-     {:event/authenticate
-      {::uism/handler (fn [env]
-                        )}}}
-
-    }})
-
-(defsc LoginForm [this {:keys [:id    ] :as props}]
-  {:query [:id    ]
-   :ident :id}
-  (dom/div ))
-
+;; TODO: This will be a macro or function that generates this
 ;; TODO: Composition of auth provider UI into this controller
-(defsc AuthController [this {:ui/keys [username password] :as props}]
-  {:query         [:ui/auth-context
-                   :ui/username
-                   :ui/password
-                   [::uism/asm-id '_]]
-   :authentication-providers {:production LoginForm}
-   :ident         (fn [] [:component/id ::AuthController])
-   :initial-state {}}
+(defsc AuthController [this {:ui/keys [auth-context] :as props}]
+  ;; TODO: query is generated from the authentication providers
+  {:query                          [:ui/auth-context
+                                    {:production (comp/get-query LoginForm)}
+                                    [::uism/asm-id '_]]
+   ::auth/authentication-providers {:production LoginForm}
+   :ident                          (fn [] [:component/id ::AuthController])
+   :initial-state                  {}}
+  ;; TODO: Logic to choose the correct factory for the provider being used
   (let [state           (uism/get-active-state this ::auth-machine)
-        authenticating? (= :state/gathering-credentials state)]
-    (ui-modal {:open authenticating? :dimmer true}
-      (ui-modal-header {} "Please Log In")
-      (ui-modal-content {}
-        (div :.ui.form
-          (div :.ui.field
-            (label "Username")
-            (input {:type     "email"
-                    :onChange (fn [evt] (m/set-string! this :ui/password :event evt))
-                    :value    password}))
-          (div :.ui.field
-            (label "Password")
-            (input {:type     "password"
-                    :onChange (fn [evt] (m/set-string! this :ui/password :event evt))
-                    :value    password}))
-          (div :.ui.primary.button
-            {:onClick (fn [] (uism/trigger! this ::auth-machine :event/login {:username username :password password}))}
-            "Login"))))))
+        authenticating? (= :state/gathering-credentials state)
+        {:keys [production]} props
+        factory         (comp/computed-factory LoginForm)]
+    (factory production {:visible? authenticating?})))
 
 (def ui-auth-controller (comp/factory AuthController {:keyfn :id}))
 
 (defsc Root [this {:keys [auth-controller crud-controller]}]
-  {:query         [{:auth-controller (comp/get-query CRUDController)}
+  {:query         [{:auth-controller (comp/get-query AuthController)}
                    {:crud-controller (comp/get-query CRUDController)}]
    :initial-state {:crud-controller {}}}
   (dom/div {}
@@ -168,7 +105,23 @@
 
 (def ui-root (comp/factory Root))
 
-(defn prepare-for-route [env route])
+(defn providers-on-route
+  "Returns a set of providers that are required to properly render the given route"
+  [{::uism/keys [event-data] :as env}]
+  ;; TODO: Calculate providers from attributes that are on the query of the given route
+  (let [required-providers (providers-on-route env)]
+    #{:production}))
+
+(defn current-providers
+  "Returns a set of auth providers that the auth controller already has permission for"
+  ())
+
+(defn prepare-for-route [env]
+  (let [necessary-providers (providers-on-route env)
+        current-providers   (auth/current-providers fulcro-app)
+        ]
+    (-> env
+      (uism/trigger auth/machine-id :event/authenticate {:provider :production}))))
 
 (defstatemachine crud-machine
   {::uism/actors
@@ -180,12 +133,14 @@
 
    ::uism/states
    {:state/initial
-    {::uism/handler (fn [{::uism/keys [event-data] :as env}
-                         {:keys [default-route]} event-data]
+    {::uism/handler (fn [env
+                         ]
                       (-> env
                         (uism/store :config event-data)
-                        (prepare-for-route default-route)
-                        (uism/activate :state/routing)))}
+                        (prepare-for-route)))}
+
+    :state/gathering-permissions
+    {}
 
     :state/routing
     {}
@@ -200,8 +155,7 @@
   (uism/begin! app crud-machine ::crud-machine
     {:actor/auth-controller AuthController
      :actor/crud-controller CRUDController}
-    {:default-route ["accounts"]
-     })
+    {:default-route ["accounts"]})
 
-  (uism/begin! app auth-machine ::auth-machine
-    {:actor/auth-dialog AuthController}))
+  (uism/begin! app auth/auth-machine auth/machine-id
+    {:actor/controller AuthController}))

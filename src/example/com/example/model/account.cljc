@@ -1,12 +1,18 @@
 (ns com.example.model.account
   (:refer-clojure :exclude [name])
   (:require
+    #?(:clj
+       [com.wsscode.pathom.connect :as pc :refer [defmutation]]
+       :cljs
+       [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]])
     [com.wsscode.pathom.connect :as pc]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.entity :as entity :refer [defentity]]
     [com.fulcrologic.rad.validation :as validation]
     [com.fulcrologic.rad.authorization :as authorization]
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.authorization :as auth]
+    [taoensso.timbre :as log]))
 
 (defattr id :uuid
   ::attr/spec uuid?
@@ -68,3 +74,17 @@
   ::entity/beforeCreate (fn [env new-entity]
                           #_(attr/set! new-entity company (:current/firm env))))
 
+#?(:clj
+   (defmutation login [env {:keys [username password]}]
+     {::pc/params #{:username :password}}
+     (log/info "Attempt to login for " username)
+     {::auth/provider  :production
+      ::auth/real-user "Tony"})
+   :cljs
+   (defmutation login [params]
+     (ok-action [{:keys [app result]}]
+       (log/info "Login result" result)
+       (auth/logged-in! app :production))
+     (remote [env]
+       (-> env
+         (m/returning auth/Session)))))
