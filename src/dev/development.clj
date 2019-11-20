@@ -3,7 +3,6 @@
     [clojure.pprint :refer [pprint]]
     [clojure.repl :refer [doc source]]
     [clojure.tools.namespace.repl :as tools-ns :refer [disable-reload! refresh clear set-refresh-dirs]]
-    [clojure.tools.namespace.repl :as tools-ns]
     [com.example.components.datomic :refer [production-database]]
     [com.example.components.middleware]
     [com.example.components.server]
@@ -17,13 +16,16 @@
     [com.fulcrologic.rad.resolvers :as res]
     [mount.core :as mount]
     [taoensso.timbre :as log]
-    [datomic.api :as d]))
+    [datomic.api :as d]
+    [com.fulcrologic.rad.attributes :as attr]))
 
 (defn seed []
   (let [u new-uuid
         {:keys [connection]} production-database]
-    (d/transact connection [{::account/id   (u 1)
-                             ::account/name "Joe Blow"}])))
+    (d/transact connection [{::account/id       (u 1)
+                             ::account/name     "Joe Blow"
+                             ::account/email    "joe@example.com"
+                             ::account/password (attr/encrypt "letmein" "some-salt" (::attr/encrypt-iterations account/password))}])))
 
 (defn start []
   (mount/start-with-args {:config "config/dev.edn"})

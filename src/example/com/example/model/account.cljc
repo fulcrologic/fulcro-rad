@@ -22,6 +22,18 @@
   ::auth/authority :local
   ::db/id :production)
 
+(defattr email :string
+  ::db/id :production
+  ::attr/index? true
+  ::attr/required? true)
+
+(defattr password :password
+  ::db/id :production
+  ;; TODO: context sense to allow for owner to write
+  ::auth/permissions (fn [env] #{})
+  ::attr/encrypt-iterations 100
+  ::attr/required? true)
+
 (defattr name :string
   ::db/id :production
   ::auth/authority :local
@@ -80,7 +92,7 @@
                                        ['?dbid ::id '?uuid]] db)]
                          {::all-accounts (mapv (fn [id] {::id id}) ids)}))))
 
-(defentity account [id name role last-login]
+(defentity account [id name email password role last-login]
   ::auth/authority :local
   ::entity/beforeCreate (fn [env new-entity]
                           #_(attr/set! new-entity company (:current/firm env))))

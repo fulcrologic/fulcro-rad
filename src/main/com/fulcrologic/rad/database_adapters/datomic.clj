@@ -18,6 +18,7 @@
 
 (def type-map
   {:string  :db.type/string
+   :password :db.type/string
    :int     :db.type/long
    :long    :db.type/long
    :money   :db.type/bigdec

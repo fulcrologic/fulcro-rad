@@ -5,6 +5,8 @@
     [com.example.components.datomic :refer [production-database]]
     [com.example.components.auto-resolvers :refer [automatic-resolvers]]
     [com.example.components.config :as s.config]
+    [com.example.schema :refer [latest-schema]]
+    [com.fulcrologic.rad.authorization :as auth]
     [com.example.model.account :as account]
     [com.wsscode.common.async-clj :refer [let-chan]]
     [com.wsscode.pathom.connect :as pc]
@@ -12,7 +14,8 @@
     [edn-query-language.core :as eql]
     [mount.core :refer [defstate]]
     [taoensso.timbre :as log]
-    [datomic.api :as d]))
+    [datomic.api :as d]
+    [com.fulcrologic.rad.schema :as schema]))
 
 (defn preprocess-parser-plugin
   "Helper to create a plugin that can view/modify the env/tx of a top-level request.
@@ -150,6 +153,8 @@
                 (p/env-plugin {::p/process-error process-error})
                 (p/env-wrap-plugin (fn [env]
                                      (assoc env
+                                       ;; Required for permission checks and such
+                                       ::schema/schema latest-schema
                                        :config s.config/config)))
                 (preprocess-parser-plugin log-requests)
                 (preprocess-parser-plugin add-current-info)
@@ -157,7 +162,7 @@
                 (p/post-process-parser-plugin p/elide-not-found)
                 (p/post-process-parser-plugin elide-reader-errors)
                 (post-process-parser-plugin-with-env log-response)
-                #_query-params-to-env-plugin
+                query-params-to-env-plugin
                 p/error-handler-plugin
                 #_p/trace-plugin]})
 

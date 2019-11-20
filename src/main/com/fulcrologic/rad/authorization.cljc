@@ -1,6 +1,10 @@
 (ns com.fulcrologic.rad.authorization
   (:require
     [clojure.set :as set]
+    [clojure.spec.alpha :as s]
+    [com.wsscode.pathom.core :as p]
+    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
+    [com.fulcrologic.rad.schema :as schema]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
@@ -158,3 +162,24 @@
   actors that provides authentication service)"
   [app authorities]
   (uism/begin! app auth-machine machine-id authorities))
+
+(>defn readable?
+  [env a]
+  [map? ::attr/attribute => boolean?]
+  (let [{::keys [permissions]} a]
+    (boolean
+      (or (nil? permissions)
+        (and permissions (contains? (set (permissions env)) :read))))))
+
+(>defn redact
+  "Creates a post-processing plugin that "
+  [{::schema/keys [schema] :as env} query-result]
+  [(s/keys :req [::schema/schema]) (? (s/or :m map? :v vector?)) => (? (s/or :m map? :v vector?))]
+  (let [attr-map (schema/attribute-map schema)]
+    (p/transduce-maps (map (fn [[k v]]
+                             (let [a (get attr-map k)]
+                               (log/info "Checking" k)
+                               (if (log/spy :info (readable? env a))
+                                 [k v]
+                                 [k ::REDACTED]))))
+      query-result)))

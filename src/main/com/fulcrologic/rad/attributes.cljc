@@ -7,7 +7,10 @@
     [com.fulcrologic.fulcro.components :as comp]
     [clojure.set :as set])
   #?(:clj
-     (:import (clojure.lang IFn))))
+     (:import (clojure.lang IFn)
+              (javax.crypto.spec PBEKeySpec)
+              (javax.crypto SecretKeyFactory)
+              (java.util Base64))))
 
 ;; defrecord so we get map-like behavior and proper = support
 #?(:clj
@@ -59,7 +62,7 @@
             ~definition)
          definition))))
 
-(>def ::type #{:string :uuid :int :inst :ref :keyword})
+(>def ::type #{:string :uuid :int :inst :ref :keyword :password})
 (>def ::target qualified-keyword?)
 (>def ::spec any?)
 (>def ::qualified-key qualified-keyword?)
@@ -83,4 +86,25 @@
       (fn [{::db/keys [id]}] (= id database-id))
       attrs)))
 
+
+#?(:clj
+   (defn ^String gen-salt []
+     (let [sr   (java.security.SecureRandom/getInstance "SHA1PRNG")
+           salt (byte-array 16)]
+       (.nextBytes sr salt)
+       (String. salt))))
+
+#?(:clj
+   (defn ^String encrypt
+     "Encrypt the given password, returning a string."
+     [^String password ^String salt ^Long iterations]
+     (let [keyLength           512
+           password-characters (.toCharArray password)
+           salt-bytes          (.getBytes salt "UTF-8")
+           skf                 (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA512")
+           spec                (new PBEKeySpec password-characters salt-bytes iterations keyLength)
+           key                 (.generateSecret skf spec)
+           res                 (.getEncoded key)
+           hashed-pw           (.encodeToString (Base64/getEncoder) res)]
+       (str salt "|" iterations "|" hashed-pw))))
 

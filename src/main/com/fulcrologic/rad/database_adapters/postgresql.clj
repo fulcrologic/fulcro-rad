@@ -11,14 +11,15 @@
     [taoensso.timbre :as log]))
 
 (def type-map
-  {:string  "TEXT"
-   :int     "INTEGER"
-   :long    "BIGINT"
-   :money   "decimal(20,2)"
-   :inst    "BIGINT"
-   :keyword "TEXT"
-   :symbol  "TEXT"
-   :uuid    "UUID"})
+  {:string   "TEXT"
+   :password "TEXT"
+   :int      "INTEGER"
+   :long     "BIGINT"
+   :money    "decimal(20,2)"
+   :inst     "BIGINT"
+   :keyword  "TEXT"
+   :symbol   "TEXT"
+   :uuid     "UUID"})
 
 (defn attr->table-name [{::attr/keys [qualified-key]}]
   (some-> qualified-key

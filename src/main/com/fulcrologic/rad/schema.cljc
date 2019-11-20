@@ -4,7 +4,7 @@
     [com.fulcrologic.rad.entity :as entity]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.attributes :as attributes]
-    [com.fulcrologic.guardrails.core :refer [>def >defn => ?]]
+    [com.fulcrologic.guardrails.core :refer [>def >defn >defn- => ?]]
     [clojure.set :as set]
     [taoensso.timbre :as log]))
 
@@ -128,3 +128,17 @@
                        {}
                        all-keys)]
     result))
+
+(>defn- -attribute-map [{::keys [roots entities]
+                         :as    schema}]
+  [::schema => (s/map-of qualified-keyword? ::attributes/attribute)]
+  (let [all-attrs (concat roots (mapcat ::entity/attributes entities))]
+    (into {}
+      (map (fn [{::attributes/keys [qualified-key] :as attr}]
+             [qualified-key attr]))
+      all-attrs)))
+
+(def attribute-map
+  "[schema]
+   Get a map from keyword to attribute definition"
+  (memoize -attribute-map))
