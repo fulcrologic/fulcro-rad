@@ -22,9 +22,11 @@
     "(did you forget to require it?). This can be ignored if that component type does no I/O."))
 
 (>defn start-io!
-  [env ComponentClass options]
+  [env ComponentClass {::rad/keys [target-route] :as options}]
   [::uism/env comp/component-class? (s/keys :req [::rad/type ::rad/target-route ::id]) => ::uism/env]
-  (-start-io! env ComponentClass options))
+  (-> env
+    (uism/store ::rad/target-route target-route)
+    (-start-io! ComponentClass options)))
 
 (defmulti -desired-attributes (fn [TargetClass]
                                 (some-> TargetClass (comp/component-options ::rad/type))))
@@ -61,9 +63,9 @@
   (let [{::rad/keys [target-route]} event-data]
     (if (empty? target-route)
       #{}
-      (let [router (uism/actor-class env :actor/router)
+      (let [router      (uism/actor-class env :actor/router)
             {:keys [target]} (log/spy :debug (dr/route-target router target-route))
-            attributes (log/spy :debug (some-> target desired-attributes))
+            attributes  (log/spy :debug (some-> target desired-attributes))
             authorities (log/spy :debug (into #{}
                                           (keep ::auth/authority)
                                           attributes))]
@@ -78,12 +80,12 @@
 (defn- initialize-route-data [{::uism/keys [fulcro-app event-data] :as env}]
   (log/debug "Initializing route data")
   (let [{::rad/keys [target-route]} event-data
-        target-route (log/spy :debug (or target-route (uism/retrieve env ::rad/target-route)))
         options (assoc event-data ::rad/target-route target-route)]
     (if (empty? target-route)
-      (do
-        (log/warn "Tried to initialize route data, but the target route was empty!")
-        (uism/activate env :state/idle))
+      (let [{::keys [home-page]} (uism/retrieve env :config)]
+        (log/debug "No target route. Using home page.")
+        (cond-> (uism/activate env :state/idle)
+          (seq home-page) (activate-route home-page)))
       ;; The main thing we end up needing to know is the target class, and from
       ;; that we can pull the information we need to do the remaining steps.
       ;; I.e. Load, create a new, etc.
@@ -98,10 +100,10 @@
 
 (defn prepare-for-route [{::uism/keys [fulcro-app event-data] :as env}]
   (log/debug "Preparing for route")
-  (let [target-route (::rad/target-route event-data)
+  (let [target-route          (::rad/target-route event-data)
         necessary-authorities (authorities-required-for-route env)
-        current-authorities (auth/verified-authorities fulcro-app)
-        missing-authorities (set/difference necessary-authorities current-authorities)]
+        current-authorities   (auth/verified-authorities fulcro-app)
+        missing-authorities   (set/difference necessary-authorities current-authorities)]
     ;; TODO: cancel any in-progress route loading (could be a route while a route was loading)
     (if (empty? missing-authorities)
       (initialize-route-data env)
@@ -126,15 +128,18 @@
      {:event/route         {::uism/handler prepare-for-route}
       :event/authenticated {::uism/handler prepare-for-route}}}
 
+    ;; TODO: Route timeout
     :state/routing
     {::uism/events
      {:event/route        {::uism/handler prepare-for-route}
-      :event/route-loaded {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
+      :event/route-loaded {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                             (let [loaded-route (log/spy :debug (get event-data ::rad/target-route))
                                                   target-route (log/spy :debug (uism/retrieve env ::rad/target-route))]
                                               (if (= loaded-route target-route)
                                                 (activate-route env target-route)
-                                                env)))}}}
+                                                (do
+                                                  (log/warn "Load notification from a route we don't care about" loaded-route)
+                                                  env))))}}}
 
     :state/idle
     {::uism/events
@@ -143,10 +148,12 @@
 (defn start!
   "Start the central controller and auth system."
   [app {::rad/keys [target-route]
-        ::keys     [id]}]
+        ::keys     [id router home-page]}]
   (uism/begin! app central-controller id
-    {}
-    {::rad/target-route target-route}))
+    {:actor/router router}
+    {::rad/target-route target-route
+     ::id               id
+     ::home-page        home-page}))
 
 (defn route-to!
   "Tell the controller to route the application to the given path."

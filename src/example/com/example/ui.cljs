@@ -131,6 +131,12 @@
       (div :.ui.item "Demo Application")
       ;; TODO: Show how we can check authority to hide UI
       (dom/a :.ui.item {:onClick (fn []
+                                   (controller/route-to! this ::main-controller
+                                     ["account" "edit" (new-uuid 1)]))} "My Account")
+      (dom/a :.ui.item {:onClick (fn []
+                                   (controller/route-to! this ::main-controller
+                                     ["account" "create" (str (new-uuid))]))} "Accounts")
+      (dom/a :.ui.item {:onClick (fn []
                                    (controller/route-to! this ::main-controller ["accounts" "all"]))} "Accounts"))
     (div :.ui.container.segment
       (ui-auth-controller auth-controller)

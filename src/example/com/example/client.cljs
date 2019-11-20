@@ -11,11 +11,14 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.components :as comp]))
 
+;; TODO: Constructor function. Allow option to completely autogenerate forms if desired.
+
 (defonce app (app/fulcro-app {:remotes          {:remote (http/fulcro-http-remote {})}
                               :client-did-mount (fn [app]
                                                   (auth/start! app {:local (uism/with-actor-class (comp/get-ident LoginForm {}) LoginForm)})
                                                   (controller/start! app
                                                     {::schema/schema     latest-schema
+                                                     ::controller/home-page ["landing-page"]
                                                      ::controller/router ui/MainRouter
                                                      ::controller/id     ::main-controller}))}))
 
