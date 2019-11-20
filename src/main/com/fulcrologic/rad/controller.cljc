@@ -153,7 +153,7 @@
     {:actor/router router}
     {::rad/target-route target-route
      ::id               id
-     ::home-page        home-page}))
+     ::home-page        (or home-page ["index"])}))
 
 (defn route-to!
   "Tell the controller to route the application to the given path."

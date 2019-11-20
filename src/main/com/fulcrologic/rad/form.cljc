@@ -1,27 +1,27 @@
 (ns com.fulcrologic.rad.form
   (:require
-    [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.ids :refer [new-uuid]]
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
-    [com.fulcrologic.rad.rendering.data-field :refer [render-field]]
-    [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.controller :as controller]
-    [com.fulcrologic.rad.authorization :as auth]
-    [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
-    [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.fulcro.mutations :as m]
-    [com.fulcrologic.fulcro.data-fetch :as df]
-    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
+    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
+    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
-    [taoensso.timbre :as log]
-    [com.wsscode.pathom.connect :as pc]))
+    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
+    [com.fulcrologic.rad :as rad]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.rad.controller :as controller]
+    [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
+    [com.fulcrologic.rad.ids :refer [new-uuid]]
+    [com.fulcrologic.rad.rendering.data-field :refer [render-field]]
+    [com.wsscode.pathom.connect :as pc]
+    [taoensso.timbre :as log]))
 
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::diff ::delta}}
-     (dba/save-form env params) )
+     (dba/save-form env params))
    :cljs
    (m/defmutation save-form [params]
      (action [env] :noop)))
@@ -131,6 +131,14 @@
     {::delta delta
      ::diff  diff}))
 
+(def global-events
+  {:event/will-leave     {::uism/handler (fn [env]
+                                           ;; TODO: Handle the controller asking if it is OK to abort this edit
+                                           env)}
+   ;; TODO: hook this up in controller
+   :event/form-abandoned {::uism/handler (fn [env]
+                                           (uism/exit env))}})
+
 (defstatemachine form-machine
   {::uism/actors
    #{:actor/form}
@@ -163,49 +171,62 @@
      {:event/ok     {::uism/handler exit-form}
       :event/cancel {::uism/handler (fn [env] (uism/activate env :state/editing))}}}
 
+    :state/saving
+    (merge global-events
+      {::uism/events
+       {:event/save-failed {::uism/handler (fn [env]
+                                             ;; TODO: Handle failures
+                                             env)}
+        :event/saved       {::uism/handler (fn [env]
+                                             (let [form-ident (uism/actor->ident env :actor/form)]
+                                               (-> env
+                                                 (uism/apply-action fs/entity->pristine* form-ident))))}}})
+
     :state/editing
-    {::uism/events
-     {:event/attribute-changed {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                 ;; NOTE: value at this layer is ALWAYS typed to the attribute.
-                                                 ;; The rendering layer is responsible for converting the value to/from
-                                                 ;; the representation needed by the UI component (e.g. string)
-                                                 (let [{:keys       [value]
-                                                        ::attr/keys [qualified-key]} event-data
-                                                       form-ident     (uism/actor->ident env :actor/form)
-                                                       path           (when (and form-ident qualified-key)
-                                                                        (conj form-ident qualified-key))
-                                                       ;; TODO: Decide when to properly set the field to marked
-                                                       mark-complete? true]
-                                                   (when-not path
-                                                     (log/error "Unable to record attribute change. Path cannot be calculated."))
-                                                   (cond-> env
-                                                     mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
-                                                     path (uism/apply-action assoc-in path value))))}
-      :event/will-leave        {::uism/handler (fn [env]
-                                                 ;; TODO: Handle the controller asking if it is OK to abort this edit
-                                                 env)}
-      ;; TODO: event for leaving to GC form state
-      :event/blur              {::uism/handler (fn [env] env)}
-      :event/save              {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                 (let [form-class   (uism/actor-class env :actor/form)
-                                                       data-to-save (calc-diff env)
-                                                       params       (merge event-data data-to-save)]
-                                                   (-> env
-                                                     (uism/trigger-remote-mutation :actor/form `save-form
-                                                       {::uism/error-event :event/save-failed
-                                                        :params            params
-                                                        ;; TODO: Make return optional?
-                                                        ::m/returning      form-class
-                                                        ::uism/ok-event    :event/saved}))))}
-      :event/saved             {::uism/handler (fn [env]
-                                                 (let [form-ident (uism/actor->ident env :actor/form)]
-                                                   (-> env
-                                                     (uism/apply-action fs/entity->pristine* form-ident))))}
-      :event/reset             {::uism/handler (fn [env]
-                                                 (let [form-ident (uism/actor->ident env :actor/form)]
-                                                   (uism/apply-action env fs/pristine->entity* form-ident)))}
-      :event/cancel            {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                                                 )}}}}})
+    (merge global-events
+      {::uism/events
+       {:event/attribute-changed {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                                                   ;; NOTE: value at this layer is ALWAYS typed to the attribute.
+                                                   ;; The rendering layer is responsible for converting the value to/from
+                                                   ;; the representation needed by the UI component (e.g. string)
+                                                   (let [{:keys       [value]
+                                                          ::attr/keys [qualified-key]} event-data
+                                                         form-ident     (uism/actor->ident env :actor/form)
+                                                         path           (when (and form-ident qualified-key)
+                                                                          (conj form-ident qualified-key))
+                                                         ;; TODO: Decide when to properly set the field to marked
+                                                         mark-complete? true]
+                                                     (when-not path
+                                                       (log/error "Unable to record attribute change. Path cannot be calculated."))
+                                                     (cond-> env
+                                                       mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
+                                                       ;; FIXME: Data coercion needs to happen at UI and db layer, but must
+                                                       ;; be extensible. You should be able to select a variant of a form
+                                                       ;; control for a given db-supported type. This allows the types
+                                                       ;; to be fully extensible since the db adapter can isolate that
+                                                       ;; coercion, and the UI control variant can do coercion at the UI
+                                                       ;; layer.
+                                                       ;; FIXME: One catch with coercion: sometimes the value has transient
+                                                       ;; values during input that will not properly coerce. This means UI
+                                                       ;; controls will need to buffer the user-interaction value and only
+                                                       ;; do the commit/coercion at the end.
+                                                       path (uism/apply-action assoc-in path value))))}
+        :event/blur              {::uism/handler (fn [env] env)}
+        :event/save              {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                                                   (let [form-class   (uism/actor-class env :actor/form)
+                                                         data-to-save (calc-diff env)
+                                                         params       (merge event-data data-to-save)]
+                                                     (-> env
+                                                       (uism/trigger-remote-mutation :actor/form `save-form
+                                                         {::uism/error-event :event/save-failed
+                                                          :params            params
+                                                          ;; TODO: Make return optional?
+                                                          ::m/returning      form-class
+                                                          ::uism/ok-event    :event/saved}))))}
+        :event/reset             {::uism/handler (fn [env]
+                                                   (let [form-ident (uism/actor->ident env :actor/form)]
+                                                     (uism/apply-action env fs/pristine->entity* form-ident)))}
+        :event/cancel            {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}])}}})}})
 
 (defmethod controller/-start-io! ::rad/form
   [{::uism/keys [fulcro-app]} TargetClass {::rad/keys [target-route] :as options}]
