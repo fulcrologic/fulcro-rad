@@ -108,14 +108,11 @@
 
 (defn log-response
   [env input]
-  (let [{:current/keys [user-id firm-id]} (env-with-current-info env)]
-    (binding [*print-level* 4 *print-length* 4])
-    (log/info "user-id:" user-id "firm-id:" firm-id "response"
-      )
-    (pprint (if (map? input)
-              (dissoc input :com.wsscode.pathom/trace)
-              input))
-    input))
+  (binding [*print-level* 6 *print-length* 4]
+    (log/info "Result:\n" (with-out-str
+                (pprint (if (map? input)
+                          (dissoc input :com.wsscode.pathom/trace)
+                          input))))))
 
 (defn add-empty-vectors
   "For cardinality many attributes, replaces ::p/not-found with an empty vector."

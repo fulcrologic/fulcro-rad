@@ -17,14 +17,12 @@
 
 (>def ::id-attribute ::attr/attribute)
 
-(>defn entity-query
+(defn entity-query
   [{::db/keys     [id]
     ::dba/keys    [adapters]
     ::entity/keys [entity]
     ::keys        [id-attribute]
     :as           env} input]
-  [(s/keys :req [::db/id ::dba/adapters ::entity/entity ::id-attribute]) (s/or :one map? :many sequential?)
-   => (? (s/or :many vector? :one map?))]
   (enc/if-let [dbadapter (get adapters id)
                query     (or
                            (get env :com.wsscode.pathom.core/parent-query)

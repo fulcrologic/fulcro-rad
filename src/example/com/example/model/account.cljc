@@ -57,9 +57,10 @@
 (defn support? [context]
   (= :support (role context)))
 
-(defn owned-by [context entity]
+(defn owned-by [{::entity/keys [primary-key]
+                 ::auth/keys   [context] :as env}]
   (cond
-    (or (= (id context) (id entity))
+    (or (= (::id context) primary-key)
       (admin? context))
     #{:read :write}
 
@@ -75,11 +76,11 @@
   ::attr/resolver (fn [env input] #?(:clj {::last-login (java.util.Date.)}))
   ::auth/authority :local
   ::auth/required-contexts #{id}
-  ::auth/permissions (fn [context entity]
-                       (owned-by context entity)))
+  ::auth/permissions (fn [env] (owned-by env)))
 
 (defattr all-accounts :ref
   ::db/id :production
+  ;;::auth/permissions (fn [env] (admin? env))
   ::attr/cardinality :many
   ::attr/target :com.example.model.account/id
   ::auth/authority :local

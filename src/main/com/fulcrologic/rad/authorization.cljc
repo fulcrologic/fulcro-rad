@@ -171,15 +171,13 @@
       (or (nil? permissions)
         (and permissions (contains? (set (permissions env)) :read))))))
 
-(>defn redact
+(defn redact
   "Creates a post-processing plugin that "
   [{::schema/keys [schema] :as env} query-result]
-  [(s/keys :req [::schema/schema]) (? (s/or :m map? :v vector?)) => (? (s/or :m map? :v vector?))]
   (let [attr-map (schema/attribute-map schema)]
     (p/transduce-maps (map (fn [[k v]]
                              (let [a (get attr-map k)]
-                               (log/info "Checking" k)
-                               (if (log/spy :info (readable? env a))
+                               (if (readable? env a)
                                  [k v]
                                  [k ::REDACTED]))))
       query-result)))
