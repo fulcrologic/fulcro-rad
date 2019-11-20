@@ -4,7 +4,7 @@
            com.taoensso/timbre        {:mvn/version "4.10.0"}
            camel-snake-kebab          {:mvn/version "0.4.0"}
            com.taoensso/encore        {:mvn/version "2.115.0"}
-           com.fulcrologic/fulcro     {:mvn/version "3.0.11-RC2"}
+           com.fulcrologic/fulcro     {:local/root "/Users/tonykay/fulcrologic/fulcro"} #_{:mvn/version "3.0.11-RC2"}
            com.fulcrologic/guardrails {:mvn/version "0.0.9"}
            com.wsscode/pathom         {:mvn/version "2.2.26"}
            org.clojure/clojure        {:mvn/version "1.10.1" :scope "provided"}
@@ -20,18 +20,18 @@
 
            :dev       {:extra-paths ["src/dev" "resources" "src/example"]
                        :extra-deps  {thheller/shadow-cljs                {:mvn/version "2.8.69"}
-                                     com.datomic/datomic-pro             {:mvn/version "0.9.5966"
-                                                                          :exclusions  [org.slf4j/slf4j-nop]}
-                                     vvvvalvalval/datomock               {:mvn/version "0.2.2"}
+                                     ;com.datomic/datomic-pro             {:mvn/version "0.9.5966"
+                                     ;:exclusions  [org.slf4j/slf4j-nop]}
+                                     ;vvvvalvalval/datomock               {:mvn/version "0.2.2"}
                                      com.fulcrologic/semantic-ui-wrapper {:mvn/version "1.0.0"}
-                                     org.postgresql/postgresql           {:mvn/version "42.2.8"}
+                                     ;org.postgresql/postgresql           {:mvn/version "42.2.8"}
                                      mount                               {:mvn/version "0.1.12"}
 
                                      ;; Unified logging for server
-                                     org.slf4j/log4j-over-slf4j        {:mvn/version "1.7.25"} ; auto sends log4j to slf4j
-                                     org.slf4j/jul-to-slf4j            {:mvn/version "1.7.25"} ; auto sends java.util.logging to slf4j
-                                     org.slf4j/jcl-over-slf4j          {:mvn/version "1.7.25"} ; auto-sends java.common.logging to slf4j
-                                     com.fzakaria/slf4j-timbre         {:mvn/version "0.3.7"} ; hooks slf4j to timbre
+                                     org.slf4j/log4j-over-slf4j          {:mvn/version "1.7.25"} ; auto sends log4j to slf4j
+                                     org.slf4j/jul-to-slf4j              {:mvn/version "1.7.25"} ; auto sends java.util.logging to slf4j
+                                     org.slf4j/jcl-over-slf4j            {:mvn/version "1.7.25"} ; auto-sends java.common.logging to slf4j
+                                     com.fzakaria/slf4j-timbre           {:mvn/version "0.3.7"} ; hooks slf4j to timbre
 
                                      binaryage/devtools                  {:mvn/version "0.9.10"}
                                      ring/ring-defaults                  {:mvn/version "0.3.2"}

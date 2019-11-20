@@ -27,7 +27,8 @@
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]))
 
 (defsc AccountForm [this props]
-  {::rad/type        :form
+  {::rad/type        ::rad/form
+   ::rad/io?         true
    ::attr/attributes [acct/id acct/name]
 
    ;; intention is action can be "edit", "create", "view". ID can be the real ID, or some constant for create (so
@@ -66,8 +67,9 @@
 (def ui-account-list-item (comp/factory AccountListItem {:keyfn ::acct/id}))
 
 (defsc AccountList [this {:keys [::acct/all-accounts] :as props}]
-  {::rad/type             :report
-   ::rad/ListItem         AccountListItem
+  {::rad/type             ::rad/report
+   ::rad/io?              true
+   ::rad/BodyItem         AccountListItem
    ::rad/source-attribute acct/all-accounts
 
    :route-segment         ["accounts"]
@@ -105,10 +107,10 @@
    :initial-state                  {:local           {}
                                     :ui/auth-context nil}}
   ;; TODO: Logic to choose the correct factory for the provider being used
-  (let [state           (uism/get-active-state this auth/machine-id)
+  (let [state (uism/get-active-state this auth/machine-id)
         authenticating? (= :state/gathering-credentials state)
         {:keys [local]} props
-        factory         (comp/computed-factory LoginForm)]
+        factory (comp/computed-factory LoginForm)]
     (factory local {:visible? authenticating?})))
 
 (def ui-auth-controller (comp/factory AuthController {:keyfn :id}))
