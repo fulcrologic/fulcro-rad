@@ -6,7 +6,8 @@
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.database-adapters.protocols :as dbp :refer [DBAdapter]]
     [com.fulcrologic.guardrails.core :refer [>defn => >def]]
-    [clojure.spec.alpha :as s]))
+    [clojure.spec.alpha :as s]
+    [taoensso.timbre :as log]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; The long-term goal is for the developer (and RAD) to be able to rely on attribute
@@ -31,6 +32,11 @@
   [dbadapter old-schema new-schema]
   [::adapter ::schema/schema ::schema/schema => any?]
   (dbp/diff->migration dbadapter old-schema new-schema))
+
+(defn save-form
+  [mutation-env params]
+  ;; TODO: Tease apart. It is possible that attributes in the diff came in for more than one database.
+  (log/info "TODO: Save" params))
 
 
 

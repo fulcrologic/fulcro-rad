@@ -3,6 +3,7 @@
   (:require
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :as gr :refer [>defn => >def >fdef]]
+    [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.fulcro.components :as comp]
     [clojure.set :as set])
@@ -11,6 +12,8 @@
               (javax.crypto.spec PBEKeySpec)
               (javax.crypto SecretKeyFactory)
               (java.util Base64))))
+
+(def attribute-registry (atom {}))
 
 ;; defrecord so we get map-like behavior and proper = support
 #?(:clj
@@ -55,7 +58,10 @@
                         (assoc ::type type)
                         (assoc ::qualified-key kw)
                         (dissoc ::spec))
-           definition `(def ~sym (com.fulcrologic.rad.attributes/map->Attribute ~output))]
+           definition `(do
+                         (def ~sym (com.fulcrologic.rad.attributes/map->Attribute ~output))
+                         (swap! attribute-registry assoc ~kw ~sym)
+                         ~sym)]
        (if spec-def
          `(do
             ~spec-def
@@ -71,6 +77,39 @@
 (>def ::attribute (s/keys
                     :req [::type ::qualified-key]
                     :opt [::index? ::component? ::spec]))
+
+(>defn key->attribute
+  "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
+  [k]
+  [::qualified-key => ::attribute]
+  (get @attribute-registry k))
+
+(>defn to-int [str]
+  [string? => int?]
+  (if (nil? str)
+    0
+    (try
+      #?(:clj  (Long/parseLong str)
+         :cljs (js/parseInt str))
+      (catch #?(:clj Exception :cljs :default) e
+        0))))
+
+;; TODO: These need to be tied to the database adapter. Native controls in DOM always deal in strings, but
+;; it is possible that custom inputs might not need coercion?
+(>defn string->value [k v]
+  [::qualified-key string? => any?]
+  (let [{::keys [type]} (key->attribute k)]
+    (case type
+      :uuid (new-uuid v)
+      :int (to-int v)
+      ;; TODO: More coercion
+      v)))
+
+(>defn value->string [k v]
+  [::qualified-key any? => string?]
+  (let [{::keys [type]} (key->attribute k)]
+    ;; TODO: more coercion
+    (str v)))
 
 (>defn attributes->eql
   "Returns an EQL query for all of the attributes that are available for the given database-id"

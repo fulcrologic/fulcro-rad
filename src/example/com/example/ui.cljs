@@ -5,6 +5,7 @@
 
     [com.example.model.account :as acct]
     [com.example.ui.login-dialog :refer [LoginForm]]
+    [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal :refer [ui-modal]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-header :refer [ui-modal-header]]
     [com.fulcrologic.semantic-ui.modules.modal.ui-modal-content :refer [ui-modal-content]]
@@ -27,26 +28,31 @@
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]))
 
 (defsc AccountForm [this props]
-  {::rad/type        ::rad/form
-   ::rad/io?         true
-   ::attr/attributes [acct/id acct/name]
+  {::rad/type           ::rad/form
+   ::rad/io?            true
+   ::attr/attributes    [acct/id acct/name]
+
+   ::form/cancel-route  ["home"]
+   ::form/confirm-exit? true
 
    ;; intention is action can be "edit", "create", "view". ID can be the real ID, or some constant for create (so
    ;; bookmarking works?).
    ;; Could also use new tempid on create and do a check for existence
-   :route-segment    ["account" :action :id]
-   :will-enter       (fn [app {:keys [id]}]
-                       ;; TODO: automatic type coercion on ID
-                       (dr/route-immediate [::acct/id (uuid id)]))
+   :route-segment       ["account" :action :id]
+   :will-enter          (fn [app {:keys [id]}]
+                          ;; TODO: automatic type coercion on ID
+                          (dr/route-immediate [::acct/id (new-uuid id)]))
 
-   :pre-merge        (fn [{:keys [data-tree]}]
-                       (fs/add-form-config AccountForm data-tree))
+   :pre-merge           (fn [{:keys [data-tree]}]
+                          (merge
+                            {:ui/confirmation-message "Lose unsaved changes?"}
+                            (fs/add-form-config AccountForm data-tree)))
 
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
-   :form-fields      #{::acct/id ::acct/name}
-   :query            [:ui/new? [::uism/asm-id '_] ::acct/id ::acct/name]
-   :ident            ::acct/id}
+   :form-fields         #{::acct/id ::acct/name}
+   :query               [:ui/new? :ui/confirmation-message [::uism/asm-id '_] ::acct/id ::acct/name]
+   :ident               ::acct/id}
   (form/render-form this props))
 
 (defsc AccountListItem [this {::acct/keys [id name] :as props}]
@@ -107,10 +113,10 @@
    :initial-state                  {:local           {}
                                     :ui/auth-context nil}}
   ;; TODO: Logic to choose the correct factory for the provider being used
-  (let [state (uism/get-active-state this auth/machine-id)
+  (let [state           (uism/get-active-state this auth/machine-id)
         authenticating? (= :state/gathering-credentials state)
         {:keys [local]} props
-        factory (comp/computed-factory LoginForm)]
+        factory         (comp/computed-factory LoginForm)]
     (factory local {:visible? authenticating?})))
 
 (def ui-auth-controller (comp/factory AuthController {:keyfn :id}))
