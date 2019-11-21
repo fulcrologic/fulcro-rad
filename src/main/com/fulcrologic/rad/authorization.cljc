@@ -163,9 +163,8 @@
   [app authorities]
   (uism/begin! app auth-machine machine-id authorities))
 
-(>defn readable?
+(defn readable?
   [env a]
-  [map? ::attr/attribute => boolean?]
   (let [{::keys [permissions]} a]
     (boolean
       (or (nil? permissions)
@@ -173,8 +172,8 @@
 
 (defn redact
   "Creates a post-processing plugin that "
-  [{::schema/keys [schema] :as env} query-result]
-  (let [attr-map (schema/attribute-map schema)]
+  [env query-result]
+  (let [attr-map @attr/attribute-registry]
     (p/transduce-maps (map (fn [[k v]]
                              (let [a (get attr-map k)]
                                (if (readable? env a)

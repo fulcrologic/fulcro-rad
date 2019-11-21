@@ -5,7 +5,7 @@
     [com.example.components.datomic :refer [production-database]]
     [com.example.components.auto-resolvers :refer [automatic-resolvers]]
     [com.example.components.config :as s.config]
-    [com.example.schema :refer [latest-schema]]
+    [com.example.schema :as schema :refer [latest-schema]]
     [com.fulcrologic.rad.authorization :as auth]
     [com.example.model.account :as account]
     [com.wsscode.common.async-clj :refer [let-chan]]
@@ -14,8 +14,7 @@
     [edn-query-language.core :as eql]
     [mount.core :refer [defstate]]
     [taoensso.timbre :as log]
-    [datomic.api :as d]
-    [com.fulcrologic.rad.schema :as schema]))
+    [datomic.api :as d]))
 
 (defn preprocess-parser-plugin
   "Helper to create a plugin that can view/modify the env/tx of a top-level request.
@@ -108,11 +107,13 @@
 
 (defn log-response
   [env input]
-  (binding [*print-level* 6 *print-length* 4]
-    (log/info "Result:\n" (with-out-str
-                (pprint (if (map? input)
-                          (dissoc input :com.wsscode.pathom/trace)
-                          input))))))
+  (let [{:current/keys [user-id firm-id]} (env-with-current-info env)]
+    (binding [*print-level* 4 *print-length* 4]
+      (log/info "user-id:" user-id "firm-id:" firm-id "response"
+        (if (map? input)
+          (dissoc input :com.wsscode.pathom/trace)
+          input)))
+    input))
 
 (defn add-empty-vectors
   "For cardinality many attributes, replaces ::p/not-found with an empty vector."

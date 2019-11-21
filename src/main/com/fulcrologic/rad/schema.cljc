@@ -6,7 +6,8 @@
     [com.fulcrologic.rad.attributes :as attributes]
     [com.fulcrologic.guardrails.core :refer [>def >defn >defn- => ?]]
     [clojure.set :as set]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.rad.attributes :as attr]))
 
 (>def ::entities (s/every ::entity/entity))
 
@@ -19,19 +20,6 @@
                  :req [::entities]
                  :opt [::indexes ::roots]))
 
-(>defn find-attribute
-  [schema attribute]
-  [::schema qualified-keyword? => (? ::attributes/attribute)]
-  (reduce
-    (fn [_ {::entity/keys [attributes]}]
-      (let [attr (first (filter (fn [{::attributes/keys [qualified-key]}]
-                                  (= qualified-key attribute))
-                          attributes))]
-        (when attr
-          (reduced attr))))
-    nil
-    (::entities schema)))
-
 (>def ::new-attributes (s/every ::attributes/attribute))
 (>def ::old-attribute ::attributes/attribute)
 (>def ::new-attribute ::attributes/attribute)
@@ -43,20 +31,23 @@
 (>def ::schema-diff (s/keys :opt [::new-entities ::deleted-entities ::modified-entities]))
 
 (>defn entity-diff
-  [database-id {old-attributes ::entity/attributes :as old-entity} {new-attributes ::entity/attributes :as new-entity}]
+  [database-id {old-attribute-keys ::entity/attributes :as old-entity}
+   {new-attribute-keys ::entity/attributes :as new-entity}]
   [::db/id ::entity/entity ::entity/entity => ::entity-diff]
   (let [belongs?  (fn [{::db/keys [id]}] (= database-id id))
         old-attrs (into {}
                     (comp
+                      (map attr/key->attribute)
                       (filter belongs?)
                       (map (fn [{::attributes/keys [qualified-key] :as attr}] [qualified-key attr])))
-                    old-attributes)
+                    old-attribute-keys)
         new-attrs (into {}
                     (comp
+                      (map attr/key->attribute)
                       (filter belongs?)
                       (map (fn [{::attributes/keys [qualified-key] :as attr}] [qualified-key attr])))
-                    new-attributes)
-        all-keys  (set/union (set (keys new-attrs)) (set (keys old-attrs)))
+                    new-attribute-keys)
+        all-keys  (set/union (set old-attribute-keys) (set new-attribute-keys))
         new?      (fn [k] (and
                             (contains? new-attrs k)
                             (not (contains? old-attrs k))))
@@ -81,9 +72,10 @@
   "Returns an entity with just the attributes associated with the given database."
   [dbid entity]
   [::db/id ::entity/entity => ::entity/entity]
-  (update entity ::entity/attributes (fn [attrs]
-                                       (filterv (fn [{::db/keys [id]}]
-                                                  (= dbid id)) attrs))))
+  (update entity ::entity/attributes (fn [attr-keys]
+                                       (filterv (fn [k]
+                                                  (let [{::db/keys [id]} (attr/key->attribute k)]
+                                                    (= dbid id))) attr-keys))))
 
 (>defn schema-diff
   "Return a diff between two schemas, which can be turned into migrations using a db adapter.
@@ -96,16 +88,17 @@
   "
   [database-id {old-entities ::entities :as old-schema} {new-entities ::entities :as new-schema}]
   [::db/id ::schema ::schema => ::schema-diff]
-  (let [belongs?     (fn [{::entity/keys [attributes]}] (some #(= database-id (::db/id %)) attributes))
-        old-entities (into {}
+  (let [old-entities (into {}
                        (keep (fn [{::entity/keys [qualified-key] :as entity}]
-                               (when (belongs? entity)
-                                 [qualified-key (limited-attributes database-id entity)])))
+                               (let [attrs (limited-attributes database-id entity)]
+                                 (when (seq attrs)
+                                   [qualified-key attrs]))))
                        old-entities)
         new-entities (into {}
                        (keep (fn [{::entity/keys [qualified-key] :as entity}]
-                               (when (belongs? entity)
-                                 [qualified-key (limited-attributes database-id entity)])))
+                               (let [attrs (limited-attributes database-id entity)]
+                                 (when (seq attrs)
+                                   [qualified-key attrs]))))
                        new-entities)
         all-keys     (set/union (set (keys new-entities)) (set (keys old-entities)))
         new?         (fn [k] (and
@@ -129,16 +122,3 @@
                        all-keys)]
     result))
 
-(>defn- -attribute-map [{::keys [roots entities]
-                         :as    schema}]
-  [::schema => (s/map-of qualified-keyword? ::attributes/attribute)]
-  (let [all-attrs (concat roots (mapcat ::entity/attributes entities))]
-    (into {}
-      (map (fn [{::attributes/keys [qualified-key] :as attr}]
-             [qualified-key attr]))
-      all-attrs)))
-
-(def attribute-map
-  "[schema]
-   Get a map from keyword to attribute definition"
-  (memoize -attribute-map))

@@ -5,7 +5,7 @@
     [com.fulcrologic.rad.entity :as entity]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.database-adapters.protocols :as dbp :refer [DBAdapter]]
-    [com.fulcrologic.guardrails.core :refer [>defn => >def]]
+    [com.fulcrologic.guardrails.core :refer [>defn => >def ?]]
     [clojure.spec.alpha :as s]
     [taoensso.timbre :as log]))
 
@@ -21,10 +21,10 @@
 (>def ::adapter (fn [v] (satisfies? dbp/DBAdapter v)))
 (>def ::adapters (s/map-of ::db/id ::adapter))
 
-(>defn get-by-ids
+(defn get-by-ids
   "Run a query to find an entity that has the given id-attr, returning the desired output."
   [dbadapter entity-definition id-attribute ids eql-query]
-  [::adapter ::entity/entity ::attr/attribute (s/coll-of any?) vector? => (s/? (s/or :v vector? :m map?))]
+  [any? ::entity/entity ::attr/attribute (s/coll-of any?) (? vector?) => any?]
   (dbp/get-by-ids dbadapter entity-definition id-attribute ids eql-query))
 
 (>defn diff->migration

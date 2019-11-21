@@ -7,7 +7,7 @@
 
 ;; RAD IDs are always strings because the must be URL compatible. You must convert them to the correct field type.
 ;; TODO: Possible to auto-convert based on the ID field itself.
-(>def ::id string?)
+(>def ::id any?)
 (>def ::tempid (s/or :fulcro-tempid tempid/tempid? :uuid uuid?))
 (>def ::target-route (s/coll-of string? :kind vector?))
 (>def ::BodyItem comp/component-class?)

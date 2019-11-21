@@ -1,5 +1,6 @@
 (ns com.fulcrologic.rad.form
   (:require
+    [clojure.spec.alpha :as s]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
@@ -12,7 +13,7 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.controller :as controller]
-    [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
+    #?(:clj [com.fulcrologic.rad.database-adapters.db-adapter :as dba])
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.rendering.data-field :refer [render-field]]
     [com.wsscode.pathom.connect :as pc]
@@ -35,7 +36,7 @@
   "When interpreting an event from a form field, this function will extract the pair of:
   [attribute value] from the `env`."
   [env]
-  [(-> env ::uism/event-data ::attr/attribute)
+  [(-> env ::uism/event-data ::attr/qualified-key)
    (-> env ::uism/event-data :value)])
 
 (defn set-attribute*
@@ -45,12 +46,19 @@
 (defn render-form [this props]
   (let [{::attr/keys [attributes]} (comp/component-options this)]
     (mapv
-      (fn [attribute]
-        (render-field this attribute props))
+      (fn [k]
+        (log/spy :info k)
+        (render-field this k props))
       attributes)))
 
 (defn- start-edit! [app TargetClass {machine-id ::id
-                                     ::rad/keys [id target-route]}]
+                                     ::rad/keys [id target-route] :as options}]
+  (when-not machine-id
+    (log/error "Missing form machine id route on start-edit!"))
+  (when-not target-route
+    (log/error "Missing target route on start-edit!"))
+  (when-not id
+    (log/error "Missing ID on start-edit!"))
   (log/debug "START EDIT" (comp/component-name TargetClass))
   (let [id-key (some-> TargetClass (comp/ident {}) first)
         ;; TODO: Coercion from string IDs to type of ID field
@@ -61,8 +69,7 @@
                       (fns/swap!-> state
                         (assoc-in [id-key id :ui/new?] false)
                         (fs/mark-complete* [id-key id]))
-                      (controller/io-complete! app {::controller/id    machine-id
-                                                    ::rad/target-route target-route}))})))
+                      (controller/io-complete! app options))})))
 
 ;; TODO: ID generation pluggable? Use tempids?  NOTE: The controller has to generate the ID because the incoming
 ;; route is already determined
@@ -75,7 +82,7 @@
   (log/debug "START CREATE" (comp/component-name TargetClass))
   (let [id-key         (some-> TargetClass (comp/ident {}) first)
         ident          [id-key tempid]
-        fields         (comp/component-options TargetClass ::attr/attributes)
+        fields         (map attr/key->attribute (comp/component-options TargetClass ::attr/attributes))
         default-values (comp/component-options TargetClass ::default-values)
         ;; TODO: Make sure there is one and only one unique identity key on the form
         initial-value  (into {:ui/new? true}
@@ -108,7 +115,7 @@
 (defn exit-form [{::uism/keys [fulcro-app] :as env}]
   (let [Form         (uism/actor-class env :actor/form)
         id           (uism/retrieve env ::controller/id)
-        cancel-route (some-> Form comp/component-options ::form/cancel-route)]
+        cancel-route (some-> Form comp/component-options ::cancel-route)]
     (when-not cancel-route
       (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form."))
     ;; TODO: probably return to original route instead
@@ -120,7 +127,9 @@
     (uism/activate env :state/asking-to-discard-changes)
     (exit-form env)))
 
-(>defn calc-diff [env]
+(>defn calc-diff
+  [env]
+  [::uism/env => (s/keys :req [::diff ::delta])]
   (let [{::uism/keys [state-map event-data]} env
         form-ident (uism/actor->ident env :actor/form)
         Form       (uism/actor-class env :actor/form)
@@ -149,22 +158,22 @@
 
    ::uism/states
    {:initial
-    {::uism/hander (fn [env]
-                     (let [{::uism/keys [fulcro-app event-data]} env
-                           {::controller/keys [id]
-                            ::keys            [action]} event-data
-                           Form (uism/actor-class env :actor/form)]
-                       (when-not id
-                         (log/error "Controller ID not sent to form SM."))
-                       (when-not (#{:create :edit} action)
-                         (log/error "Unexpected action" action))
-                       (if (= :create action)
-                         (start-create! fulcro-app Form event-data)
-                         (start-edit! fulcro-app Form event-data))
-                       (-> env
-                         (uism/store ::action action)
-                         (uism/store ::controller/id id)
-                         (uism/activate :state/editing))))}
+    {::uism/handler (fn [env]
+                      (let [{::uism/keys [fulcro-app event-data]} env
+                            {::controller/keys [id]
+                             ::keys            [action]} event-data
+                            Form (uism/actor-class env :actor/form)]
+                        (when-not id
+                          (log/error "Controller ID not sent to form SM."))
+                        (when-not (#{:create :edit} action)
+                          (log/error "Unexpected action" action))
+                        (if (= :create action)
+                          (start-create! fulcro-app Form event-data)
+                          (start-edit! fulcro-app Form event-data))
+                        (-> env
+                          (uism/store ::action action)
+                          (uism/store ::controller/id id)
+                          (uism/activate :state/editing))))}
 
     :state/asking-to-discard-changes
     {::uism/events
@@ -229,11 +238,21 @@
         :event/cancel            {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}])}}})}})
 
 (defmethod controller/-start-io! ::rad/form
-  [{::uism/keys [fulcro-app]} TargetClass {::rad/keys [target-route] :as options}]
+  [{::uism/keys [fulcro-app] :as env} TargetClass {::controller/keys [id]
+                                                   ::rad/keys        [target-route] :as options}]
   (log/info "Starting I/O processing for RAD Form" (comp/component-name TargetClass))
   (let [[_ action id] target-route
-        form-machine-id [(first (comp/ident TargetClass {})) (new-uuid id)]
-        event-data      (merge options {::action (some-> action str keyword)})]
+        target-id       (new-uuid id)
+        form-machine-id [(first (comp/ident TargetClass {})) target-id]
+        event-data      (assoc options
+                          ::id form-machine-id
+                          ::rad/id target-id
+                          ::rad/tempid target-id
+                          ::action (some-> action str keyword))]
     (uism/begin! fulcro-app form-machine form-machine-id
       {:actor/form (uism/with-actor-class form-machine-id TargetClass)}
-      event-data)))
+      event-data)
+    (if (= action "create")
+      (start-create! fulcro-app TargetClass event-data)
+      (start-edit! fulcro-app TargetClass event-data))
+    (uism/activate env :state/routing)))

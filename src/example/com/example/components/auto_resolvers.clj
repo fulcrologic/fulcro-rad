@@ -2,7 +2,8 @@
   (:require
     [mount.core :refer [defstate]]
     [com.example.schema :as ex-schema]
-    [com.fulcrologic.rad.resolvers :as res]))
+    [com.fulcrologic.rad.resolvers :as res]
+    [taoensso.timbre :as log]))
 
 (defstate automatic-resolvers
   :start

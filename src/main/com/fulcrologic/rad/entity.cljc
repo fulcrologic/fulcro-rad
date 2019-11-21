@@ -7,13 +7,8 @@
     [com.fulcrologic.fulcro.components :as comp]))
 
 (>def ::qualified-key qualified-keyword?)
-(>def ::attributes (s/every ::attr/attribute))
+(>def ::attributes ::attr/attributes)
 (>def ::entity (s/keys :req [::qualified-key ::attributes]))
-
-#?(:clj
-   (>fdef defentity
-     [name attrs & options]
-     [simple-symbol? vector? (s/* (s/cat :k qualified-keyword? :v any?)) => any?]))
 
 #?(:clj
    (defmacro defentity

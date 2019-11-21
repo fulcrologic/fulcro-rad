@@ -2,7 +2,7 @@
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :as gr :refer [>defn => >def >fdef]]
+    [com.fulcrologic.guardrails.core :as gr :refer [>defn => >def >fdef ?]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.fulcro.components :as comp]
@@ -15,68 +15,37 @@
 
 (def attribute-registry (atom {}))
 
-;; defrecord so we get map-like behavior and proper = support
-#?(:clj
-   (defrecord Attribute []
-     Object
-     (toString [this]
-       (str "Attribute: " (::qualified-key this)))
-     IFn
-     (invoke [this m]
-       (get m (::qualified-key this))))
-   :cljs
-   (defrecord Attribute [definition]
-     IFn
-     (-invoke [this m]
-       (get m (::qualified-key this)))))
-
 #?(:clj
    (>fdef defattr
-     [sym type & args]
-     [simple-symbol? ::type (s/* (s/cat :k qualified-keyword? :v any?)) => any?]))
+     [kw type m]
+     [qualified-keyword? keyword? map? => any?]))
 
 #?(:clj
    (defmacro defattr
      "Create a data model attribute. Type can be one of :string, :int, :uuid, etc. (more types are added over time,
      so see main documentation and your database adapter for more information).
 
-     The remaining arguments are key-value pairs, and these represent an open set of options
-     that can be used to add features to attributes arbitrarily. Thus, you should consult the
-     documentation of various other modules for what to include on an attribute.
-
-     By default the following are supported:
-
-     * `::attr/spec spec` - A clojure spec for the attribute. Will cause the macro to emit a guardrails `>def`.
-
+     The remaining argument is an open map of additional things that any subsystem can
+     use to describe facets of this attribute that are important to your system.
      "
-     [sym type & {:as m}]
-     (let [nspc       (if (comp/cljs? &env) (-> &env :ns :name str) (name (ns-name *ns*)))
-           spec       (::spec m)
-           kw         (keyword (str nspc) (name sym))
-           spec-def   (when spec `(gr/>def ~kw ~spec))
-           output     (-> m
-                        (assoc ::type type)
-                        (assoc ::qualified-key kw)
-                        (dissoc ::spec))
-           definition `(do
-                         (def ~sym (com.fulcrologic.rad.attributes/map->Attribute ~output))
-                         (swap! attribute-registry assoc ~kw ~sym)
-                         ~sym)]
-       (if spec-def
-         `(do
-            ~spec-def
-            ~definition)
-         definition))))
+     [kw type m]
+     (let [definition `(do
+                         (swap! attribute-registry assoc ~kw ~(-> m
+                                                                (assoc ::type type)
+                                                                (assoc ::qualified-key kw)
+                                                                (dissoc ::spec)))
+                         ~kw)]
+       definition)))
 
-(>def ::type #{:string :uuid :int :inst :ref :keyword :password})
+;; TODO: rename ref-target
 (>def ::target qualified-keyword?)
-(>def ::spec any?)
 (>def ::qualified-key qualified-keyword?)
 (>def ::index? boolean?)
 (>def ::component? boolean?)
 (>def ::attribute (s/keys
                     :req [::type ::qualified-key]
                     :opt [::index? ::component? ::spec]))
+(>def ::attributes (s/every qualified-keyword?))
 
 (>defn key->attribute
   "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
@@ -111,10 +80,15 @@
     ;; TODO: more coercion
     (str v)))
 
+(>defn identity?
+  [k]
+  [qualified-keyword? => boolean?]
+  (boolean (some-> k key->attribute ::unique (= :identity))))
+
 (>defn attributes->eql
   "Returns an EQL query for all of the attributes that are available for the given database-id"
   [database-id attrs]
-  [::db/id (s/every ::attribute) => vector?]
+  [::db/id ::attributes => vector?]
   (reduce
     (fn [outs {::keys [qualified-key type target]}]
       (if (and target (= :ref type))
@@ -123,8 +97,7 @@
     []
     (filter
       (fn [{::db/keys [id]}] (= id database-id))
-      attrs)))
-
+      (map key->attribute attrs))))
 
 #?(:clj
    (defn ^String gen-salt []

@@ -48,7 +48,7 @@
                            (= :string type) (assoc :db/fulltext true)))
                 unique (assoc :db/unique (keyword "db.unique" (name unique)))))))
         txn
-        attributes))
+        (map attr/key->attribute attributes)))
     []
     new-entities))
 

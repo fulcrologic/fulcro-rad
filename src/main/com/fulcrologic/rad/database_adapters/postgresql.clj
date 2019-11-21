@@ -39,7 +39,8 @@
   (let [creates (StringBuilder.)
         updates (StringBuilder.)]
     (doseq [{::entity/keys [qualified-key attributes] :as entity} new-entities
-            :let [table-name (csk/->snake_case (name qualified-key))]]
+            :let [attributes (map attr/key->attribute attributes)
+                  table-name (csk/->snake_case (name qualified-key))]]
       (.append creates (str "CREATE TABLE " table-name "(\n"))
       (.append creates (str/join ",\n"
                          (keep
@@ -61,7 +62,8 @@
       (.append creates ");\n"))
 
     (doseq [{::entity/keys [qualified-key attributes] :as entity} new-entities
-            :let [table-name (csk/->snake_case (name qualified-key))]]
+            :let [attributes (map attr/key->attribute attributes)
+                  table-name (csk/->snake_case (name qualified-key))]]
       (.append updates
         (str/join ""
           (keep
@@ -69,7 +71,7 @@
               (if (or (nil? cardinality) (= cardinality :one))
                 (let [column-name      (csk/->snake_case (name qualified-key))
                       target-attribute (when target
-                                         (schema/find-attribute schema target))
+                                         (attr/key->attribute target))
                       target-column    (attr->column-name target-attribute)
                       target-table     (attr->table-name target-attribute)
                       target-type      (some-> target-attribute ::attr/type type-map)]

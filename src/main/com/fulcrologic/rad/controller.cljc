@@ -9,6 +9,7 @@
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [clojure.set :as set]
@@ -23,7 +24,7 @@
 
 (>defn start-io!
   [env ComponentClass {::rad/keys [target-route] :as options}]
-  [::uism/env comp/component-class? (s/keys :req [::rad/type ::rad/target-route ::id]) => ::uism/env]
+  [::uism/env comp/component-class? (s/keys :req [::rad/target-route ::id]) => ::uism/env]
   (-> env
     (uism/store ::rad/target-route target-route)
     (-start-io! ComponentClass options)))
@@ -32,14 +33,14 @@
                                 (some-> TargetClass (comp/component-options ::rad/type))))
 
 (defmethod -desired-attributes :default [c]
-  (or (some-> c comp/component-options ::attr/attributes) []))
+  (or (some->> c comp/component-options ::attr/attributes (map attr/key->attribute)) []))
 
 (>defn io-complete!
   "Custom components should call this to indicate that they are done with I/O, allowing the
    controller to complete the route."
   [app {::keys     [id]
         ::rad/keys [target-route]}]
-  [app (s/keys :req [::rad/target-route ::id]) => any?]
+  [::app/app (s/keys :req [::rad/target-route ::id]) => any?]
   (log/debug "Controller notified that target route I/O is complete." target-route)
   (uism/trigger! app id :event/route-loaded {::rad/target-route target-route}))
 
@@ -74,13 +75,15 @@
 (defn- activate-route [{::uism/keys [fulcro-app] :as env} target-route]
   (dr/change-route fulcro-app target-route)
   (-> env
-    (uism/store :com.fulcrologic.rad/target-route nil)
+    (uism/store ::rad/target-route nil)
     (uism/activate :state/idle)))
 
-(defn- initialize-route-data [{::uism/keys [fulcro-app event-data] :as env}]
+(defn- initialize-route-data [{::uism/keys [event-data] :as env}]
   (log/debug "Initializing route data")
-  (let [{::rad/keys [target-route]} event-data
-        options (assoc event-data ::rad/target-route target-route)]
+  (let [target-route (or (::rad/target-route event-data)
+                       (uism/retrieve env ::rad/target-route))
+        options      (assoc event-data ::rad/target-route target-route
+                                       ::id (::uism/asm-id env))]
     (if (empty? target-route)
       (let [{::keys [home-page]} (uism/retrieve env :config)]
         (log/debug "No target route. Using home page.")

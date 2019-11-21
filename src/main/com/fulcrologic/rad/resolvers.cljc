@@ -15,6 +15,7 @@
 ;; TODO: This is really CLJ stuff, meant for satisfying queries from the server. We also need a client-side
 ;; set of functions to generate resolvers for network dbs, like firebase, GraphQL, etc.
 
+(>def ::id-key qualified-keyword?)
 (>def ::id-attribute ::attr/attribute)
 
 (defn entity-query
@@ -23,27 +24,35 @@
     ::entity/keys [entity]
     ::keys        [id-attribute]
     :as           env} input]
-  (enc/if-let [dbadapter (get adapters id)
-               query     (or
-                           (get env :com.wsscode.pathom.core/parent-query)
-                           (get env ::default-query))
-               ids       (if (sequential? input)
-                           (into #{} (keep #(id-attribute %) input))
-                           #{(id-attribute input)})]
-    (do
-      (log/info "Running" query "on entities with " id-attribute ":" ids)
-      (dba/get-by-ids dbadapter entity id-attribute ids query))
-    (do
-      (log/info "Unable to complete query because the database adapter was missing.")
-      nil)))
+  (let [one? (not (sequential? input))]
+    (enc/if-let [dbadapter (get adapters id)
+                 id-key    (::attr/qualified-key id-attribute)
+                 query     (or
+                             (get env :com.wsscode.pathom.core/parent-query)
+                             (get env ::default-query))
+                 ids       (if one?
+                             #{(get input id-key)}
+                             (into #{} (keep #(get % id-key) input)))]
+      (do
+        (log/info "Running" query "on entities with " id-key ":" ids)
+        (let [result (dba/get-by-ids dbadapter entity id-attribute ids query)]
+          (if one?
+            (first result)
+            result)))
+      (do
+        (log/info "Unable to complete query because the database adapter was missing.")
+        nil))))
 
 (>defn id-resolver
   [database-id
    {::entity/keys [qualified-key attributes] :as entity}
-   {id-key ::attr/qualified-key :as id-attr}]
-  [::db/id ::entity/entity ::attr/attribute => ::pc/resolver]
+   id-attr]
+  [::db/id ::entity/entity ::id-attribute => ::pc/resolver]
   (log/info "Building ID resolver for" qualified-key)
-  (let [data-attributes (filter #(not= id-attr %) attributes)
+  (let [data-attributes (into []
+                          (comp
+                            (filter #(not= (::attr/qualified-key id-attr) %)))
+                          attributes)
         outputs         (attr/attributes->eql database-id data-attributes)]
     {::pc/sym     (symbol
                     (str (name database-id) "." (namespace qualified-key))
@@ -59,7 +68,7 @@
                                         ::id-attribute id-attr)
                                       input)
                                     (auth/redact env)))
-     ::pc/input   #{id-key}}))
+     ::pc/input   #{(::attr/qualified-key id-attr)}}))
 
 (defn just-pc-keys [m]
   (into {}
@@ -95,7 +104,10 @@
    as well as any virtual attributes."
   [database-id {::entity/keys [attributes] :as entity}]
   [::db/id ::entity/entity => (s/every ::pc/resolver)]
-  (let [identity-attrs      (filter (fn [{::attr/keys [unique]}] (= :identity unique)) attributes)
+  (let [attributes          (log/spy :info (mapv attr/key->attribute attributes))
+        identity-attrs      (into []
+                              (filter #(attr/identity? (::attr/qualified-key %)))
+                              attributes)
         virtual-attrs       (remove ::db/id attributes)
         entity-resolvers    (keep (fn [a] (id-resolver database-id entity a)) identity-attrs)
         ;; TODO: Make this not suck
@@ -115,4 +127,4 @@
           database-ids)
         (keep (fn [attr]
                 (when (contains? database-ids (::db/id attr))
-                  (attribute-resolver attr))) roots)))))
+                  (attribute-resolver attr))) (concat roots (vals @attr/attribute-registry)))))))

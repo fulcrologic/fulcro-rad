@@ -1,7 +1,5 @@
 (ns com.fulcrologic.rad.ids
-  #?(:cljs
-     (:require
-       [cljs.core :as core])))
+  (:require [clojure.string :as str]))
 
 (defn new-uuid
   "Without args gives random UUID. With args, builds UUID based on input.
@@ -15,10 +13,18 @@
   #?(:clj ([v]
            (cond
              (uuid? v) v
-             (int? int-or-str)
+             (int? v)
              (java.util.UUID/fromString
-               (format "ffffffff-ffff-ffff-ffff-%012d" int-or-str))
-             :else (java.util.UUID/fromString (str int-or-str)))))
+               (format "ffffffff-ffff-ffff-ffff-%012d" v))
+             :else (java.util.UUID/fromString (str v)))))
   #?(:cljs ([] (random-uuid)))
-  #?(:cljs ([& args] (core/uuid (apply str args)))))
+  #?(:cljs ([v]
+            (cond
+              (uuid? v) v
+              (int? v) (let [sv      (str v)
+                             l       (.-length sv)
+                             padding (str/join (repeat (- 12 l) "0"))]
+                         (uuid (str "ffffffff-ffff-ffff-ffff-" padding sv)))
+              :else (uuid (str v))))))
+
 

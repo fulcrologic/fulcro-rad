@@ -25,7 +25,9 @@
     (d/transact connection [{::account/id       (u 1)
                              ::account/name     "Joe Blow"
                              ::account/email    "joe@example.com"
-                             ::account/password (attr/encrypt "letmein" "some-salt" (::attr/encrypt-iterations account/password))}])))
+                             ::account/password (attr/encrypt "letmein" "some-salt"
+                                                  (::attr/encrypt-iterations
+                                                    (attr/key->attribute ::account/password)))}])))
 
 (defn start []
   (mount/start-with-args {:config "config/dev.edn"})
@@ -46,14 +48,13 @@
   (tools-ns/refresh :after 'development/start))
 
 (comment
-
   (seeed)
   (res/schema->resolvers #{:production} ex-schema/latest-schema)
   (res/entity->resolvers :production employee/employee)
   (res/entity->resolvers :production account/account))
 
 (comment
-  (let [adapter (datomic/->DatomicAdapter :production)]
+  (let [adapter (datomic/->DatomicAdapter :production nil)]
     (pprint
       (dba/diff->migration adapter prior-schema latest-schema)))
 

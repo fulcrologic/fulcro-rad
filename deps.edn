@@ -4,7 +4,7 @@
            com.taoensso/timbre        {:mvn/version "4.10.0"}
            camel-snake-kebab          {:mvn/version "0.4.0"}
            com.taoensso/encore        {:mvn/version "2.115.0"}
-           com.fulcrologic/fulcro     {:local/root "/Users/tonykay/fulcrologic/fulcro"} #_{:mvn/version "3.0.11-RC2"}
+           com.fulcrologic/fulcro     {:mvn/version "3.0.11-RC2"}
            com.fulcrologic/guardrails {:mvn/version "0.0.9"}
            com.wsscode/pathom         {:mvn/version "2.2.26"}
            org.clojure/clojure        {:mvn/version "1.10.1" :scope "provided"}

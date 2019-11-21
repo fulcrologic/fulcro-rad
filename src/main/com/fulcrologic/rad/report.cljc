@@ -1,5 +1,6 @@
 (ns com.fulcrologic.rad.report
   (:require
+    [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.controller :as controller :refer [io-complete!]]
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.components :as comp]
