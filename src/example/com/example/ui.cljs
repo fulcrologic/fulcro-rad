@@ -3,6 +3,7 @@
     ;; This require pulls in the multimethods for rendering w/semantic UI
     [com.fulcrologic.rad.rendering.semantic-ui.semantic-ui-controls]
 
+    [com.example.schema :as ex-schema]
     [com.example.model.account :as acct]
     [com.example.ui.login-dialog :refer [LoginForm]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
@@ -24,7 +25,6 @@
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]))
 
-
 #_(defsc-form AccountForm [this props]
     {::attr/attributes    [::acct/id ::acct/name ::acct/email ::acct/last-login]
      ::form/read-only?    {
@@ -33,14 +33,11 @@
      ::form/title         "Edit Account"
      ::form/cancel-route  ["landing-page"]
      ::form/confirm-exit? true
-     ::form/route-prefix  "account"})
+     ::form/route-prefix  "account"
+     })
 
-(defsc AccountForm [this props]
-  {::rad/type           ::rad/form
-   ::rad/io?            true
-   ;; TODO: Auto-include ID in query in macro (based on require input for other attrs)
-   ::attr/attributes    [::acct/id ::acct/name ::acct/email ::acct/last-login]
-
+(form/defsc-form AccountForm [this props]
+  {::attr/attributes    [::acct/id ::acct/name ::acct/email ::acct/last-login]
    ::form/read-only?    {
                          ; ::acct/email true
                          }
@@ -48,23 +45,10 @@
    ::form/title         "Edit Account"
    ::form/cancel-route  ["landing-page"]
    ::form/confirm-exit? true
-
-   ;; intention is action can be "edit", "create", "view". ID can be the real ID, or some constant for create (so
-   ;; bookmarking works?).
-   ;; Could also use new tempid on create and do a check for existence
-   :route-segment       ["account" :action :id]
-   :will-enter          (fn [app {:keys [id]}]
-                          ;; TODO: automatic type coercion on ID
-                          (dr/route-immediate [::acct/id (new-uuid id)]))
-
+   ::form/route-prefix  "account"
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
-   :form-fields         #{::acct/id ::acct/name ::acct/email}
-   :query               [:ui/new? :ui/confirmation-message [::uism/asm-id '_]
-                         ::acct/id ::acct/name ::acct/email ::acct/last-login
-                         fs/form-config-join]
-   :ident               ::acct/id}
-  (form/render-layout this props))
+   ::rad/schema         ex-schema/latest-schema})
 
 (defsc AccountListItem [this {::acct/keys [id name active? last-login] :as props}]
   {::attr/attributes [::acct/id ::acct/name ::acct/active? ::acct/last-login]

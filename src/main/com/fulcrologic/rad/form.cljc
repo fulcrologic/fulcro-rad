@@ -1,4 +1,5 @@
 (ns com.fulcrologic.rad.form
+  #?(:cljs (:require-macros [com.fulcrologic.rad.form]))
   (:require
     [clojure.spec.alpha :as s]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
@@ -17,7 +18,9 @@
     #?(:clj [com.fulcrologic.rad.database-adapters.db-adapter :as dba])
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.wsscode.pathom.connect :as pc]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    #?(:clj [cljs.analyzer :as ana])
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
@@ -42,7 +45,74 @@
 
 (defmulti render-layout (fn [this props] (some-> this comp/component-options ::layout)))
 
+#?(:clj
+   (s/def ::defsc-form-args (s/cat
+                              :sym symbol?
+                              :doc (s/? string?)
+                              :arglist (s/and vector? #(<= 2 (count %) 5))
+                              :options map?
+                              :body (s/* any?))))
 
+#?(:clj
+   (s/def ::defsc-form-options (s/keys :req [::attr/attributes ::rad/schema
+                                             ::id ::title ::cancel-route ::route-prefix])))
+
+#?(:clj
+   (defn convert-options [env options]
+     (when-not (s/valid? ::defsc-form-options options)
+       (throw (ana/error env (str "Invalid options. " (-> (s/explain-data ::defsc-form-options options)
+                                                        ::s/problems
+                                                        first
+                                                        :pred
+                                                        seq) " is invalid."))))
+     (let [{::attr/keys [attributes]} options
+           {::keys [id route-prefix]} options
+           form-field? (fn [{::attr/keys [unique] ::db/keys [id]}]
+                         (and (not unique) id))
+           query       (vec (concat [:ui/new? :ui/confirmation-message [::uism/asm-id ''_]]
+                              attributes
+                              [`fs/form-config-join]))]
+       (-> (dissoc options ::route-prefix)
+         (assoc :route-segment [route-prefix :action :id]
+                ::rad/type ::rad/form
+                ::rad/io? true
+                :ident id
+                :will-enter `(fn [~'app {:keys [~'id]}]
+                               (dr/route-immediate [~id (new-uuid ~'id)]))
+                :form-fields (->> attributes
+                               (mapv attr/key->attribute)
+                               (filter form-field?)
+                               (map ::attr/qualified-key)
+                               (into #{}))
+                :query query)))))
+
+#?(:clj
+   (defn form-body [argslist body]
+     (if (empty? body)
+       `[(render-layout ~(first argslist) (comp/props ~(first argslist)))]
+       body)))
+
+#?(:clj
+   (defn defsc-form*
+     [env args]
+     (when-not (s/valid? ::defsc-form-args args)
+       (throw (ana/error env (str "Invalid arguments. " (-> (s/explain-data ::defsc-form-args args)
+                                                          ::s/problems
+                                                          first
+                                                          :path) " is invalid."))))
+     (let [{:keys [sym arglist options body]} (s/conform ::defsc-form-args args)]
+       `(comp/defsc ~sym ~arglist
+          ~(convert-options env options)
+          ~@(form-body arglist body)))))
+
+#?(:clj
+   (defmacro defsc-form [& args]
+     (try
+       (defsc-form* &env args)
+       (catch Exception e
+         (if (contains? (ex-data e) :tag)
+           (throw e)
+           (throw (ana/error &env "Unexpected internal error while processing defsc. Please check your syntax." e)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LOGIC
