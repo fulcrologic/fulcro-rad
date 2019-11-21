@@ -10,6 +10,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad :as rad]
+    [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.controller :as controller]
@@ -30,7 +31,8 @@
                          (when-let [attr (attr/key->attribute k)]
                            (or
                              (::field-type attr)
-                             (some-> attr ::attr/type data-type->field-type)))))
+                             (some-> attr ::attr/type data-type->field-type)
+                             (some-> attr ::attr/type)))))
 
 (defmethod render-field :default
   [_ attr _]
@@ -284,4 +286,15 @@
   (uism/trigger! this (comp/get-ident this) :event/reset {}))
 (defn cancel! [this]
   (uism/trigger! this (comp/get-ident this) :event/cancel {}))
+
+(>defn read-only?
+  [this attr]
+  [comp/component? ::attr/attribute => boolean?]
+  (let [k          (get attr ::attr/qualified-key)
+        read-only? (-> this comp/component-options ::read-only? (get k))]
+    (boolean
+      (if (boolean? read-only?)
+        read-only?
+        ;; TODO: Use attr permissions function? (client-side version?)
+        (nil? (-> attr ::db/id))))))
 

@@ -1,4 +1,4 @@
-(ns com.fulcrologic.rad.rendering.semantic-ui.text-field
+(ns com.fulcrologic.rad.rendering.semantic-ui.instant-field
   (:require
     #?(:cljs
        [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
@@ -12,7 +12,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.rad.form :refer [render-field]]))
 
-(defmethod render-field :text [this k props]
+(defmethod render-field :inst [this k props]
   (let [attribute  (attr/key->attribute k)
         {::form/keys [field-label]} attribute
         asm-id     (comp/get-ident this)
@@ -21,16 +21,7 @@
     (div :.ui.field {:key (str k)}
       (label (or field-label (some-> k name str/capitalize)))
       (if read-only?
-        (div value)
-        (input {:value    value
-                :onBlur   (fn [evt]
-                            (uism/trigger! this asm-id :event/blur
-                              {::attr/qualified-key k
-                               :form-ident          (comp/get-ident this)
-                               :value               (evt/target-value evt)}))
-                :onChange (fn [evt]
-                            (uism/trigger! this asm-id :event/attribute-changed
-                              {::attr/qualified-key k
-                               :form-ident          (comp/get-ident this)
-                               :value               (evt/target-value evt)}))})))))
+        (div (str value))
+        ;; FIXME: date time input handling, which needs coercion logic and probably comp-local-state buffering
+        (div (str value))))))
 
