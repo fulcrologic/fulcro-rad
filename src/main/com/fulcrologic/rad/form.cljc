@@ -298,3 +298,8 @@
         ;; TODO: Use attr permissions function? (client-side version?)
         (nil? (-> attr ::db/id))))))
 
+(defn edit!
+  "Route to the given form for editing the entity with the given ID."
+  [this form-class entity-id]
+  (let [[root & _] (-> form-class comp/component-options :route-segment)]
+    (controller/route-to! this :main-controller [root "edit" (str entity-id)])))
