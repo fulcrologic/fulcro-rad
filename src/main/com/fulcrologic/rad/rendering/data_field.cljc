@@ -8,13 +8,13 @@
    })
 
 (defmulti render-field (fn [this k props]
-                         (log/spy :info (when-let [attr (attr/key->attribute k)]
-                                          (or
-                                            (::type attr)
-                                            (some-> attr ::attr/type default-mapping))))))
+                         (when-let [attr (attr/key->attribute k)]
+                           (or
+                             (::type attr)
+                             (some-> attr ::attr/type default-mapping)))))
 
 (defmethod render-field :default
   [_ attr _]
   (log/error "Attempt to render a field that did not have anything to dispatch to."
     "Did you remember to require the namespace that implements the field type:"
-    (some-> attr attr/key->attribute ::type)))
+    attr))

@@ -104,7 +104,7 @@
    as well as any virtual attributes."
   [database-id {::entity/keys [attributes] :as entity}]
   [::db/id ::entity/entity => (s/every ::pc/resolver)]
-  (let [attributes          (log/spy :info (mapv attr/key->attribute attributes))
+  (let [attributes          (mapv attr/key->attribute attributes)
         identity-attrs      (into []
                               (filter #(attr/identity? (::attr/qualified-key %)))
                               attributes)
@@ -127,4 +127,4 @@
           database-ids)
         (keep (fn [attr]
                 (when (contains? database-ids (::db/id attr))
-                  (attribute-resolver attr))) (concat roots (vals @attr/attribute-registry)))))))
+                  (attribute-resolver attr))) roots)))))

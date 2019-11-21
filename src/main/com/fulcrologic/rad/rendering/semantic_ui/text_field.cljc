@@ -13,22 +13,22 @@
     [camel-snake-kebab.core :as csk]
     [com.fulcrologic.rad.rendering.data-field :as data-field :refer [render-field]]))
 
-(defmethod render-field :text [this k {::uism/keys [asm-id]
-                                       :as         props}]
+(defmethod render-field :text [this k props]
   (let [attribute (attr/key->attribute k)
         {::form/keys [field-label]} attribute
-        value     (or (and attribute (attribute props)) "")]
-    (div :.ui.field
+        asm-id    (comp/get-ident this)
+        value     (or (and attribute (get props k)) "")]
+    (div :.ui.field {:key (str k)}
       (label (or field-label (some-> k name str/capitalize)))
       (input {:value    value
               :onBlur   (fn [evt]
                           (uism/trigger! this asm-id :event/blur
-                            {::attr/attribute attribute
-                             :form-ident      (comp/get-ident this)
-                             :value           (evt/target-value evt)}))
+                            {::attr/qualified-key k
+                             :form-ident          (comp/get-ident this)
+                             :value               (evt/target-value evt)}))
               :onChange (fn [evt]
                           (uism/trigger! this asm-id :event/attribute-changed
-                            {::attr/attribute attribute
-                             :form-ident      (comp/get-ident this)
-                             :value           (evt/target-value evt)}))}))))
+                            {::attr/qualified-key k
+                             :form-ident          (comp/get-ident this)
+                             :value               (evt/target-value evt)}))}))))
 

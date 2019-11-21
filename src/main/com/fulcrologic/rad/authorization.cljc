@@ -67,7 +67,7 @@
   ;; TODO: swap actors for authentication provider
   (let [controller  (uism/actor-class env :actor/controller)
         provider-ui (some-> controller ::authentication-providers (get provider))]
-    (cond-> (uism/assoc-aliased env :context provider)
+    (cond-> env
       provider-ui (uism/reset-actor-ident :actor/auth-dialog (uism/with-actor-class
                                                                (comp/get-ident provider-ui {})
                                                                provider-ui)))))

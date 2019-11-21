@@ -94,7 +94,8 @@
 
 ;; List just persisted ones that "group together" in storage. Could cross storage
 ;; boundaries, though, so not sure how well the concept works in total.
-(defentity account [::id ::name ::email ::password]
+;; TODO: Move virtual attributes out of the entity, and auto-find them in registry for resolver generation
+(defentity account [::id ::name ::email ::password ::last-login ::role]
   ;; Ideas:
   ::auth/authority :local
   ::entity/beforeCreate (fn [env new-entity]

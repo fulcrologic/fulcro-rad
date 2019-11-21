@@ -47,7 +47,6 @@
   (let [{::attr/keys [attributes]} (comp/component-options this)]
     (mapv
       (fn [k]
-        (log/spy :info k)
         (render-field this k props))
       attributes)))
 

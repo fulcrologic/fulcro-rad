@@ -33,7 +33,7 @@
                                 (some-> TargetClass (comp/component-options ::rad/type))))
 
 (defmethod -desired-attributes :default [c]
-  (or (some->> c comp/component-options ::attr/attributes (map attr/key->attribute)) []))
+  (or (some->> c comp/component-options ::attr/attributes (mapv attr/key->attribute)) []))
 
 (>defn io-complete!
   "Custom components should call this to indicate that they are done with I/O, allowing the
