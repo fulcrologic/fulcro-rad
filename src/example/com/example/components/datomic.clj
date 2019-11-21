@@ -46,6 +46,13 @@
         (throw (ex-info "REFUSING TO START a database that has SNAPSHOT migrations. Please set allow.mocked.connection JVM property if you want to allow this." {}))))
     (log/info "Running Migrations")
     (try
+      (d/transact conn [#:db{:fn    {:db.fn/lang     :clojure,
+                                     :db.fn/imports  [],
+                                     :db.fn/requires [],
+                                     :db.fn/params   '[db eid rel ident],
+                                     :db.fn/code     "(do (when-not (and (= 2 (count ident)) (keyword? (first ident))) (throw (IllegalArgumentException. (str \"ident must be an ident, got \" ident)))) (let [ref-val (or (:db/id (datomic.api/entity db ident)) (str (second ident)))] [[:db/add eid rel ref-val]]))"},
+                             ;:id    #db/id[:db.part/user -1000005],
+                             :ident :com.fulcrologic.rad.fn/add-ident}])
       (d/transact conn migration)
       (catch Exception e
         (log/error "Database migration failed:" {:exception e})

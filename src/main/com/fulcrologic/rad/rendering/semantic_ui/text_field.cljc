@@ -10,8 +10,7 @@
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
-    [camel-snake-kebab.core :as csk]
-    [com.fulcrologic.rad.rendering.data-field :as data-field :refer [render-field]]))
+    [com.fulcrologic.rad.form :refer [render-field]]))
 
 (defmethod render-field :text [this k props]
   (let [attribute (attr/key->attribute k)

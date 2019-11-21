@@ -34,9 +34,9 @@
   (dbp/diff->migration dbadapter old-schema new-schema))
 
 (defn save-form
-  [mutation-env params]
+  [dbadapter mutation-env params]
   ;; TODO: Tease apart. It is possible that attributes in the diff came in for more than one database.
-  (log/info "TODO: Save" params))
+  (dbp/save-form dbadapter mutation-env params) )
 
 
 

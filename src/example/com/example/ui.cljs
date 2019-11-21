@@ -32,6 +32,7 @@
    ::rad/io?            true
    ::attr/attributes    [::acct/id ::acct/name ::acct/email]
 
+   ::form/title         "Edit Account"
    ::form/cancel-route  ["home"]
    ::form/confirm-exit? true
 
@@ -51,12 +52,11 @@
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
    :form-fields         #{::acct/id ::acct/name ::acct/email}
-   :query               [:ui/new? :ui/confirmation-message #_[::uism/asm-id '_] ::acct/id ::acct/name
-                         ::acct/email
+   :query               [:ui/new? :ui/confirmation-message [::uism/asm-id '_]
+                         ::acct/id ::acct/name ::acct/email
                          fs/form-config-join]
    :ident               ::acct/id}
-  (dom/div :.ui.form
-    (form/render-form this props)))
+  (form/render-layout this props))
 
 (defsc AccountListItem [this {::acct/keys [id name] :as props}]
   {::attr/attributes [::acct/id ::acct/name]

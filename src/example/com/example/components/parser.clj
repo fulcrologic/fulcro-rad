@@ -14,7 +14,8 @@
     [edn-query-language.core :as eql]
     [mount.core :refer [defstate]]
     [taoensso.timbre :as log]
-    [datomic.api :as d]))
+    [datomic.api :as d]
+    [com.fulcrologic.rad.form :as form]))
 
 (defn preprocess-parser-plugin
   "Helper to create a plugin that can view/modify the env/tx of a top-level request.
@@ -147,7 +148,7 @@
    ::p/env     {::p/reader               [p/map-reader pc/reader2 pc/index-reader
                                           pc/open-ident-reader p/env-placeholder-reader]
                 ::p/placeholder-prefixes #{">"}}
-   ::p/plugins [(pc/connect-plugin {::pc/register [account/login automatic-resolvers]})
+   ::p/plugins [(pc/connect-plugin {::pc/register [account/login form/save-form automatic-resolvers]})
                 (p/env-plugin {::p/process-error process-error})
                 (p/env-wrap-plugin (fn [env]
                                      (assoc env

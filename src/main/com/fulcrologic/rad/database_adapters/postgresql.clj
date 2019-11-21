@@ -92,7 +92,10 @@
       "\nCOMMIT;\n"))
   (get-by-ids [this entity id-attr ids desired-output]
     (log/error "get by IDs not yet implemented on PostgreSQL")
-    []))
+    [])
+  (save-form [this mutation-env params]
+    (log/error "PSQL Save Not implemented")
+    nil))
 
 
 

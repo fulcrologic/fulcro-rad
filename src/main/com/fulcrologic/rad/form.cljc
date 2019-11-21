@@ -15,14 +15,43 @@
     [com.fulcrologic.rad.controller :as controller]
     #?(:clj [com.fulcrologic.rad.database-adapters.db-adapter :as dba])
     [com.fulcrologic.rad.ids :refer [new-uuid]]
-    [com.fulcrologic.rad.rendering.data-field :refer [render-field]]
     [com.wsscode.pathom.connect :as pc]
     [taoensso.timbre :as log]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; RENDERING
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def data-type->field-type
+  {:string :text
+   })
+
+(defmulti render-field (fn [this k props]
+                         (when-let [attr (attr/key->attribute k)]
+                           (or
+                             (::field-type attr)
+                             (some-> attr ::attr/type data-type->field-type)))))
+
+(defmethod render-field :default
+  [_ attr _]
+  (log/debug "NOTE: Attempt to render a field that did not have anything to dispatch to."
+    "Did you remember to require the namespace that implements the field type:"
+    attr))
+
+(defmulti render-layout (fn [this props] (some-> this comp/component-options ::layout)))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; LOGIC
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::diff ::delta}}
-     (dba/save-form env params))
+     ;; FIXME: Find correct adapter based on content of diff
+     (let [adapter (-> env :com.fulcrologic.rad.database-adapters.db-adapter/adapters :production)]
+       (dba/save-form adapter env params)))
    :cljs
    (m/defmutation save-form [params]
      (action [env] :noop)))
@@ -42,13 +71,6 @@
 (defn set-attribute*
   "Mutation helper: Set the given attribute's value in app state."
   [state-map form attribute value])
-
-(defn render-form [this props]
-  (let [{::attr/keys [attributes]} (comp/component-options this)]
-    (mapv
-      (fn [k]
-        (render-field this k props))
-      attributes)))
 
 (defn- start-edit! [app TargetClass {machine-id ::id
                                      ::rad/keys [id target-route] :as options}]
@@ -128,7 +150,7 @@
 
 (>defn calc-diff
   [env]
-  [::uism/env => (s/keys :req [::diff ::delta])]
+  [::uism/env => (s/keys :req [::delta])]
   (let [{::uism/keys [state-map event-data]} env
         form-ident (uism/actor->ident env :actor/form)
         Form       (uism/actor-class env :actor/form)
@@ -136,8 +158,7 @@
         new?       (uism/alias-value env :new?)
         delta      (fs/dirty-fields props true {:new-entity? new?})
         diff       (fs/dirty-fields props false {:new-entity? new?})]
-    {::delta delta
-     ::diff  diff}))
+    {::delta delta}))
 
 (def global-events
   {:event/will-leave     {::uism/handler (fn [env]
@@ -226,11 +247,11 @@
                                                          params       (merge event-data data-to-save)]
                                                      (-> env
                                                        (uism/trigger-remote-mutation :actor/form `save-form
-                                                         {::uism/error-event :event/save-failed
-                                                          :params            params
-                                                          ;; TODO: Make return optional?
-                                                          ::m/returning      form-class
-                                                          ::uism/ok-event    :event/saved}))))}
+                                                         (merge params
+                                                           {::uism/error-event :event/save-failed
+                                                            ;; TODO: Make return optional?
+                                                            ::m/returning      form-class
+                                                            ::uism/ok-event    :event/saved})))))}
         :event/reset             {::uism/handler (fn [env]
                                                    (let [form-ident (uism/actor->ident env :actor/form)]
                                                      (uism/apply-action env fs/pristine->entity* form-ident)))}
@@ -255,3 +276,4 @@
       (start-create! fulcro-app TargetClass event-data)
       (start-edit! fulcro-app TargetClass event-data))
     (uism/activate env :state/routing)))
+
