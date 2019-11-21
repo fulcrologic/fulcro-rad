@@ -25,17 +25,6 @@
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]))
 
-#_(defsc-form AccountForm [this props]
-    {::attr/attributes    [::acct/id ::acct/name ::acct/email ::acct/last-login]
-     ::form/read-only?    {
-                           ; ::acct/email true
-                           }
-     ::form/title         "Edit Account"
-     ::form/cancel-route  ["landing-page"]
-     ::form/confirm-exit? true
-     ::form/route-prefix  "account"
-     })
-
 (form/defsc-form AccountForm [this props]
   {::attr/attributes    [::acct/id ::acct/name ::acct/email ::acct/last-login]
    ::form/read-only?    {
