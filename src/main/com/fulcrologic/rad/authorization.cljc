@@ -1,4 +1,5 @@
 (ns com.fulcrologic.rad.authorization
+  #?(:cljs (:require-macros com.fulcrologic.rad.authorization))
   (:require
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
@@ -180,3 +181,26 @@
                                  [k v]
                                  [k ::REDACTED]))))
       query-result)))
+
+#?(:clj
+   (defmacro defauthenticator [sym authority-map]
+     (let [query         (into [:ui/auth-context [::uism/asm-id (quote '_)]]
+                           (map (fn [k] `{~k (comp/get-query ~(get authority-map k))})
+                             (keys authority-map)))
+           initial-state (into {}
+                           (map (fn [k] [k {}]))
+                           (keys authority-map))
+           ident-fn      (list 'fn [] [::id (keyword sym)])]
+       `(defsc ~sym [~'this ~'props]
+          {:query                     ~query
+           ::authentication-providers ~authority-map
+           :ident                     ~ident-fn
+           :initial-state             ~initial-state}
+          ;; TODO: Logic to choose the correct factory for the provider being used
+          (let [~'state (uism/get-active-state ~'this machine-id)
+                ~'authenticating? (= :state/gathering-credentials ~'state)
+                {:keys [~'local]} ~'props
+                ~'factory (comp/computed-factory ~(get authority-map :local))]
+            (~'factory ~'local {:visible? ~'authenticating?}))))))
+;(macroexpand-1 '(defauthenticator AuthController {:local LoginForm}))
+

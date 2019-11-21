@@ -1,4 +1,5 @@
 (ns com.fulcrologic.rad.report
+  #?(:cljs (:require-macros com.fulcrologic.rad.report))
   (:require
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.attributes :as attr]
@@ -100,3 +101,63 @@
   "Run a report with the current parameters"
   [this]
   (uism/trigger! this (comp/get-ident this) :event/run))
+
+(defn req!
+  ([sym options k pred?]
+   (when-not (and (contains? options k) (pred? (get options k)))
+     (throw (ex-info (str "defsc-report " sym " is missing or invalid option " k) {}))))
+  ([sym options k]
+   (when-not (contains? options k)
+     (throw (ex-info (str "defsc-report " sym " is missing option " k) {})))))
+
+(defn opt!
+  [sym options k pred?]
+  (when-not (pred? (get options k))
+    (throw (ex-info (str "defsc-report " sym " has an invalid option " k) {}))))
+
+#?(:clj
+   (defmacro defsc-report
+     "Define a report. Just like defsc, but you do not specify query/ident/etc.
+
+     Instead:
+
+     ::report/BodyItem FulcroClass?
+     ::report/source-attribute keyword?
+     ::report/route string?
+     ::report/parameters (map-of ui-keyword? rad-data-type?)
+
+     NOTE: Parameters MUST have a `ui` namespace, like `:ui/show-inactive?`.
+
+     If you elide the body, one will be generated for you.
+     "
+     [sym arglist & args]
+     (let [this-sym (first arglist)
+           {::keys [BodyItem source-attribute route parameters] :as options} (first args)
+           query    (into [{source-attribute `(comp/get-query ~BodyItem)}]
+                      (keys parameters))
+           options  (assoc options
+                      ::rad/io? true
+                      :route-segment [route]
+                      ::rad/type ::rad/report
+                      :query query
+                      :ident (list 'fn [] [:component/id (keyword sym)]))
+           body     (if (seq (rest args))
+                      (rest args)
+                      [`(render-layout ~this-sym)])]
+       (req! sym options ::BodyItem)
+       (req! sym options ::source-attribute keyword?)
+       (req! sym options ::route string?)
+       (opt! sym options ::parameters
+         (fn [p] (and (map? p)
+                   (every? #(and
+                              (keyword? %)
+                              (= "ui" (namespace %))) (keys p)))))
+       `(comp/defsc ~sym ~arglist ~options ~@body))))
+
+#_(macroexpand-1 '(defsc-report A [t p] {
+                                         :com.fulcrologic.rad.report/BodyItem         Boo
+                                         :com.fulcrologic.rad.report/source-attribute ::all
+                                         :com.fulcrologic.rad.report/route            "accounts"
+                                         :com.fulcrologic.rad.report/parameters       {:ui/active? boolean?}
+                                         }
+                    (dom/div :.hello "Hello")))
