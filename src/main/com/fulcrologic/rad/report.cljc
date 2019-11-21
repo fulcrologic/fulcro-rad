@@ -122,6 +122,8 @@
      Instead:
 
      ::report/BodyItem FulcroClass?
+     ::report/columns (every? keyword? :kind vector?)
+     ::report/column-headings (every? string? :kind vector?)
      ::report/source-attribute keyword?
      ::report/route string?
      ::report/parameters (map-of ui-keyword? rad-data-type?)
@@ -132,8 +134,12 @@
      "
      [sym arglist & args]
      (let [this-sym (first arglist)
-           {::keys [BodyItem source-attribute route parameters] :as options} (first args)
-           query    (into [{source-attribute `(comp/get-query ~BodyItem)}]
+           {::keys [BodyItem columns source-attribute route parameters] :as options} (first args)
+           subquery (cond
+                      BodyItem `(comp/get-query ~BodyItem)
+                      (seq columns) columns
+                      :else (throw (ex-info "Reports must have columns or a BodyItem" {})))
+           query    (into [{source-attribute subquery}]
                       (keys parameters))
            options  (assoc options
                       ::rad/io? true
@@ -153,11 +159,3 @@
                               (keyword? %)
                               (= "ui" (namespace %))) (keys p)))))
        `(comp/defsc ~sym ~arglist ~options ~@body))))
-
-#_(macroexpand-1 '(defsc-report A [t p] {
-                                         :com.fulcrologic.rad.report/BodyItem         Boo
-                                         :com.fulcrologic.rad.report/source-attribute ::all
-                                         :com.fulcrologic.rad.report/route            "accounts"
-                                         :com.fulcrologic.rad.report/parameters       {:ui/active? boolean?}
-                                         }
-                    (dom/div :.hello "Hello")))

@@ -9,6 +9,7 @@
     [com.wsscode.pathom.connect :as pc]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.report :as report]
     [com.fulcrologic.rad.entity :as entity :refer [defentity]]
     [com.fulcrologic.rad.validation :as validation]
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
@@ -80,6 +81,7 @@
   {::attr/spec              inst?
    ;; doesn't go in db, no resolver auto-generation
    ::attr/resolver          (fn [env input] #?(:clj {::last-login (java.util.Date.)}))
+   ::report/column-header   "Last Login"
    ::auth/authority         :local
    ::auth/required-contexts #{::id}
    ::auth/permissions       (fn [env] (owned-by env))})
