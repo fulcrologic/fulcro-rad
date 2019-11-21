@@ -12,7 +12,8 @@
 (defsc LoginForm [this {:ui/keys [username password] :as props} {:keys [visible?]}]
   {:query         [:ui/username
                    :ui/password]
-   :initial-state {}
+   :initial-state {:ui/username "tony@example.com"
+                   :ui/password "letmein"}
    :ident         (fn [] [:component/id ::LoginForm])}
   (log/spy :info props)
   (log/spy :info visible?)
