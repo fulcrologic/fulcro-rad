@@ -100,6 +100,7 @@
   [x]
   (when (eql/ident? x) x))
 
+;; TODO: Use attribute defs to elide the bits of delta that don't belong to this db
 (defn delta->datomic-txn
   "Takes in a normalized form delta, usually from client, and turns in
   into a datomic transaction."
@@ -168,9 +169,9 @@
           {::schema/keys [new-entities]} diff
           txn  (new-entities->migration new-schema new-entities)]
       txn))
-  (save-form [this {:keys [connection] :as mutation-env} params]
+  (save-form [this mutation-env params]
     (let [txn (delta->datomic-txn (::form/delta params))]
-      (d/transact connection txn))
+      @(d/transact connection txn))
     nil))
 
 

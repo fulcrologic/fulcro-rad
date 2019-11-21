@@ -89,6 +89,7 @@
                       (log/debug "Marking the form complete")
                       (fns/swap!-> state
                         (assoc-in [id-key id :ui/new?] false)
+                        (fs/add-form-config* TargetClass [id-key id])
                         (fs/mark-complete* [id-key id]))
                       (controller/io-complete! app options))})))
 
@@ -255,7 +256,7 @@
         :event/reset             {::uism/handler (fn [env]
                                                    (let [form-ident (uism/actor->ident env :actor/form)]
                                                      (uism/apply-action env fs/pristine->entity* form-ident)))}
-        :event/cancel            {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}])}}})}})
+        :event/cancel            {::uism/handler (fn [env] (exit-form env))}}})}})
 
 (defmethod controller/-start-io! ::rad/form
   [{::uism/keys [fulcro-app] :as env} TargetClass {::controller/keys [id]
@@ -276,4 +277,11 @@
       (start-create! fulcro-app TargetClass event-data)
       (start-edit! fulcro-app TargetClass event-data))
     (uism/activate env :state/routing)))
+
+(defn save! [this]
+  (uism/trigger! this (comp/get-ident this) :event/save {}))
+(defn undo-all! [this]
+  (uism/trigger! this (comp/get-ident this) :event/reset {}))
+(defn cancel! [this]
+  (uism/trigger! this (comp/get-ident this) :event/cancel {}))
 

@@ -33,7 +33,7 @@
    ::attr/attributes    [::acct/id ::acct/name ::acct/email]
 
    ::form/title         "Edit Account"
-   ::form/cancel-route  ["home"]
+   ::form/cancel-route  ["landing-page"]
    ::form/confirm-exit? true
 
    ;; intention is action can be "edit", "create", "view". ID can be the real ID, or some constant for create (so
@@ -43,11 +43,6 @@
    :will-enter          (fn [app {:keys [id]}]
                           ;; TODO: automatic type coercion on ID
                           (dr/route-immediate [::acct/id (new-uuid id)]))
-
-   :pre-merge           (fn [{:keys [data-tree]}]
-                          (merge
-                            {:ui/confirmation-message "Lose unsaved changes?"}
-                            (fs/add-form-config AccountForm data-tree)))
 
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
