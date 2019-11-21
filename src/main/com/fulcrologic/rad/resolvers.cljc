@@ -31,8 +31,8 @@
                              (get env :com.wsscode.pathom.core/parent-query)
                              (get env ::default-query))
                  ids       (if one?
-                             #{(get input id-key)}
-                             (into #{} (keep #(get % id-key) input)))]
+                             [(get input id-key)]
+                             (into [] (keep #(get % id-key) input)))]
       (do
         (log/info "Running" query "on entities with " id-key ":" ids)
         (let [result (dba/get-by-ids dbadapter entity id-attribute ids query)]

@@ -25,6 +25,28 @@
     (d/transact connection [{::account/id       (u 1)
                              ::account/name     "Joe Blow"
                              ::account/email    "joe@example.com"
+                             ::account/active?  true
+                             ::account/password (attr/encrypt "letmein" "some-salt"
+                                                  (::attr/encrypt-iterations
+                                                    (attr/key->attribute ::account/password)))}
+                            {::account/id       (u 2)
+                             ::account/name     "Sam Hill"
+                             ::account/email    "sam@example.com"
+                             ::account/active?  false
+                             ::account/password (attr/encrypt "letmein" "some-salt"
+                                                  (::attr/encrypt-iterations
+                                                    (attr/key->attribute ::account/password)))}
+                            {::account/id       (u 3)
+                             ::account/name     "Jose Haplon"
+                             ::account/email    "jose@example.com"
+                             ::account/active?  true
+                             ::account/password (attr/encrypt "letmein" "some-salt"
+                                                  (::attr/encrypt-iterations
+                                                    (attr/key->attribute ::account/password)))}
+                            {::account/id       (u 4)
+                             ::account/name     "Rose Small"
+                             ::account/email    "rose@example.com"
+                             ::account/active?  true
                              ::account/password (attr/encrypt "letmein" "some-salt"
                                                   (::attr/encrypt-iterations
                                                     (attr/key->attribute ::account/password)))}])))
@@ -48,7 +70,7 @@
   (tools-ns/refresh :after 'development/start))
 
 (comment
-  (seeed)
+  (seed)
   (res/schema->resolvers #{:production} ex-schema/latest-schema)
   (res/entity->resolvers :production employee/employee)
   (res/entity->resolvers :production account/account))

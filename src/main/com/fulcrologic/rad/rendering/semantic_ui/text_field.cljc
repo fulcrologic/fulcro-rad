@@ -24,13 +24,7 @@
         (div value)
         (input {:value    value
                 :onBlur   (fn [evt]
-                            (uism/trigger! this asm-id :event/blur
-                              {::attr/qualified-key k
-                               :form-ident          (comp/get-ident this)
-                               :value               (evt/target-value evt)}))
+                            (form/input-blur! this k (evt/target-value evt)))
                 :onChange (fn [evt]
-                            (uism/trigger! this asm-id :event/attribute-changed
-                              {::attr/qualified-key k
-                               :form-ident          (comp/get-ident this)
-                               :value               (evt/target-value evt)}))})))))
+                            (form/input-changed! this k (evt/target-value evt)))})))))
 

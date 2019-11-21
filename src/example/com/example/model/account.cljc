@@ -8,6 +8,7 @@
         [[com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]])
     [com.wsscode.pathom.connect :as pc]
     [com.fulcrologic.rad.database :as db]
+    [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.entity :as entity :refer [defentity]]
     [com.fulcrologic.rad.validation :as validation]
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
@@ -25,6 +26,12 @@
   {::db/id          :production
    ::attr/index?    true
    ::attr/required? true})
+
+(defattr ::active? :boolean
+  {::db/id              :production
+   ::form/default-value true
+   ::attr/index?        true
+   ::attr/required?     true})
 
 (defattr ::password :password
   {::db/id                   :production
@@ -84,18 +91,24 @@
    ::attr/target      :com.example.model.account/id
    ::auth/authority   :local
    ::pc/output        [{::all-accounts [::id]}]
-   ::attr/resolver    (fn [env input]
+   ::attr/resolver    (fn [{:keys [query-params] :as env} input]
                         #?(:clj
                            (let [{:keys [db]} env
-                                 ids (d/q [:find '[?uuid ...]
-                                           :where
-                                           ['?dbid ::id '?uuid]] db)]
+                                 ids (if (:ui/show-inactive? query-params)
+                                       (d/q [:find '[?uuid ...]
+                                             :where
+                                             ['?dbid ::id '?uuid]] db)
+                                       (d/q [:find '[?uuid ...]
+                                             :where
+                                             ['?dbid ::active? true]
+                                             ['?dbid ::id '?uuid]] db))]
+                             (log/spy :info query-params)
                              {::all-accounts (mapv (fn [id] {::id id}) ids)})))})
 
 ;; List just persisted ones that "group together" in storage. Could cross storage
 ;; boundaries, though, so not sure how well the concept works in total.
 ;; TODO: Move virtual attributes out of the entity, and auto-find them in registry for resolver generation
-(defentity account [::id ::name ::email ::password ::last-login ::role]
+(defentity account [::id ::name ::email ::password ::last-login ::role ::active?]
   ;; Ideas:
   ::auth/authority :local
   ::entity/beforeCreate (fn [env new-entity]

@@ -208,11 +208,12 @@
       {::uism/events
        {:event/save-failed {::uism/handler (fn [env]
                                              ;; TODO: Handle failures
-                                             env)}
+                                             (uism/activate env :state/editing))}
         :event/saved       {::uism/handler (fn [env]
                                              (let [form-ident (uism/actor->ident env :actor/form)]
                                                (-> env
-                                                 (uism/apply-action fs/entity->pristine* form-ident))))}}})
+                                                 (uism/apply-action fs/entity->pristine* (log/spy :info form-ident))
+                                                 (uism/activate :state/editing))))}}})
 
     :state/editing
     (merge global-events
@@ -254,7 +255,8 @@
                                                            {::uism/error-event :event/save-failed
                                                             ;; TODO: Make return optional?
                                                             ::m/returning      form-class
-                                                            ::uism/ok-event    :event/saved})))))}
+                                                            ::uism/ok-event    :event/saved}))
+                                                       (uism/activate :state/saving))))}
         :event/reset             {::uism/handler (fn [env]
                                                    (let [form-ident (uism/actor->ident env :actor/form)]
                                                      (uism/apply-action env fs/pristine->entity* form-ident)))}
@@ -303,3 +305,17 @@
   [this form-class entity-id]
   (let [[root & _] (-> form-class comp/component-options :route-segment)]
     (controller/route-to! this :main-controller [root "edit" (str entity-id)])))
+
+(defn input-blur! [this k value]
+  (let [asm-id (comp/get-ident this)]
+    (uism/trigger! this asm-id :event/blur
+      {::attr/qualified-key k
+       :form-ident          asm-id
+       :value               value})))
+
+(defn input-changed! [this k value]
+  (let [asm-id (comp/get-ident this)]
+    (uism/trigger! this asm-id :event/attribute-changed
+      {::attr/qualified-key k
+       :form-ident          asm-id
+       :value               value})))

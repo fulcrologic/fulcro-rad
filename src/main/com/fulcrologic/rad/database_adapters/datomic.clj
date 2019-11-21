@@ -20,6 +20,7 @@
 
 (def type-map
   {:string   :db.type/string
+   :boolean  :db.type/boolean
    :password :db.type/string
    :int      :db.type/long
    :long     :db.type/long

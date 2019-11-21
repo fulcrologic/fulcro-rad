@@ -10,8 +10,7 @@
        [com.fulcrologic.fulcro.dom-server :as dom])))
 
 (defmethod report/render-parameter-input :boolean [this k]
-  (log/info "Rendering boolean input")
   (let [value (get (comp/props this) k)]
     (dom/input {:type     "checkbox"
                 :onChange #(m/set-value! this k (not value))
-                :value    (boolean value)})))
+                :checked  (boolean value)})))

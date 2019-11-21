@@ -80,7 +80,7 @@
                                                          report-ident   (uism/actor->ident env :actor/report)
                                                          desired-params (some-> Report comp/component-options ::parameters keys set)
                                                          current-params (merge
-                                                                          (select-keys (get-in state-map report-ident) desired-params)
+                                                                          (select-keys (log/spy :info (get-in state-map report-ident)) (log/spy :info desired-params))
                                                                           event-data)]
                                                      (load-report! fulcro-app Report current-params)
                                                      env))}}})}})

@@ -72,7 +72,7 @@
                                           attributes))]
         authorities))))
 
-(defn- activate-route [{::uism/keys [fulcro-app] :as env} target-route]
+(defn activate-route [{::uism/keys [fulcro-app] :as env} target-route]
   (dr/change-route fulcro-app target-route)
   (-> env
     (uism/store ::rad/target-route nil)
