@@ -26,22 +26,20 @@
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]))
 
 (form/defsc-form AccountForm [this props]
-  {::attr/attributes    [::acct/id ::acct/name ::acct/email ::acct/last-login]
-   ::form/read-only?    {
-                         ; ::acct/email true
-                         }
-   ::form/id            ::acct/id
-   ::form/title         "Edit Account"
-   ::form/cancel-route  ["landing-page"]
-   ::form/confirm-exit? true
-   ::form/route-prefix  "account"
+  {::attr/attributes   [::acct/id ::acct/name ::acct/email ::acct/last-login]
+   ;::form/read-only?   {::acct/email true}
+   ::form/id           ::acct/id
+   ::form/cancel-route ["landing-page"]
+   ::form/route-prefix "account"
+   ::form/title        "Edit Account"
+   ;;::form/confirm-exit? true
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
-   ::rad/schema         ex-schema/latest-schema})
+   ::rad/schema        ex-schema/latest-schema})
 
 (defsc AccountListItem [this {::acct/keys [id name active? last-login] :as props}]
   {::report/columns   [::acct/name ::acct/active? ::acct/last-login]
-   ;::report/column-headings  ["Name" "Active?" "Last Login"]
+   ::report/column-headings  ["Name" "Active?" "Last Login"]
    ::report/edit-form AccountForm
    :query             [::acct/id ::acct/name ::acct/active? ::acct/last-login]
    :ident             ::acct/id}
