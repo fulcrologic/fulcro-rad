@@ -44,7 +44,7 @@ library extensions can easily add capabilities.
 ** Pretty much everything from "Forms", but for read-only display.
 ** Completely generated output, with ability to incrementally override.
 
-See the http://[YouTube Video] for a demonstration of a working prototype.
+See the https://youtu.be/jkx9F-RIFiY[YouTube Video] for a demonstration of a working prototype.
 
 == Ideas
 

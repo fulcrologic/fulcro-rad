@@ -58,9 +58,6 @@
    ::report/parameters       {:ui/show-inactive? :boolean}
    ::report/route            "accounts"})
 
-(comment
-  (comp/get-query AccountList))
-
 (defsc LandingPage [this props]
   {:query         ['*]
    :ident         (fn [] [:component/id ::LandingPage])
