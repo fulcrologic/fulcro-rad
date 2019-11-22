@@ -27,7 +27,7 @@
 
 (form/defsc-form AccountForm [this props]
   {::attr/attributes   [::acct/id ::acct/name ::acct/email ::acct/last-login]
-   ;::form/read-only?   {::acct/email true}
+   ; ::form/read-only?   {::acct/email false}
    ::form/id           ::acct/id
    ::form/cancel-route ["landing-page"]
    ::form/route-prefix "account"
@@ -38,11 +38,11 @@
    ::rad/schema        ex-schema/latest-schema})
 
 (defsc AccountListItem [this {::acct/keys [id name active? last-login] :as props}]
-  {::report/columns   [::acct/name ::acct/active? ::acct/last-login]
-   ::report/column-headings  ["Name" "Active?" "Last Login"]
-   ::report/edit-form AccountForm
-   :query             [::acct/id ::acct/name ::acct/active? ::acct/last-login]
-   :ident             ::acct/id}
+  {::report/columns         [::acct/name ::acct/active? ::acct/last-login]
+   ::report/column-headings ["Name" "Active?" "Last Login"]
+   ::report/edit-form       AccountForm
+   :query                   [::acct/id ::acct/name ::acct/active? ::acct/last-login]
+   :ident                   ::acct/id}
   #_(dom/div :.item
       (dom/i :.large.github.middle.aligned.icon)
       (div :.content

@@ -104,7 +104,6 @@
                                              :where
                                              ['?dbid ::active? true]
                                              ['?dbid ::id '?uuid]] db))]
-                             (log/spy :info query-params)
                              {::all-accounts (mapv (fn [id] {::id id}) ids)})))})
 
 ;; List just persisted ones that "group together" in storage. Could cross storage
