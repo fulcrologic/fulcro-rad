@@ -1,19 +1,52 @@
 = Fulcro Rapid Application Development Tools
 
-This library is currently an experiment. It should *not* be used in any kind of production
+This library is currently in an experimental phase. It should *not* be used in any kind of production
 system unless you feel ok about forking it and maintaining the fork.  Once the ideas have
-stabilied then I may do an official release with stable documentation and APIs.
+stabilized then I may do an official release with stable documentation and APIs.
+
+HELP WANTED: This project is more ambitious than my time will allow. If you have Clojure chops and are
+interested in helping, please let me know.
+
+== Goals
 
 Here are the goals:
 
-* Declarative data model
-  * Can be used to generate: forms, reports, data resolvers, etc.
-* A Path-based auth management. That is to say: data always has a context, and that
-  context implies security (a user can read their own emails). Often, figuring out the authorization
-  in some specific context (i.e. a form) may require following the graph to figure out if the
-  context has been established, and also to interact with authorizing it.
+* Build applications quickly, without serious compromises:
+** Minimal Boilerplate
+** Easily (and gradually) escape to custom code when your needs outgrow the system's abilities.
 
-Some basic ideas:
+The facets that this library are intended to address:
+
+* OPEN model (via namespaced keywords and maps)
+** All declarative constructs use open maps in CLJC so that
+library extensions can easily add capabilities.
+
+* Declarative data model to facilitate:
+** Generated database schema (if desired) with migration management.
+*** Database adapter makes it possible to use any database.
+** Generated demand-driven server APIs
+** Declarative (extensible) permissions model.
+
+* Authentication
+** Extensible system for obtaining and managing client authentication.
+** Demand-driven authentication (login pops if a screen needs to work with data that requires auth)
+
+* Forms
+** Declarative and extensible in all aspects: validation, rendering, permissions, etc.
+** Support for graph-based forms (nested forms with relations)
+** Automatic logic for complete data management Create/Update/Delete.
+** Integration with permissions (authorization)
+** Ability to generate UI with ability to incrementally override.
+** Pluggable UI generation system: Support web, native, etc., from a single declaration.
+
+* Reports
+** Input parameters
+** Pretty much everything from "Forms", but for read-only display.
+** Completely generated output, with ability to incrementally override.
+
+See the http://[YouTube Video] for a demonstration of a working prototype.
+
+== Ideas
 
 * A state machine to manage auth context.  For example, you have auth in a google domain, a
 facebook domain, and your company's domain.  Perhaps SSO gives you that, or perhaps you
@@ -25,9 +58,9 @@ the UI routing and visibility could be tied to sending an event to the auth cont
 a request to send *back* an event to the calling context when the auth is complete.  The auth systems
 then run in parallel with the application logic.
 
-* A given cluster of UI, though the colocated query, establishes a top-level context (e.g. `:account/id`),
-and subqueries and joined via the graph query itself.  Pathom is used to traverse  this for data needs,
-but it could also be traversed to derive the auth needs.
+* A given cluster of UI, using the co-located query, establishes a top-level context (e.g. `:account/id`),
+and subqueries are joined via the graph query itself.  Pathom is used to traverse this for data needs,
+but it is also traversed to derive the auth needs.
 
 * A cluster of UI also establishes path-based contexts (e.g. `[account-id, mailbox, message-id]`) where a component
 rendering the message is able to know the mailbox and account (accumulate identities along a UI path). This means
@@ -37,32 +70,9 @@ you know there is a resolver that can take an email address and turn that
 that into a starting context for youtube videos posted by that person. This is already a feature of Pathom, but
 it could be used *at development time* to do things like error checking, code completion, etc., and at
 runtime to do things like mentioned in the prior point (resolve auth necessary to do something like use the
-YouTube API).
+GitHub API).
 
-* If all data is sufficiently declared, then we can also generate:
-** Specs
-** Database migrations, SQL, Datomic, etc.
-** Data Resolvers (for the local domain database at least)
-** CRUD mutations
-** Form UI (with a bit more declaration)
-*** Correctly display/hide/make readonly fields
-*** Fully automatic CRUD (even with nested sub-forms)
-** Reports
-*** Declarative inputs needed from user to run report
-*** Rows/columns auto-derived based on resolvers/context
-
-The new dynamic routing support would also make it possible to assemble most of a CRUD app with HTML5
+The dynamic routing support allows us to make it possible to assemble most of a CRUD app with HTML5
 routing, dynamic code loading (splitting), and arbitrary linkage of navigation with very little code.
 Customizing the "chrome" of autogenerated things could also be declarative/pluggable, so that UI could even
 be emitted (and customized) for web + native from the same declarations.
-
-Ultimately I see a session where a user can use a REPL to emit artifacts that
-can then be tweaked/customized as needed.
-
-== Declaring Data
-
-[source]
------
-
------
-
