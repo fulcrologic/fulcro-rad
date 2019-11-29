@@ -9,4 +9,5 @@
   com.fulcrologic.rad.report/defsc-report                  clojure.core/defn
   com.fulcrologic.fulcro.routing.dynamic-routing/defrouter clojure.core/defn
   com.fulcrologic.rad.authorization/defauthenticator       clojure.core/defn
+  mount.core/defstate                                      clojure.core/def
   }}
