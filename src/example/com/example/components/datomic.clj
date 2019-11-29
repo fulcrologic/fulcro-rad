@@ -21,11 +21,19 @@
                     database "?user=" user "&password=" password)]
     url))
 
+(defn presence
+  "Returns s if s is not blank. Takes an optional default."
+  [s & [default]]
+  (if (str/blank? s)
+    default
+    s))
+
 ;; TODO: This can become part of library once the pattern is well-established
 (defn start-database
   []
   (log/info "Starting Datomic")
-  (let [url                    (config->datomic-url config)
+  (let [url                    (presence (System/getenv "DATOMIC_URL")
+                                         (config->datomic-url config))
         ;; TODO: Better system of dealing with migrations
         created?               (d/create-database url)
         mocking-required?      (boolean (System/getProperty "force.mocked.connection"))

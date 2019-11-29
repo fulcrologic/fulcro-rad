@@ -84,8 +84,8 @@ be emitted (and customized) for web + native from the same declarations.
 For any contributors wanting to run this, please see:
 https://docs.datomic.com/on-prem/storage.html#sql-database[Datomic SQL
 database] to provision a postgres database for Datomic. If you don't
-want to use postgres, supply a custom env variable. Then follow these
-steps:
+want to use postgres, you can pass a custom Datomic url atop the
+`Makefile`. Then follow these steps:
 
 * Install datomic
 * Supply the necessary variables at the top of the `Makefile`
