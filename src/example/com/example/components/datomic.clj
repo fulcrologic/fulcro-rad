@@ -49,8 +49,7 @@
         mocking-ok?            (or mocking-required?
                                    (boolean (System/getProperty
                                              "allow.mocked.connection")))
-        use-mocked-connection? mocking-required?
-        conn                   (if use-mocked-connection?
+        conn                   (if mocking-required?
                                  (mock-conn (d/db (d/connect url)))
                                  (d/connect url))
         adapter                (datomic-adapter/->DatomicAdapter :production conn)
