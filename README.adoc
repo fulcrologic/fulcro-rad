@@ -79,6 +79,8 @@ be emitted (and customized) for web + native from the same declarations.
 
 == Development
 
+=== Setup
+
 For any contributors wanting to run this, please see:
 https://docs.datomic.com/on-prem/storage.html#sql-database[Datomic SQL
 database] to provision a postgres database for Datomic. If you don't
@@ -95,7 +97,9 @@ steps:
 gem install foreman
 -----------------
 
-* Start the nrepl server, shadow-cljs watcher and datomic transactor using:
+=== Startup
+
+* Start up all the necessary proceses:
 
 [source,bash]
 -----------------
@@ -103,7 +107,7 @@ foreman start Procfile.dev
 -----------------
 
 * Connect to the nrepl server using your repl client, Emacs Cider is supported.
-* In the repl, load in the dev code.
+* From the repl, load in the dev code.
 
 This is done so that any compilation exceptions are thrown at runtime,
 instead of startup time which would make the repl crash.
@@ -124,3 +128,11 @@ development=> (go)
 -----------------
 
 * The system is started, visit http://localhost:3000/index.html[localhost:3000/index.html]
+
+* If you make any changes to the clj side or in the configs, refresh
+  the namesaces and restart the system:
+
+[source,clojure]
+-----------------
+development=> (restart)
+-----------------
