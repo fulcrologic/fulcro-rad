@@ -106,7 +106,8 @@ gem install foreman
 foreman start Procfile.dev
 -----------------
 
-* Connect to the nrepl server using your repl client, Emacs Cider is supported.
+* Connect to the nrepl server using your repl client, Emacs Cider is
+  supported.
 * From the repl, load in the dev code.
 
 This is done so that any compilation exceptions are thrown at runtime,
@@ -127,7 +128,8 @@ user=> (dev)
 development=> (go)
 -----------------
 
-* The system is started, visit http://localhost:3000/index.html[localhost:3000/index.html]
+* The system is started, visit
+  http://localhost:3000/index.html[localhost:3000/index.html]
 
 * If you make any changes to the clj side or in the configs, refresh
   the namesaces and reset the system:
@@ -136,3 +138,6 @@ development=> (go)
 -----------------
 development=> (reset)
 -----------------
+
+* Some dir-locals are configured for emacs. The system will also reset
+  when running `M-x cider-ns-refresh`
