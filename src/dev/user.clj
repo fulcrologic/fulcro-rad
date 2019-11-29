@@ -17,4 +17,15 @@
                       (update-in data [:vargs 2] #(with-out-str (clojure.pprint/pprint %)))
                       data))]
                  [])})
+(defn in-ns-dev []
+  (in-ns 'development)
+  :loaded)
 
+(defn dev
+  "Loads all source files and switches to the 'dev' namespace. Throws
+  any exceptions that may be thrown during compilation."
+  []
+  (let [ret (refresh :after `switch-to-dev)]
+    (if (instance? Throwable ret)
+      (throw ret)
+      ret)))

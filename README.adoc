@@ -105,8 +105,11 @@ foreman start Procfile.dev
 * Connect to the nrepl server using your repl client, Emacs Cider is supported.
 * In the repl, load in the dev code.
 
-This is done so that any startup exceptions don't mean the whole
-repl crashes. You can fix the issue, and run (dev) again.
+This is done so that any compilation exceptions are thrown at runtime,
+instead of startup time which would make the repl crash.
+
+If some code won't compile, you can fix the issue and just try running
+`(dev)` again.
 
 [source,clojure]
 -----------------
