@@ -82,11 +82,11 @@ be emitted (and customized) for web + native from the same declarations.
 For any contributors wanting to run this, please see:
 https://docs.datomic.com/on-prem/storage.html#sql-database[Datomic SQL
 database] to provision a postgres database for Datomic. If you don't
-want to use postgres, supply a custom env variable
-`DATOMIC_URL=datomic:dev://localhost:4334/fulcro_rad_example`
+want to use postgres, supply a custom env variable. Then follow these
+steps:
 
 * Install datomic
-* Replace the DATOMIC_VERSION and TRANSACTOR_PROPERTIES in the `Makefile`
+* Supply the necessary variables at the top of the `Makefile`
 * Set the matching datomic peer dependency in `deps.edn`
 * Install `foreman`
 

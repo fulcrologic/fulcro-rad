@@ -1,0 +1,3 @@
+repl: make repl
+transactor: make transactor
+shadow: make cljs
