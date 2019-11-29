@@ -130,9 +130,9 @@ development=> (go)
 * The system is started, visit http://localhost:3000/index.html[localhost:3000/index.html]
 
 * If you make any changes to the clj side or in the configs, refresh
-  the namesaces and restart the system:
+  the namesaces and reset the system:
 
 [source,clojure]
 -----------------
-development=> (restart)
+development=> (reset)
 -----------------
