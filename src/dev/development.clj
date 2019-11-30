@@ -69,6 +69,8 @@
   (stop)
   (tools-ns/refresh :after 'development/start))
 
+(def reset #'restart)
+
 (comment
   (seed)
   (res/schema->resolvers #{:production} ex-schema/latest-schema)

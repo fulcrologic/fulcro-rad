@@ -20,3 +20,4 @@ resources/public/js
 target
 .cpcache
 .shadow-cljs
+.clj-kondo/.cache

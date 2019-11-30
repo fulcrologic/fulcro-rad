@@ -1,0 +1,13 @@
+{:lint-as
+ {slingshot.slingshot/try+                                 clojure.core/try
+  compojure.core/defroutes                                 clojure.core/def
+  clojure.test.check.clojure-test/defspec                  clojure.core/def
+  clojure.test.check.properties/for-all                    clojure.core/let
+  clojure.java.jdbc/with-db-transaction                    clojure.core/let
+  com.fulcrologic.fulcro.components/defsc                  clojure.core/defn
+  com.fulcrologic.rad.form/defsc-form                      clojure.core/defn
+  com.fulcrologic.rad.report/defsc-report                  clojure.core/defn
+  com.fulcrologic.fulcro.routing.dynamic-routing/defrouter clojure.core/defn
+  com.fulcrologic.rad.authorization/defauthenticator       clojure.core/defn
+  mount.core/defstate                                      clojure.core/def
+  }}
