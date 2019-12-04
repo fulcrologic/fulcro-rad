@@ -13,31 +13,51 @@
     [taoensso.timbre :as log]))
 
 (defattr ::id :uuid
-  {::attr/unique    :identity
+  {::attr/unique?   true
+   ::db/id          :primary-db
+   ::db/entity      ::address
    ::attr/index?    true
    ::attr/required? true
-   ::auth/authority :local
-   ::db/id          :production})
+   ::auth/authority :local})
 
 (defattr ::street :string
-  {::db/id          :production
-   ::attr/index?    true
+  {::attr/index?    true
+   ::db/id          :primary-db
+   ::db/entity      ::address
    ::attr/required? true})
 
 (defattr ::city :string
-  {::db/id          :production
-   ::attr/index?    true
+  {::attr/index?    true
+   ::db/id          :primary-db
+   ::db/entity      ::address
    ::attr/required? true})
 
 (defattr ::state :enum
-  {::db/id          :production
-   ::attr/cardinality :one
-   ::attr/values #{:AZ :AL :AK :CA :CT :DE :GA :HI :KS :MS :MO :MN :OR :WA}
+  {::attr/values    #{:AZ :AL :AK :CA :CT :DE :GA :HI :KS :MS :MO :MN :OR :WA}
+   ::db/id          :primary-db
+   ::db/entity      ::address
    ::attr/index?    true
-   ::attr/required? true})
+   ::attr/required? true
+   ::attr/labels    {:AZ "Arizona"
+                     :AL "Alabama"
+                     :AK "Alaska"
+                     :CA "California"
+                     :CT "Connecticut"
+                     :DE "Deleware"
+                     :GA "Georgia"
+                     :HI "Hawaii"
+                     :KS "Kansas"
+                     :MS "Mississippi"
+                     :MO "Missouri"
+                     :OR "Oregon"
+                     :WA "Washington"}})
 
 (defattr ::zip :string
-  {::db/id          :production
-   ::attr/index?    true
+  {::attr/index?    true
+   ::db/id          :primary-db
+   ::db/entity      ::address
    ::attr/required? true})
+
+(defentity address [::id ::street ::city ::state ::zip]
+  {})
 

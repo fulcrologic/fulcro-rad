@@ -7,7 +7,6 @@
     [com.example.components.middleware]
     [com.example.components.server]
     [com.example.model.account :as account]
-    [com.example.model.employee :as employee]
     [com.example.schema :as ex-schema :refer [latest-schema prior-schema]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
@@ -73,23 +72,16 @@
 
 (comment
   (seed)
-  (res/schema->resolvers #{:production} ex-schema/latest-schema)
-  (res/entity->resolvers :production employee/employee)
-  (res/entity->resolvers :production account/account))
+  (res/schema->resolvers #{:primary-db} ex-schema/latest-schema)
+  (res/entity->resolvers :primary-db account/account))
 
 (comment
-  (let [adapter (datomic/->DatomicAdapter :production nil)]
+  (let [adapter (datomic/->DatomicAdapter :primary-db nil)]
     (pprint
       (dba/diff->migration adapter prior-schema latest-schema)))
 
-  (let [adapter (datomic/->DatomicAdapter :old-database)]
-    (pprint
-      (dba/diff->migration adapter prior-schema latest-schema)))
-
-  (let [adapter (psql/->PostgreSQLAdapter :production)]
+  (let [adapter (psql/->PostgreSQLAdapter :primary-db)]
     (print
       (dba/diff->migration adapter prior-schema latest-schema)))
 
-  (let [adapter (psql/->PostgreSQLAdapter :old-database)]
-    (print
-      (dba/diff->migration adapter prior-schema latest-schema))))
+  )

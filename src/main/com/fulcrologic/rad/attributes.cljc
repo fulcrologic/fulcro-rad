@@ -83,7 +83,7 @@
 (>defn identity?
   [k]
   [qualified-keyword? => boolean?]
-  (boolean (some-> k key->attribute ::unique (= :identity))))
+  (boolean (some-> k key->attribute ::unique? (= true))))
 
 (>defn attributes->eql
   "Returns an EQL query for all of the attributes that are available for the given database-id"

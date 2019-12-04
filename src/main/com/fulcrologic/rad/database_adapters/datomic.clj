@@ -37,7 +37,7 @@
   (reduce
     (fn [txn {::entity/keys [attributes] :as entity}]
       (reduce
-        (fn [txn {::attr/keys [qualified-key type index? component? unique cardinality]}]
+        (fn [txn {::attr/keys [qualified-key type index? component? unique? cardinality]}]
           (let [datomic-cardinality (if (= :many cardinality) :db.cardinality/many :db.cardinality/one)
                 datomic-type        (type-map type)]
             (conj txn
@@ -49,7 +49,7 @@
                          (assoc :db/index true)
                          (cond->
                            (= :string type) (assoc :db/fulltext true)))
-                unique (assoc :db/unique (keyword "db.unique" (name unique)))))))
+                unique? (assoc :db/unique (keyword "db.unique" (name unique?)))))))
         txn
         (map attr/key->attribute attributes)))
     []

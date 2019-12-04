@@ -15,23 +15,14 @@
      "Define an entity with attributes, and optional additional options.
 
      ```
-     (defentity account [id name password]
-       ::spec (s/keys :req [::id ::name ::password]))
+     (defentity account [::id ::name ::password])
      ```
      "
-     [sym attributes & {:as m}]
-     (let [nspc       (if (comp/cljs? &env) (-> &env :ns :name str) (name (ns-name *ns*)))
-           spec       (::spec m)
-           kw         (keyword (str nspc) (name sym))
-           spec-def   (when spec `(gr/>def ~kw ~spec))
-           output     (-> m
-                        (assoc ::qualified-key kw)
-                        (assoc ::attributes attributes)
-                        (dissoc ::spec))
-           definition `(def ~sym ~output)]
-       (if spec-def
-         `(do
-            ~spec-def
-            ~definition)
-         definition))))
+     [sym attributes options]
+     (let [nspc   (if (comp/cljs? &env) (-> &env :ns :name str) (name (ns-name *ns*)))
+           kw     (keyword (str nspc) (name sym))
+           output (-> options
+                    (assoc ::qualified-key kw)
+                    (assoc ::attributes attributes))]
+       `(def ~sym ~output))))
 

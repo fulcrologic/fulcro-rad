@@ -7,4 +7,4 @@
 
 (defstate automatic-resolvers
   :start
-  (res/schema->resolvers #{:production} ex-schema/latest-schema))
+  (res/schema->resolvers #{:primary-db} ex-schema/latest-schema))

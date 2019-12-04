@@ -14,11 +14,11 @@
 ;; TODO: Index support
 (>def ::index map?)
 (>def ::indexes (s/every ::index))
-(>def ::roots (s/every ::attributes/attribute))
+(>def ::globals (s/every ::attributes/attribute))
 
 (>def ::schema (s/keys
                  :req [::entities]
-                 :opt [::indexes ::roots]))
+                 :opt [::indexes ::globals]))
 
 (>def ::new-attributes (s/every ::attributes/attribute))
 (>def ::old-attribute ::attributes/attribute)

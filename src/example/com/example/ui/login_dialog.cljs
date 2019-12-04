@@ -15,8 +15,6 @@
    :initial-state {:ui/username "tony@example.com"
                    :ui/password "letmein"}
    :ident         (fn [] [:component/id ::LoginForm])}
-  (log/spy :info props)
-  (log/spy :info visible?)
   (ui-modal {:open (boolean visible?) :dimmer true}
     (ui-modal-header {} "Please Log In")
     (ui-modal-content {}

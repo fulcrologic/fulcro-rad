@@ -67,8 +67,8 @@
                                                         seq) " is invalid."))))
      (let [{::attr/keys [attributes]} options
            {::keys [id route-prefix]} options
-           form-field? (fn [{::attr/keys [unique] ::db/keys [id]}]
-                         (and (not unique) id))
+           form-field? (fn [{::attr/keys [unique?] ::db/keys [id]}]
+                         (and (not unique?) id))
            query       (vec (concat [:ui/new? :ui/confirmation-message [::uism/asm-id ''_]]
                               attributes
                               [`fs/form-config-join]))]
@@ -122,7 +122,7 @@
    (pc/defmutation save-form [env params]
      {::pc/params #{::diff ::delta}}
      ;; FIXME: Find correct adapter based on content of diff
-     (let [adapter (-> env :com.fulcrologic.rad.database-adapters.db-adapter/adapters :production)]
+     (let [adapter (-> env :com.fulcrologic.rad.database-adapters.db-adapter/adapters :primary-db)]
        (dba/save-form adapter env params)))
    :cljs
    (m/defmutation save-form [params]
@@ -181,11 +181,11 @@
         ;; TODO: Make sure there is one and only one unique identity key on the form
         initial-value  (into {:ui/new? true}
                          (keep (fn [{::keys      [default-value]
-                                     ::attr/keys [qualified-key unique]}]
+                                     ::attr/keys [qualified-key unique?]}]
                                  ;; NOTE: default value can come from attribute or be set/overridden on form itself
                                  (let [default-value (or (get default-values qualified-key) default-value)]
                                    (cond
-                                     (= unique :identity) [qualified-key tempid]
+                                     (= unique? true) [qualified-key tempid]
                                      default-value [qualified-key default-value]))))
                          fields)
         filled-fields  (keys initial-value)

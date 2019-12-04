@@ -83,7 +83,7 @@
   [attr]
   [::attr/attribute => (? ::pc/resolver)]
   (log/info "Building attribute resolver for" (::attr/qualified-key attr))
-  (enc/if-let [resolver        (::attr/resolver attr)
+  (enc/if-let [resolver        (::pc/resolve attr)
                secure-resolver (fn [env input]
                                  (->>
                                    (resolver env input)
@@ -116,7 +116,7 @@
     (concat entity-resolvers attribute-resolvers)))
 
 (>defn schema->resolvers
-  [database-ids {::schema/keys [entities roots]}]
+  [database-ids {::schema/keys [entities globals]}]
   [(s/every ::db/id) ::schema/schema => (s/every ::pc/resolver)]
   (let [database-ids (set database-ids)]
     (vec
@@ -127,4 +127,4 @@
           database-ids)
         (keep (fn [attr]
                 (when (contains? database-ids (::db/id attr))
-                  (attribute-resolver attr))) roots)))))
+                  (attribute-resolver attr))) globals)))))

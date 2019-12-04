@@ -44,15 +44,15 @@
       (.append creates (str "CREATE TABLE " table-name "(\n"))
       (.append creates (str/join ",\n"
                          (keep
-                           (fn [{::attr/keys [qualified-key type unique]}]
+                           (fn [{::attr/keys [qualified-key type unique?]}]
                              (let [column-name (csk/->snake_case (name qualified-key))]
                                (cond
                                  (and
                                    (= type :generated)
-                                   (= unique :identity))
+                                   (= unique? true))
                                  (str "   " column-name " BIGSERIAL PRIMARY KEY")
 
-                                 (= unique :identity)
+                                 (= unique? true)
                                  (str "   " column-name " " (type-map type) " NOT NULL PRIMARY KEY")
 
                                  (= :ref type) nil
@@ -67,7 +67,7 @@
       (.append updates
         (str/join ""
           (keep
-            (fn [{::attr/keys [qualified-key type target unique cardinality]}]
+            (fn [{::attr/keys [qualified-key type target unique? cardinality]}]
               (if (or (nil? cardinality) (= cardinality :one))
                 (let [column-name      (csk/->snake_case (name qualified-key))
                       target-attribute (when target
