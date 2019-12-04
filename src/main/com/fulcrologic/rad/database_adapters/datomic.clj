@@ -2,21 +2,14 @@
   (:require
     [com.fulcrologic.rad.database-adapters.protocols :as dbp]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.entity :as entity]
-    [com.fulcrologic.rad.schema :as schema]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
-    [clojure.spec.alpha :as s]
-    [taoensso.timbre :as log]
     [datomic.api :as d]
     [datomock.core :refer [mock-conn]]
     [mount.core :refer [defstate]]
-    [taoensso.timbre :as log]
-    [clojure.string :as str]
     [edn-query-language.core :as eql]
     [clojure.walk :as walk]
     [clojure.set :as set]))
-
 
 (def type-map
   {:string   :db.type/string
@@ -31,29 +24,7 @@
    :ref      :db.type/ref
    :uuid     :db.type/uuid})
 
-(>defn new-entities->migration
-  [schema new-entities]
-  [::schema/schema (s/coll-of ::entity/entity) => vector?]
-  (reduce
-    (fn [txn {::entity/keys [attributes] :as entity}]
-      (reduce
-        (fn [txn {::attr/keys [qualified-key type index? component? unique? cardinality]}]
-          (let [datomic-cardinality (if (= :many cardinality) :db.cardinality/many :db.cardinality/one)
-                datomic-type        (type-map type)]
-            (conj txn
-              (cond-> {:db/ident       qualified-key
-                       :db/valueType   datomic-type
-                       :db/cardinality datomic-cardinality}
-                (and (= :ref type) component?) (assoc :db/isComponent true)
-                index? (->
-                         (assoc :db/index true)
-                         (cond->
-                           (= :string type) (assoc :db/fulltext true)))
-                unique? (assoc :db/unique (keyword "db.unique" (name unique?)))))))
-        txn
-        (map attr/key->attribute attributes)))
-    []
-    new-entities))
+
 
 (defn replace-ref-types
   "dbc   the database to query
@@ -159,18 +130,13 @@
 
 (defrecord DatomicAdapter [database-id connection]
   dbp/DBAdapter
-  (get-by-ids [this entity id-attr ids desired-output]
+  (get-by-ids [_ id-attr ids desired-output]
     ;; TODO: Should use consistent DB for atomicity
     (let [pk   (::attr/qualified-key id-attr)
           eids (mapv (fn [id] [pk id]) ids)
           db   (d/db connection)]
       (pull-* db desired-output eids)))
-  (diff->migration [this old-schema new-schema]
-    (let [diff (schema/schema-diff database-id old-schema new-schema)
-          {::schema/keys [new-entities]} diff
-          txn  (new-entities->migration new-schema new-entities)]
-      txn))
-  (save-form [this mutation-env params]
+  (save-form [_ _ params]
     (let [txn (delta->datomic-txn (::form/delta params))]
       @(d/transact connection txn))
     nil))

@@ -2,11 +2,9 @@
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :as gr :refer [>defn => >def >fdef ?]]
+    [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
-    [com.fulcrologic.rad.database :as db]
-    [com.fulcrologic.fulcro.components :as comp]
-    [clojure.set :as set])
+    [com.fulcrologic.rad.database :as db])
   #?(:clj
      (:import (clojure.lang IFn)
               (javax.crypto.spec PBEKeySpec)

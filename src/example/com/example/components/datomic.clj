@@ -1,7 +1,6 @@
 (ns com.example.components.datomic
   (:require
     [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
-    [com.fulcrologic.rad.database-adapters.protocols :as dbp]
     [com.fulcrologic.rad.database-adapters.datomic :as datomic-adapter]
     [com.example.schema :refer [prior-schema latest-schema]]
     [taoensso.timbre :as log]
@@ -25,7 +24,7 @@
     default
     s))
 
-(def migration-code "" "
+(def migration-code "
   (do
     (when-not (and (= 2 (count ident))
                    (keyword? (first ident)))
@@ -53,7 +52,7 @@
                                  (mock-conn (d/db (d/connect url)))
                                  (d/connect url))
         adapter                (datomic-adapter/->DatomicAdapter :primary-db conn)
-        migration              (dbp/diff->migration adapter prior-schema
+        migration              [] #_(dbp/diff->migration adapter prior-schema
                                  latest-schema)]
     (log/warn "Datomic URL: " url)
     (when created?

@@ -1,13 +1,10 @@
 (ns com.fulcrologic.rad.database-adapters.db-adapter
   (:require
-    [com.fulcrologic.rad.schema :as schema]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.entity :as entity]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.database-adapters.protocols :as dbp :refer [DBAdapter]]
     [com.fulcrologic.guardrails.core :refer [>defn => >def ?]]
-    [clojure.spec.alpha :as s]
-    [taoensso.timbre :as log]))
+    [clojure.spec.alpha :as s]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; The long-term goal is for the developer (and RAD) to be able to rely on attribute
@@ -22,21 +19,15 @@
 (>def ::adapters (s/map-of ::db/id ::adapter))
 
 (defn get-by-ids
-  "Run a query to find an entity that has the given id-attr, returning the desired output."
-  [dbadapter entity-definition id-attribute ids eql-query]
-  [any? ::entity/entity ::attr/attribute (s/coll-of any?) (? vector?) => any?]
-  (dbp/get-by-ids dbadapter entity-definition id-attribute ids eql-query))
-
-(>defn diff->migration
-  "Convert a schema diff to a migration using the specified db adapter."
-  [dbadapter old-schema new-schema]
-  [::adapter ::schema/schema ::schema/schema => any?]
-  (dbp/diff->migration dbadapter old-schema new-schema))
+  "Run a query to find attributes of the `eql-query` that are co-located on the thing with the given id-attr."
+  [dbadapter id-attribute ids eql-query]
+  [any? ::attr/attribute (s/coll-of any?) (? vector?) => any?]
+  (dbp/get-by-ids dbadapter id-attribute ids eql-query))
 
 (defn save-form
   [dbadapter mutation-env params]
   ;; TODO: Tease apart. It is possible that attributes in the diff came in for more than one database.
-  (dbp/save-form dbadapter mutation-env params) )
+  (dbp/save-form dbadapter mutation-env params))
 
 
 

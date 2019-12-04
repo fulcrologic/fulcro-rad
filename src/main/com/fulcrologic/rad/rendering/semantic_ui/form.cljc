@@ -2,7 +2,6 @@
   (:require
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.components :as comp]
     #?(:cljs
        [com.fulcrologic.fulcro.dom :as dom]

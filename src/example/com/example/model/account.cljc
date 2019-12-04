@@ -10,15 +10,30 @@
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
-    [com.fulcrologic.rad.entity :as entity :refer [defentity]]
     [com.fulcrologic.rad.authorization :as auth]
     [taoensso.timbre :as log]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; The concept of "ownership" can be modeled in Datomic using a single attribute
+;; that can be placed on entities that refers to some central thing (firm in this
+;; example).
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defattr :firm/id :uuid
   {::attr/unique?      true
    ::datomic/identity? true
    ::datomic/database  :primary-db
    ::attr/required?    true
+
+   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+   ;; The auth system must at least name "which provider" must be authenticated
+   ;; against before allowing access to some property. The resolved authorization
+   ;; data would then appear in the `env` of various lambdas for doing additional
+   ;; work like determining read/write/execute permissions. Again, this is easily
+   ;; extensible as plug-ins that affect everything from the Pathom parser to
+   ;; generalizations for UI interactions on the client. We're simply naming the "thing" that should be
+   ;; used to gain an identity for the user in the context of some (sub)set of
+   ;; attributes.
+   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    ::auth/authority    :local})
 
 (defattr :firm/name :string
@@ -35,13 +50,6 @@
 
    ::attr/required?     true
    ::auth/authority     :local})
-
-(defattr ::id :uuid
-  {::attr/unique?      true
-   ::datomic/identity? true
-   ::datomic/database  :primary-db
-   ::attr/required?    true
-   ::auth/authority    :local})
 
 (declare add-firm)
 
@@ -87,6 +95,13 @@
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
    ::auth/authority     :local})
+
+(defattr ::id :uuid
+  {::attr/unique?      true
+   ::datomic/identity? true
+   ::datomic/database  :primary-db
+   ::attr/required?    true
+   ::auth/authority    :local})
 
 (defattr ::email :string
   {::attr/unique?       :value
@@ -174,6 +189,12 @@
    ;; In SQL engine, allow join generation override
    #_#_:sql/join [::id [:account-tags/account-id :account-tags/tag-id] :com.example.model.tag/id]})
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; If there is no database-specific representation of an attribute then one must
+;; define the Pathom-specific mechanism for resolving it. We can (and may) hang write-level stuff
+;; here, but Fulcro reified mutations are probably sufficient in many cases where virtual attributes
+;; support any kind of "create/update".
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defattr ::all-accounts :ref
   {::auth/authority :local
    ::pc/output      [{::all-accounts [::id]}]
@@ -189,9 +210,6 @@
                                            ['?dbid ::active? true]
                                            ['?dbid ::id '?uuid]] db))]
                            {::all-accounts (mapv (fn [id] {::id id}) ids)})))})
-
-(defentity account [::id ::email ::password ::name ::addresses ::active? ::avatar ::tags]
-  {})
 
 #?(:clj
    (defmutation login [env {:keys [username password]}]

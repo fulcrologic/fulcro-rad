@@ -5,8 +5,6 @@
     [com.example.components.datomic :refer [production-database]]
     [com.example.components.auto-resolvers :refer [automatic-resolvers]]
     [com.example.components.config :as s.config]
-    [com.example.schema :as schema :refer [latest-schema]]
-    [com.fulcrologic.rad.authorization :as auth]
     [com.example.model.account :as account]
     [com.wsscode.common.async-clj :refer [let-chan]]
     [com.wsscode.pathom.connect :as pc]
@@ -153,7 +151,6 @@
                 (p/env-wrap-plugin (fn [env]
                                      (assoc env
                                        ;; Required for permission checks and such
-                                       ::schema/schema latest-schema
                                        :config s.config/config)))
                 (preprocess-parser-plugin log-requests)
                 (preprocess-parser-plugin add-current-info)

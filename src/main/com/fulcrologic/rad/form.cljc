@@ -13,7 +13,6 @@
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.controller :as controller]
     #?(:clj [com.fulcrologic.rad.database-adapters.db-adapter :as dba])
     [com.fulcrologic.rad.ids :refer [new-uuid]]

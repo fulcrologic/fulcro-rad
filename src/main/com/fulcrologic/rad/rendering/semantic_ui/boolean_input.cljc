@@ -3,7 +3,6 @@
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.rad.report :as report]
-    [taoensso.timbre :as log]
     #?(:cljs
        [com.fulcrologic.fulcro.dom :as dom]
        :clj

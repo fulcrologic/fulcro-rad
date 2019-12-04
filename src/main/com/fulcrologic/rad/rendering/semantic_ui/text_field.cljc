@@ -9,13 +9,11 @@
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.dom.events :as evt]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.rad.form :refer [render-field]]))
 
 (defmethod render-field :text [this k props]
   (let [attribute  (attr/key->attribute k)
         {::form/keys [field-label]} attribute
-        asm-id     (comp/get-ident this)
         read-only? (form/read-only? this attribute)
         value      (or (and attribute (get props k)) "")]
     (div :.ui.field {:key (str k)}

@@ -4,13 +4,11 @@
     [taoensso.timbre :as log]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.components :as comp]
     #?(:cljs
        [com.fulcrologic.fulcro.dom :as dom]
        :clj
        [com.fulcrologic.fulcro.dom-server :as dom])
-    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.rad.form :as form]))
 
 (defmethod report/render-layout :default [this]
@@ -28,10 +26,9 @@
         (dom/div :.ui.form
           (map-indexed
             (fn [idx k]
-              (let [kind (get parameters k)]
-                (dom/div :.ui.inline.field {:key idx}
-                  (dom/label (some-> k name str/capitalize))
-                  (report/render-parameter-input this k))))
+              (dom/div :.ui.inline.field {:key idx}
+                (dom/label (some-> k name str/capitalize))
+                (report/render-parameter-input this k)))
             (keys parameters))))
       (dom/div :.ui.attached.segment
         (when (seq rows)
