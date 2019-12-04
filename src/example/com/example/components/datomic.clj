@@ -2,7 +2,6 @@
   (:require
     [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
     [com.fulcrologic.rad.database-adapters.datomic :as datomic-adapter]
-    [com.example.schema :refer [prior-schema latest-schema]]
     [taoensso.timbre :as log]
     [datomic.api :as d]
     [datomock.core :refer [mock-conn]]

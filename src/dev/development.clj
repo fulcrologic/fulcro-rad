@@ -7,7 +7,6 @@
     [com.example.components.middleware]
     [com.example.components.server]
     [com.example.model.account :as account]
-    [com.example.schema :as ex-schema :refer [latest-schema prior-schema]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
     [com.fulcrologic.rad.database-adapters.db-adapter :as dba]

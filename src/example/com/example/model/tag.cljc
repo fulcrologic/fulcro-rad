@@ -21,5 +21,3 @@
    ::attr/required? true
    ::attr/index?    true})
 
-(defentity tag [::id ::label]
-  {})

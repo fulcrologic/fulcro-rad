@@ -40,32 +40,32 @@
           (log/info "Unable to complete query because the database adapter was missing.")
           nil))))
 
-#_(>defn id-resolver
-    [database-id
-     {::entity/keys [qualified-key attributes] :as entity}
-     id-attr]
-    [::db/id ::entity/entity ::id-attribute => ::pc/resolver]
-    (log/info "Building ID resolver for" qualified-key)
-    (let [data-attributes (into []
-                            (comp
-                              (filter #(not= (::attr/qualified-key id-attr) %)))
-                            attributes)
-          outputs         (attr/attributes->eql database-id data-attributes)]
-      {::pc/sym     (symbol
-                      (str (name database-id) "." (namespace qualified-key))
-                      (str (name qualified-key) "-resolver"))
-       ::pc/output  outputs
-       ::pc/batch?  true
-       ::pc/resolve (fn [env input] (->>
-                                      (entity-query
-                                        (assoc env
-                                          ::default-query outputs
-                                          ::db/id database-id
-                                          ::entity/entity entity
-                                          ::id-attribute id-attr)
-                                        input)
-                                      (auth/redact env)))
-       ::pc/input   #{(::attr/qualified-key id-attr)}}))
+;(>defn id-resolver
+;    [database-id
+;     {::entity/keys [qualified-key attributes] :as entity}
+;     id-attr]
+;    [::db/id ::entity/entity ::id-attribute => ::pc/resolver]
+;    (log/info "Building ID resolver for" qualified-key)
+;    (let [data-attributes (into []
+;                            (comp
+;                              (filter #(not= (::attr/qualified-key id-attr) %)))
+;                            attributes)
+;          outputs         (attr/attributes->eql database-id data-attributes)]
+;      {::pc/sym     (symbol
+;                      (str (name database-id) "." (namespace qualified-key))
+;                      (str (name qualified-key) "-resolver"))
+;       ::pc/output  outputs
+;       ::pc/batch?  true
+;       ::pc/resolve (fn [env input] (->>
+;                                      (entity-query
+;                                        (assoc env
+;                                          ::default-query outputs
+;                                          ::db/id database-id
+;                                          ::entity/entity entity
+;                                          ::id-attribute id-attr)
+;                                        input)
+;                                      (auth/redact env)))
+;       ::pc/input   #{(::attr/qualified-key id-attr)}}))
 
 (defn just-pc-keys [m]
   (into {}
@@ -96,31 +96,31 @@
       (log/error "Virtual attribute " attr " is missing ::attr/resolver key.")
       nil)))
 
-#_(>defn entity->resolvers
-    "Convert a given entity into the resolvers for the entity itself (accessible from unique identities)
-     as well as any virtual attributes."
-    [database-id {::entity/keys [attributes] :as entity}]
-    [::db/id ::entity/entity => (s/every ::pc/resolver)]
-    (let [attributes          (mapv attr/key->attribute attributes)
-          identity-attrs      (into []
-                                (filter #(attr/identity? (::attr/qualified-key %)))
-                                attributes)
-          virtual-attrs       (remove ::db/id attributes)
-          entity-resolvers    (keep (fn [a] (id-resolver database-id entity a)) identity-attrs)
-          pk                  (some-> identity-attrs first ::attr/qualified-key)
-          attribute-resolvers (keep (fn [a] (attribute-resolver (assoc a ::pc/input #{pk}))) virtual-attrs)]
-      (concat entity-resolvers attribute-resolvers)))
+;(>defn entity->resolvers
+;    "Convert a given entity into the resolvers for the entity itself (accessible from unique identities)
+;     as well as any virtual attributes."
+;    [database-id {::entity/keys [attributes] :as entity}]
+;    [::db/id ::entity/entity => (s/every ::pc/resolver)]
+;    (let [attributes          (mapv attr/key->attribute attributes)
+;          identity-attrs      (into []
+;                                (filter #(attr/identity? (::attr/qualified-key %)))
+;                                attributes)
+;          virtual-attrs       (remove ::db/id attributes)
+;          entity-resolvers    (keep (fn [a] (id-resolver database-id entity a)) identity-attrs)
+;          pk                  (some-> identity-attrs first ::attr/qualified-key)
+;          attribute-resolvers (keep (fn [a] (attribute-resolver (assoc a ::pc/input #{pk}))) virtual-attrs)]
+;      (concat entity-resolvers attribute-resolvers)))
 
-#_(>defn schema->resolvers
-  [database-ids {::schema/keys [entities globals]}]
-  [(s/every ::db/id) ::schema/schema => (s/every ::pc/resolver)]
-  (let [database-ids (set database-ids)]
-    (vec
-      (concat
-        [] #_(mapcat
-               (fn [dbid]
-                 (mapcat (fn [entity] (entity->resolvers dbid entity)) entities))
-               database-ids)
-        (keep (fn [attr]
-                (when (contains? database-ids (::db/id attr))
-                  (attribute-resolver attr))) globals)))))
+;(>defn schema->resolvers
+;  [database-ids {::schema/keys [entities globals]}]
+;  [(s/every ::db/id) ::schema/schema => (s/every ::pc/resolver)]
+;  (let [database-ids (set database-ids)]
+;    (vec
+;      (concat
+;        [] #_(mapcat
+;               (fn [dbid]
+;                 (mapcat (fn [entity] (entity->resolvers dbid entity)) entities))
+;               database-ids)
+;        (keep (fn [attr]
+;                (when (contains? database-ids (::db/id attr))
+;                  (attribute-resolver attr))) globals)))))
