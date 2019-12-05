@@ -4,8 +4,6 @@
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.authorization :as auth]
-    [com.fulcrologic.rad.database :as db]
-    [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
     [com.wsscode.pathom.connect :as pc :refer [defresolver defmutation]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))

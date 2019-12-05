@@ -2,11 +2,9 @@
   (:require
     [clojure.pprint :refer [pprint]]
     [clojure.walk :as walk]
-    [com.fulcrologic.rad.form :as form]
     [com.wsscode.common.async-clj :refer [let-chan]]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
-    [datomic.api :as d]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]
     [com.fulcrologic.rad.attributes :as attr]))
@@ -26,32 +24,43 @@
            (parser env tx)
            {}))))})
 
-(def omitted-from-logs #{:password :user/password :data-uris})
-
 (defn remove-omissions
   "Replaces black-listed keys from tx with ::omitted, meant for logging tx's
   without logging sensitive details like passwords."
-  [tx]
-  (walk/postwalk
-    (fn [x]
-      (if (and (vector? x) (= 2 (count x)) (contains? omitted-from-logs (first x)))
-        [(first x) ::omitted]
-        x))
-    tx))
+  [config tx]
+  (let [sensitive-keys (get-in config [::config :sensitive-keys] #{})]
+    (walk/postwalk
+      (fn [x]
+        (if (and (vector? x) (= 2 (count x)) (contains? sensitive-keys (first x)))
+          [(first x) ::omitted]
+          x))
+      tx)))
 
-(defn log-requests [{:keys [env tx] :as req}]
+(defn- log! [env msg value]
   (binding [*print-level* 4 *print-length* 4]
-    (let [{:current/keys [user firm]} env]
-      (log/info
-        (str "user-id: " (:db/id user)
-          (when (:db/id firm) (str "firm-id: " (:db/id firm))))
-        "transaction:"
+    (let [{:keys [config]} env]
+      (log/info msg
         (try
-          (pr-str (remove-omissions tx))
+          (pr-str (remove-omissions config value))
           (catch Throwable e
             (log/error (.getMessage e))
-            "<failed to serialize tx>")))))
-  req)
+            "<failed to serialize>"))))))
+
+(defn log-request! [{:keys [env tx] :as req}]
+  (let [config         (:config env)
+        sensitive-keys (conj
+                         (get-in config [::config :sensitive-keys] #{})
+                         :com.wsscode.pathom/trace)]
+    (log! env "transaction: " (remove-omissions sensitive-keys tx))
+    req))
+
+(defn log-response!
+  [{:keys [config] :as env} response]
+  (let [sensitive-keys (conj
+                         (get-in config [::config :sensitive-keys] #{})
+                         :com.wsscode.pathom/trace)]
+    (log! env "response: " (remove-omissions sensitive-keys response))
+    response))
 
 (defn process-error
   "If there were any exceptions in the parser that cause complete failure we
@@ -81,14 +90,6 @@
      (fn transform-parser-out-plugin-internal [env tx]
        (let-chan [res (parser env tx)]
          (f env res))))})
-
-(defn log-response
-  [env input]
-  (binding [*print-level* 4 *print-length* 4]
-    (log/info "response"
-      (if (map? input)
-        (dissoc input :com.wsscode.pathom/trace)
-        input))))
 
 (defn add-empty-vectors
   "For cardinality many attributes, replaces ::p/not-found with an empty vector."
@@ -126,11 +127,11 @@
                    [(pc/connect-plugin {::pc/register resolvers})
                     (p/env-plugin {::p/process-error process-error})
                     (when augment-env (p/env-wrap-plugin augment-env))
-                    (when log-requests? (preprocess-parser-plugin config log-requests))
+                    (when log-requests? (preprocess-parser-plugin log-request!))
                     (p/post-process-parser-plugin add-empty-vectors)
                     (p/post-process-parser-plugin p/elide-not-found)
                     (p/post-process-parser-plugin elide-reader-errors)
-                    (when log-responses? (post-process-parser-plugin-with-env log-response))
+                    (when log-responses? (post-process-parser-plugin-with-env log-response!))
                     query-params-to-env-plugin
                     p/error-handler-plugin
                     (when trace? p/trace-plugin)]))})

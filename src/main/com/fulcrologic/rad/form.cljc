@@ -14,7 +14,6 @@
     [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.controller :as controller]
-    #?(:clj [com.fulcrologic.rad.database-adapters.db-adapter :as dba])
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.wsscode.pathom.connect :as pc]
     [taoensso.timbre :as log]
@@ -66,8 +65,7 @@
                                                         seq) " is invalid."))))
      (let [{::attr/keys [attributes]} options
            {::keys [id route-prefix]} options
-           form-field? (fn [{::attr/keys [unique?] ::db/keys [id]}]
-                         (and (not unique?) id))
+           form-field? (fn [{::attr/keys [identity?]}] (not identity?))
            query       (vec (concat [:ui/new? :ui/confirmation-message [::uism/asm-id ''_]]
                               attributes
                               [`fs/form-config-join]))]
@@ -120,9 +118,8 @@
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::diff ::delta}}
-     ;; FIXME: Find correct adapter based on content of diff
-     (let [adapter (-> env :com.fulcrologic.rad.database-adapters.db-adapter/adapters :production)]
-       (dba/save-form adapter env params)))
+     ;; TODO: Write across all plugins
+     )
    :cljs
    (m/defmutation save-form [params]
      (action [env] :noop)))
@@ -361,13 +358,7 @@
 (>defn read-only?
   [this attr]
   [comp/component? ::attr/attribute => boolean?]
-  (let [k          (get attr ::attr/qualified-key)
-        read-only? (-> this comp/component-options ::read-only? (get k))]
-    (boolean
-      (if (boolean? read-only?)
-        read-only?
-        ;; TODO: Use attr permissions function? (client-side version?)
-        (nil? (-> attr ::db/id))))))
+  (boolean (or read-only? (::attr/identity? attr) (::pc/resolve attr))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
