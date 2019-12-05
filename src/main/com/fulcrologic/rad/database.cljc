@@ -4,7 +4,7 @@
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>def >defn => | ?]]))
 
-(>def ::id (s/with-gen keyword? #(s/gen #{:primary-db :authorization})))
+(>def ::id (s/with-gen keyword? #(s/gen #{:production :authorization})))
 (>def ::variant (s/with-gen keyword? #(s/gen #{:postgresql :mysql :h2})))
 (>def ::naming #{:snake_case :kebab-case :CamelCase})
 (>def ::migration-generator ifn?)

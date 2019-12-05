@@ -8,10 +8,29 @@
         [[com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]])
     [com.wsscode.pathom.connect :as pc]
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
+    [com.fulcrologic.rad.database-adapters.postgresql :as psql]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
     [com.fulcrologic.rad.authorization :as auth]
     [taoensso.timbre :as log]))
+
+(defattr :user/email :string
+  {::psql/schema    :auth
+   ::psql/table     "user"
+   ::attr/unique?   true
+   ::attr/required? true})
+
+(defattr :user/password :password
+  {::psql/schema    :auth
+   ::psql/table     "user"
+   ::attr/required? true})
+
+;; Once logged in, this is placed in the session to identify the Datomic database
+;; in which this user's data is stored
+(defattr :user/datomic-shard :keyword
+  {::psql/schema    :auth
+   ::psql/table     "user"
+   ::attr/required? true})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; The concept of "ownership" can be modeled in Datomic using a single attribute
@@ -19,10 +38,9 @@
 ;; example).
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defattr :firm/id :uuid
-  {::attr/unique?      true
-   ::datomic/identity? true
-   ::datomic/database  :primary-db
-   ::attr/required?    true
+  {::attr/identity? true
+   ::datomic/schema :production
+   ::attr/required? true
 
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    ;; The auth system must at least name "which provider" must be authenticated
@@ -34,10 +52,10 @@
    ;; used to gain an identity for the user in the context of some (sub)set of
    ;; attributes.
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-   ::auth/authority    :local})
+   ::auth/authority :local})
 
 (defattr :firm/name :string
-  {::datomic/database   :primary-db
+  {::datomic/schema     :production
 
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    ;; In the Datomic case it is sufficient to indicate identity fields as a way to
@@ -54,8 +72,7 @@
 (declare add-firm)
 
 (defattr :entity/firm :ref
-  {::attr/unique?       true
-   ::datomic/database   :primary-db
+  {::datomic/schema     :production
 
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    ;; This attribute can live on any entity identified by this set.
@@ -97,31 +114,30 @@
    ::auth/authority     :local})
 
 (defattr ::id :uuid
-  {::attr/unique?      true
-   ::datomic/identity? true
-   ::datomic/database  :primary-db
-   ::attr/required?    true
-   ::auth/authority    :local})
+  {::attr/identity? true
+   ::datomic/schema :production
+   ::attr/required? true
+   ::auth/authority :local})
 
 (defattr ::email :string
-  {::attr/unique?       :value
-   ::datomic/database   :primary-db
+  {::attr/unique?       true
+   ::datomic/schema     :production
    ::datomic/entity-ids #{::id}
    ::attr/required?     true
    ::auth/authority     :local})
 
 ;; Save must put it in storage, and return a URL that is stored in the attribute.
-(defattr ::avatar :linked-binary
-  {::auth/authority     :local
-   ::datomic/database   :primary-db
-   ::datomic/entity-ids #{::id}
-   ::attr/save-binary   (fn [env java-io-file] "http://www.example.com/image.png")
-   ::attr/binary-data   (fn [env url] (comment "returns binary data. optional."))
-   ::attr/delete-binary (fn [env url] (comment "hook to delete binary. optional."))})
+#_(defattr ::avatar :linked-binary
+    {::auth/authority     :local
+     ::datomic/schema     :production
+     ::datomic/entity-ids #{::id}
+     ::attr/save-binary   (fn [env java-io-file] "http://www.example.com/image.png")
+     ::attr/binary-data   (fn [env url] (comment "returns binary data. optional."))
+     ::attr/delete-binary (fn [env url] (comment "hook to delete binary. optional."))})
 
 (defattr ::active? :boolean
   {::auth/authority     :local
-   ::datomic/database   :primary-db
+   ::datomic/schema     :production
    ::datomic/entity-ids #{::id}
    ::form/default-value true
    ::attr/required?     true})
@@ -129,7 +145,7 @@
 (defattr ::password :password
   {;; TODO: context sense to allow for owner to write
    ::auth/authority          :local
-   ::datomic/database        :primary-db
+   ::datomic/schema          :production
    ::datomic/entity-ids      #{::id}
 
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -167,13 +183,13 @@
 
 (defattr ::name :string
   {::auth/authority     :local
-   ::datomic/database   :primary-db
+   ::datomic/schema     :production
    ::datomic/entity-ids #{::id}
    ::attr/required?     true})
 
 ;; In SQL engine default to one->many with target table holding back-ref
 (defattr ::addresses :ref
-  {::datomic/database         :primary-db
+  {::datomic/schema           :production
    ::datomic/intended-targets #{:com.example.model.address/id}
    ::datomic/component?       true
    ::datomic/entity-ids       #{::id}
@@ -181,7 +197,7 @@
    ::auth/authority           :local})
 
 (defattr ::tags :ref
-  {::datomic/database         :primary-db
+  {::datomic/schema           :production
    ::datomic/intended-targets #{:com.example.model.tag/id}
    ::datomic/entity-ids       #{::id}
    ::attr/cardinality         :many

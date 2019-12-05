@@ -1,4 +1,4 @@
-(ns com.fulcrologic.rad.attributes
+(ns ^:always-reload com.fulcrologic.rad.attributes
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     [clojure.spec.alpha :as s]

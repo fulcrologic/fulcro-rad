@@ -1,10 +1,12 @@
 (ns com.fulcrologic.rad.ids
-  (:require [clojure.string :as str]))
+  (:require
+    [clojure.string :as str]
+    [com.fulcrologic.guardrails.core :refer [>defn =>]]))
 
 (defn new-uuid
   "Without args gives random UUID. With args, builds UUID based on input.
 
-  - If v is an int (in CLJ), it will generate a fixed UUID starting with FFF...and ending
+  - If v is an int (in CLJC), it will generate a fixed UUID starting with FFF...and ending
     in that number.
   - If v is a uuid, it is just returned.
   - If v is non-nil it will be used as a string to generate a UUID (can fail).
@@ -27,4 +29,14 @@
                          (uuid (str "ffffffff-ffff-ffff-ffff-" padding sv)))
               :else (uuid (str v))))))
 
+(>defn select-keys-in-ns
+  "Returns a version of `m` where only those keys with namespace `nspc` are kept."
+  [m nspc]
+  [map? string? => map?]
+  (reduce-kv
+    (fn [new-map k v]
+      (if (and (keyword? k) (= nspc (namespace k)))
+        (assoc new-map k v)
+        new-map))
+    {} m))
 

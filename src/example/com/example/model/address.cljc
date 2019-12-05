@@ -6,7 +6,7 @@
 
 (defattr ::id :uuid
   {::attr/unique?   true
-   ::datomic/id     :primary-db
+   ::datomic/id     :production
    ::datomic/entity ::address
    ::attr/index?    true
    ::attr/required? true
@@ -14,19 +14,19 @@
 
 (defattr ::street :string
   {::attr/index?    true
-   ::datomic/id     :primary-db
+   ::datomic/id     :production
    ::datomic/entity ::address
    ::attr/required? true})
 
 (defattr ::city :string
   {::attr/index?    true
-   ::datomic/id     :primary-db
+   ::datomic/id     :production
    ::datomic/entity ::address
    ::attr/required? true})
 
 (defattr ::state :enum
   {::attr/values    #{:AZ :AL :AK :CA :CT :DE :GA :HI :KS :MS :MO :MN :OR :WA}
-   ::datomic/id     :primary-db
+   ::datomic/id     :production
    ::datomic/entity ::address
    ::attr/index?    true
    ::attr/required? true
@@ -46,7 +46,7 @@
 
 (defattr ::zip :string
   {::attr/index?    true
-   ::datomic/id     :primary-db
+   ::datomic/id     :production
    ::datomic/entity ::address
    ::attr/required? true})
 

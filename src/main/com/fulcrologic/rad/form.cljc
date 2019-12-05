@@ -121,7 +121,7 @@
    (pc/defmutation save-form [env params]
      {::pc/params #{::diff ::delta}}
      ;; FIXME: Find correct adapter based on content of diff
-     (let [adapter (-> env :com.fulcrologic.rad.database-adapters.db-adapter/adapters :primary-db)]
+     (let [adapter (-> env :com.fulcrologic.rad.database-adapters.db-adapter/adapters :production)]
        (dba/save-form adapter env params)))
    :cljs
    (m/defmutation save-form [params]

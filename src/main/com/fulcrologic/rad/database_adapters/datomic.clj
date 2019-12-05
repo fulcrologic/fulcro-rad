@@ -1,15 +1,17 @@
 (ns com.fulcrologic.rad.database-adapters.datomic
   (:require
-    [com.fulcrologic.rad.database-adapters.protocols :as dbp]
-    [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.guardrails.core :refer [>defn =>]]
-    [datomic.api :as d]
-    [datomock.core :refer [mock-conn]]
-    [mount.core :refer [defstate]]
-    [edn-query-language.core :as eql]
+    [clojure.set :as set]
     [clojure.walk :as walk]
-    [clojure.set :as set]))
+    [com.fulcrologic.guardrails.core :refer [>defn =>]]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.database-adapters.protocols :as dbp]
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.ids :refer [select-keys-in-ns]]
+    [datomic.api :as d]
+    [datomock.core :as dm :refer [mock-conn]]
+    [edn-query-language.core :as eql]
+    [mount.core :refer [defstate]]
+    [taoensso.timbre :as log]))
 
 (def type-map
   {:string   :db.type/string
@@ -141,4 +143,103 @@
       @(d/transact connection txn))
     nil))
 
+(def suggested-logging-blacklist
+  "A vector containing a list of namespace strings that generate a lot of debug noise when using Datomic. Can
+  be added to Timbre's ns-blacklist to reduce logging overhead."
+  ["com.mchange.v2.c3p0.impl.C3P0PooledConnectionPool"
+   "com.mchange.v2.c3p0.stmt.GooGooStatementCache"
+   "com.mchange.v2.resourcepool.BasicResourcePool"
+   "com.zaxxer.hikari.pool.HikariPool"
+   "com.zaxxer.hikari.pool.PoolBase"
+   "com.mchange.v2.c3p0.impl.AbstractPoolBackedDataSource"
+   "com.mchange.v2.c3p0.impl.NewPooledConnection"
+   "datomic.common"
+   "datomic.connector"
+   "datomic.coordination"
+   "datomic.db"
+   "datomic.index"
+   "datomic.kv-cluster"
+   "datomic.log"
+   "datomic.peer"
+   "datomic.process-monitor"
+   "datomic.reconnector2"
+   "datomic.slf4j"
+   "io.netty.buffer.PoolThreadCache"
+   "org.apache.http.impl.conn.PoolingHttpClientConnectionManager"
+   "org.projectodd.wunderboss.web.Web"
+   "org.quartz.core.JobRunShell"
+   "org.quartz.core.QuartzScheduler"
+   "org.quartz.core.QuartzSchedulerThread"
+   "org.quartz.impl.StdSchedulerFactory"
+   "org.quartz.impl.jdbcjobstore.JobStoreTX"
+   "org.quartz.impl.jdbcjobstore.SimpleSemaphore"
+   "org.quartz.impl.jdbcjobstore.StdRowLockSemaphore"
+   "org.quartz.plugins.history.LoggingJobHistoryPlugin"
+   "org.quartz.plugins.history.LoggingTriggerHistoryPlugin"
+   "org.quartz.utils.UpdateChecker"
+   "shadow.cljs.devtools.server.worker.impl"])
+
+(>defn automatic-schema
+  "Returns a Datomic transaction for the complete schema that is represented in the RAD attributes
+   that have a `::datomic/schema` that matches `schema-name`."
+  [schema-name]
+  [keyword? => vector?]
+  (let [attributes (filter #(= schema-name (::schema %)) (vals @attr/attribute-registry))]
+    (mapv
+      (fn [{::attr/keys [unique? type qualified-key] :as a}]
+        (let [overrides    (select-keys-in-ns a "db")
+              datomic-type (get type-map type)]
+          (when-not datomic-type
+            (throw (ex-info (str "No mapping from attribute type to Datomic: " type) {})))
+          (merge
+            (cond-> {:db/ident qualified-key
+                     :db/index true
+                     :db/type  datomic-type}
+              (= :string type) (assoc :db/fulltext true)
+              unique? (assoc :db/unique :db.unique/value))
+            overrides)))
+      attributes)))
+
+(let [db-url      (fn [] (str "datomic:mem://" (gensym "-test-database")))
+      pristine-db (atom nil)
+      migrated-db (atom {})
+      setup!      (fn [schema txn]
+                    (locking pristine-db
+                      (when-not @pristine-db
+                        (let [db-url (db-url)
+                              _      (log/info "Creating test database" db-url)
+                              _      (d/create-database db-url)
+                              conn   (d/connect db-url)]
+                          (reset! pristine-db (d/db conn))))
+                      (when-not (get @migrated-db schema)
+                        (let [conn (dm/mock-conn @pristine-db)
+                              txn  (if (vector? txn) txn (automatic-schema schema))]
+                          (log/debug "Transacting schema: " txn)
+                          @(d/transact conn txn)
+                          (swap! migrated-db assoc schema (d/db conn))))))]
+  (defn empty-db-connection
+    "Returns a Datomic database that contains the given application schema, but no data.
+     This function must be passed a schema name (keyword).  The optional second parameter
+     is the actual schema to use in the empty database, otherwise automatic generation will be used
+     against RAD attributes. This function memoizes the resulting database for speed.
+
+     See `reset-test-schema`."
+    ([schema-name]
+     (empty-db-connection schema-name nil))
+    ([schema-name txn]
+     (setup! schema-name txn)
+     (dm/mock-conn (get @migrated-db schema-name))))
+
+  (defn pristine-db-connection
+    "Returns a Datomic database that has no application schema or data."
+    []
+    (setup!)
+    (dm/mock-conn @pristine-db))
+
+  (defn reset-test-schema
+    "Reset the schema on the empty test database. This is necessary if you change the schema
+    and don't want to restart your REPL/Test env."
+    []
+    (reset! pristine-db nil)
+    (reset! migrated-db {})))
 

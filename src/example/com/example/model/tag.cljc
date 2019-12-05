@@ -6,7 +6,7 @@
 
 (defattr ::id :uuid
   {::attr/authority :local
-   ::datomic/id     :primary-db
+   ::datomic/id     :production
    ::datomic/entity ::tag
    ::attr/unique?   true
    ::attr/required? true
@@ -14,7 +14,7 @@
 
 (defattr ::label :string
   {::attr/authority :local
-   ::datomic/id     :primary-db
+   ::datomic/id     :production
    ::datomic/entity ::tag
    ::attr/unique?   :value
    ::attr/normalize (fn [v] (str/capitalize v))

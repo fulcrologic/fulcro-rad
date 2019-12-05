@@ -50,7 +50,7 @@
         conn                   (if mocking-required?
                                  (mock-conn (d/db (d/connect url)))
                                  (d/connect url))
-        adapter                (datomic-adapter/->DatomicAdapter :primary-db conn)
+        adapter                (datomic-adapter/->DatomicAdapter :production conn)
         migration              [] #_(dbp/diff->migration adapter prior-schema
                                  latest-schema)]
     (log/warn "Datomic URL: " url)
@@ -77,7 +77,7 @@
         (log/error "Database migration failed:" {:exception e})
         (throw e)))
     {:connection    conn
-     ::dba/adapters {:primary-db adapter}}))
+     ::dba/adapters {:production adapter}}))
 
 (defstate ^{:on-reload :noop} production-database
   :start

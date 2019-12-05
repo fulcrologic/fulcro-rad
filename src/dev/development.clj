@@ -71,16 +71,17 @@
 
 (comment
   (seed)
-  (res/schema->resolvers #{:primary-db} ex-schema/latest-schema)
-  (res/entity->resolvers :primary-db account/account))
+  (res/schema->resolvers #{:production} ex-schema/latest-schema)
+  (res/entity->resolvers :production account/account))
 
 (comment
-  (let [adapter (datomic/->DatomicAdapter :primary-db nil)]
+  (let [adapter (datomic/->DatomicAdapter :production nil)]
     (pprint
       (dba/diff->migration adapter prior-schema latest-schema)))
 
-  (let [adapter (psql/->PostgreSQLAdapter :primary-db)]
+  (let [adapter (psql/->PostgreSQLAdapter :production)]
     (print
       (dba/diff->migration adapter prior-schema latest-schema)))
 
+  (datomic/automatic-schema :production)
   )
