@@ -254,13 +254,49 @@
     :postgresql (config->postgres-url config)
     (throw (ex-info "Unsupported Datomic back-end driver." {:driver driver}))))
 
-(defn start-database! [{:datomic/keys [driver schema prevent-changes?] :as config} schemas]
+(def add-ident-transactor-function-code
+  "The body of a RAD function that is needed by the pre-written form save logic."
+  "(do
+    (when-not (and (= 2 (count ident))
+                   (keyword? (first ident)))
+      (throw (IllegalArgumentException.
+              (str \"ident must be an ident, got \" ident))))
+    (let [ref-val (or (:db/id (datomic.api/entity db ident))
+                      (str (second ident)))]
+      [[:db/add eid rel ref-val]]))")
+
+(defn ensure-transactor-functions!
+  "Must be called on any Datomic database that will be used with automatic form save. This
+  adds transactor functions.  The built-in startup logic (if used) will automatically call this,
+  but if you create/start your databases with custom code you should run this on your newly
+  created database."
+  [conn]
+  @(d/transact conn [#:db{:fn    {:db.fn/lang     :clojure
+                                  :db.fn/imports  []
+                                  :db.fn/requires []
+                                  :db.fn/params   '[db eid rel ident]
+                                  :db.fn/code     add-ident-transactor-function-code}
+                          ;; :id #db/id[:db.part/user -1000005]
+                          :ident :com.fulcrologic.rad.fn/add-ident}]))
+
+(defn start-database!
+  "Starts a Datomic database connection given the standard sub-element config described
+  in `start-databases`. Typically use that function instead of this one.
+
+
+  * `:config` a map of k-v pairs for setting up a connection.
+  * `schemas` a map from schema name to either :auto, :none, or (fn [k conn]).
+
+  Returns a migrated database connection."
+  [{:datomic/keys [driver schema prevent-changes?] :as config} schemas]
   (let [url             (config->url config)
         generator       (get schemas schema :auto)
         created?        (d/create-database url)
         mock?           (or (System/getProperty "mock-connections") prevent-changes?)
         real-connection (d/connect url)
         conn            (if mock? (dm/fork-conn real-connection) real-connection)]
+    (log/info "Adding form save support to database transactor functions.")
+    (ensure-transactor-functions! conn)
     (cond
       (= :auto generator) (let [txn (automatic-schema schema)]
                             (log/info "Transacting automatic schema.")

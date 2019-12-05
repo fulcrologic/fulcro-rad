@@ -23,16 +23,15 @@
     default
     s))
 
-(def migration-code "
-  (do
+(def add-ident-transactor-function-code
+  "(do
     (when-not (and (= 2 (count ident))
                    (keyword? (first ident)))
       (throw (IllegalArgumentException.
               (str \"ident must be an ident, got \" ident))))
     (let [ref-val (or (:db/id (datomic.api/entity db ident))
                       (str (second ident)))]
-      [[:db/add eid rel ref-val]]))
-")
+      [[:db/add eid rel ref-val]]))")
 
 ;; TODO: This can become part of library once the pattern is well-established
 (defn start-database
@@ -69,7 +68,7 @@
                                   :db.fn/imports  []
                                   :db.fn/requires []
                                   :db.fn/params   '[db eid rel ident]
-                                  :db.fn/code migration-code}
+                                  :db.fn/code     add-ident-transactor-function-code}
                              ;; :id #db/id[:db.part/user -1000005]
                              :ident :com.fulcrologic.rad.fn/add-ident}])
       (d/transact conn migration)
