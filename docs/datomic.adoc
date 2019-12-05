@@ -31,6 +31,7 @@ The following common attribute keys are supported automatically:
 override for uniqueness is supplied or the attribute is marked as an `::attr/identity?`.
 `::attr/identity?`:: Causes the attribute to be a unique *identity*. If supplied, then `::attr/unique?` is
 assumed.
+`::attr/cardinality`:: `:one` or `:many` (or you can specify it with normal datomic keys).
 
 The plugin-specific attribute parameters are:
 

@@ -186,21 +186,24 @@
   [keyword? => vector?]
   (let [attributes (filter #(= schema-name (::schema %)) (vals @attr/attribute-registry))]
     (mapv
-      (fn [{::attr/keys [unique? type qualified-key] :as a}]
+      (fn [{::attr/keys [unique? identity? type qualified-key cardinality] :as a}]
         (let [overrides    (select-keys-in-ns a "db")
               datomic-type (get type-map type)]
           (when-not datomic-type
             (throw (ex-info (str "No mapping from attribute type to Datomic: " type) {})))
           (merge
-            (cond-> {:db/ident qualified-key
-                     :db/index true
-                     :db/type  datomic-type}
-              (= :string type) (assoc :db/fulltext true)
-              unique? (assoc :db/unique :db.unique/value))
+            (cond-> {:db/ident       qualified-key
+                     :db/cardinality (if (= :many cardinality)
+                                       :db.cardinality/many
+                                       :db.cardinality/one)
+                     :db/index       true
+                     :db/valueType   datomic-type}
+              unique? (assoc :db/unique :db.unique/value)
+              identity? (assoc :db/unique :db.unique/identity))
             overrides)))
       attributes)))
 
-(let [db-url      (fn [] (str "datomic:mem://" (gensym "-test-database")))
+(let [db-url      (fn [] (str "datomic:mem://" (gensym "test-database")))
       pristine-db (atom nil)
       migrated-db (atom {})
       setup!      (fn [schema txn]

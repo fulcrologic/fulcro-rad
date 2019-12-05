@@ -10,12 +10,11 @@
 (log/set-level! :debug)
 
 (deftest sample-test
-  (datomic/reset-test-schema)
   (let [conn        (datomic/empty-db-connection :production)
         sample-data [{::acct/id   (new-uuid 1)
                       ::acct/name "Joe"}]]
     @(d/transact conn sample-data)
 
-    #_(let [db (d/db conn)
+    (let [db (d/db conn)
           a  (d/pull db '[*] [::acct/id (new-uuid 1)])]
-      (is (= sample-data a)))))
+      (is (= "Joe" (::acct/name a))))))
