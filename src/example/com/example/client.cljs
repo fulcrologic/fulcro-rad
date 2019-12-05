@@ -10,7 +10,10 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.data-fetch :as df]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.example.model.account :as account]
+    [com.example.model.tag :as tag]
+    [com.example.model.address :as address]))
 
 ;; TODO: Constructor function. Allow option to completely autogenerate forms if desired.
 
@@ -30,7 +33,8 @@
                               :client-did-mount     (fn [app]
                                                       (auth/start! app {:local (uism/with-actor-class (comp/get-ident LoginForm {}) LoginForm)})
                                                       (controller/start! app
-                                                        {::controller/home-page ["landing-page"]
+                                                        {::attr/all-attributes  [account/attributes tag/attributes address/attributes]
+                                                         ::controller/home-page ["landing-page"]
                                                          ::controller/router    ui/MainRouter
                                                          ::controller/id        :main-controller}))}))
 

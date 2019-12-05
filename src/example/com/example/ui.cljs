@@ -2,8 +2,6 @@
   (:require
     ;; This require pulls in the multimethods for rendering w/semantic UI
     [com.fulcrologic.rad.rendering.semantic-ui.semantic-ui-controls]
-
-    [com.example.schema :as ex-schema]
     [com.example.model.account :as acct]
     [com.example.ui.login-dialog :refer [LoginForm]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
@@ -30,7 +28,7 @@
    ;;::form/confirm-exit? true
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
-   ::rad/schema        ex-schema/latest-schema})
+   })
 
 (defsc AccountListItem [this {::acct/keys [id name active? last-login] :as props}]
   {::report/columns         [::acct/name ::acct/active? ::acct/last-login]
