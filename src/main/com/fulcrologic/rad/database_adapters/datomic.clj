@@ -26,8 +26,6 @@
    :ref      :db.type/ref
    :uuid     :db.type/uuid})
 
-
-
 (defn replace-ref-types
   "dbc   the database to query
    refs  a set of keywords that ref datomic entities, which you want to access directly
@@ -246,3 +244,79 @@
     (reset! pristine-db nil)
     (reset! migrated-db {})))
 
+(defn config->postgres-url [{:postgresql/keys [user host port password database]
+                             datomic-db       :datomic/database}]
+  (str "datomic:sql://" datomic-db "?jdbc:postgresql://" host (when port (str ":" port)) "/"
+    database "?user=" user "&password=" password))
+
+(defn config->url [{:datomic/keys [driver] :as config}]
+  (case driver
+    :postgresql (config->postgres-url config)
+    (throw (ex-info "Unsupported Datomic back-end driver." {:driver driver}))))
+
+(defn start-database! [{:datomic/keys [driver schema prevent-changes?] :as config} schemas]
+  (let [url             (config->url config)
+        generator       (get schemas schema :auto)
+        created?        (d/create-database url)
+        mock?           (or (System/getProperty "mock-connections") prevent-changes?)
+        real-connection (d/connect url)
+        conn            (if mock? (dm/fork-conn real-connection) real-connection)]
+    (cond
+      (= :auto generator) (let [txn (automatic-schema schema)]
+                            (log/info "Transacting automatic schema.")
+                            @(d/transact conn txn))
+      (ifn? generator) (do
+                         (log/info "Running custom schema function.")
+                         (generator conn))
+      :otherwise (log/info "Schema management disabled."))
+    (log/info "Finished connecting to and migrating database.")
+    conn))
+
+(defn start-databases
+  "Start all of the databases described in config, using the schemas defined in schemas.
+
+  * `config`:  a map that contains the key ::datomic/databases.
+  * `schemas`:  a map whose keys are schema names, and whose values can be missing (or :auto) for
+  automatic schema generation, a `(fn [schema-name conn] ...)` that updates the schema for schema-name
+  on the database reachable via `conn`. You may omit `schemas` if automatic generation is being used
+  everywhere.
+
+TASK: Perhaps it makes sense to require the attributes as an explicit list so we don't have this
+stupid side-effect requirement for proper operation. That would return us to having a symbol to stand
+in for an attribute?
+
+  WARNING: Be sure all of your model files are required before running this function, since it
+  will use the attribute definitions during startup.
+
+  The `::datomic/databases` entry in the config is a map with the following form:
+
+  ```
+  {:production-shard-1 {:datomic/schema :production
+                        :datomic/driver :postgresql
+                        :datomic/database \"prod\"
+                        :postgresql/host \"localhost\"
+                        :postgresql/port \"localhost\"
+                        :postgresql/user \"datomic\"
+                        :postgresql/password \"datomic\"
+                        :postgresql/database \"datomic\"}}
+  ```
+
+  The `:datomic/schema` is used to select the attributes that will appear in that database's schema.
+  The remaining parameters select and configure the back-end storage system for the database.
+
+  Each supported driver type has custom options for configuring it. See Fulcro's config
+  file support for a good method of defining these in EDN config files for use in development
+  and production environments.
+
+  Returns a map whose keys are the database keys (i.e. `:production-shard-1`) and
+  whose values are the live database connection.
+  "
+  ([config]
+   (start-databases {}))
+  ([config schemas]
+   (reduce-kv
+     (fn [m k v]
+       (log/info "Starting database " k)
+       (assoc m k (start-database! v schemas)))
+     {}
+     (::databases config))))

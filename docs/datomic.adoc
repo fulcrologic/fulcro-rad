@@ -60,7 +60,10 @@ This feature is great for early development, but it may become necessary over ti
 adopt a migration system or other more manual schema management policy. This feature
 is therefore easy to opt in/out of at any time.
 
-TODO: Write the generator, and document it.
+You can pull the current generated schema from the attribute database using
+`(datomic/automatic-schema schema-key)`.  NOTE: You must require all namespaces in
+your model that define attributes to ensure that they are all included in the generated
+schema.
 
 === Validation
 
@@ -94,15 +97,6 @@ It is also quite useful for testing, since it can be used to pre-create (and cac
 that can be used to exercise Datomic code against your schema without the complete overhead of
 starting an external database with new schema.
 
-=== Seeding Development Data
-
-We recommend using UUID domain IDs for all entities (e.g. `:account/id`). This not only enables
-much of the resolver logic, it also allows you to easily and consistently seed development
-data for things like live coding and tests.
-
-The `com.fulcrologic.rad.ids/new-uuid` function can be used to generate a new random UUID in CLJC, but
-it can also be used to generate a constant (well-known) UUID for testing.
-
 === Selecting a Database During Operation
 
 When you set up your Pathom parser you can provide plugins that modify the environment that will
@@ -116,7 +110,50 @@ The `env` must therefore be augmented to contain the following well-known things
 `::datomic/connections` - A map, keyed by schema, of the database connection that should be used
 in the context of the current request.
 `::datomic/databases` - A map, keyed by schema, of the most recent database value that
-should be used in the context of the current request.
+should be used in the context of the current request (for consistent reads across multiple resolvers).
+
+TODO: Supply helper funtions that can help with this
+
+== Testing
+
+Custom mutations and resolvers are easiest to write if you have a simple way of
+testing them against a database that looks like your real one.
+This plugin supports some helpful testing tools that leverage Datomock to give you a
+fast an consistent starting point for your tests.
+
+=== Seeding Development Data
+
+We recommend using UUID domain IDs for all entities (e.g. `:account/id`). This not only enables
+much of the resolver logic, it also allows you to easily and consistently seed development
+data for things like live coding and tests.
+
+The `com.fulcrologic.rad.ids/new-uuid` function can be used to generate a new random UUID in CLJC, but
+it can also be used to generate a constant (well-known) UUID for testing.
+
+=== A Sample Test
+
+The core function to use is `datomic/empty-db-connection`, which can work with
+automatically-generated schema or a manual schema. It returns a Datomic connection
+which has the supplied schema (and is memoized for fast startup on sequences of tests).
+
+A typical test might look like the following:
+
+[source, clojure]
+-----
+(deftest sample-test
+  ;; the empty-db-connection can accept a schema txn if needed.
+  (let [conn        (datomic/empty-db-connection :production)
+        sample-data [{::acct/id   (new-uuid 1)
+                      ::acct/name "Joe"}]]
+    @(d/transact conn sample-data)
+
+    (let [db (d/db conn)
+          a  (d/pull db [::acct/name] [::acct/id (new-uuid 1)])]
+      (is (= "Joe" (::acct/name a))))))
+-----
+
+NOTE: The connection is memoized based on the schema key (not any supplied migration data). You
+can use `(datomic/reset-test-schema k)` to forget the current memoized version.
 
 == Resolver Generation
 
