@@ -4,8 +4,7 @@
     [clojure.spec.alpha :as s]
     [taoensso.timbre :as log]
     [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
-    [com.fulcrologic.rad.ids :refer [new-uuid]]
-    [com.fulcrologic.rad.database :as db])
+    [com.fulcrologic.rad.ids :refer [new-uuid]])
   #?(:clj
      (:import (clojure.lang IFn)
               (javax.crypto.spec PBEKeySpec)

@@ -82,65 +82,97 @@
   [x]
   (when (eql/ident? x) x))
 
-;; TODO: Use attribute defs to elide the bits of delta that don't belong to this db
 (defn delta->datomic-txn
   "Takes in a normalized form delta, usually from client, and turns in
-  into a datomic transaction."
-  [delta]
+  into a Datomic transaction for the given schema (returns empty txn if there is nothing on the delta for that schema)."
+  [schema delta]
+  ;; TASK: test mapcat on nil (nothing on schema)
   (mapcat (fn [[[id-k id] entity-diff]]
-            (conj
-              (mapcat (fn [[k diff]]
-                        (let [{:keys [before after]} diff]
-                          (cond
-                            (ref->ident after) (if (nil? after)
-                                                 [[:db/retract (str id) k (ref->ident before)]]
-                                                 [[:com.fulcrologic.rad.fn/add-ident (str id) k (ref->ident after)]])
+            (when (-> id-k attr/key->attribute ::schema (= schema))
+              (conj
+                (mapcat (fn [[k diff]]
+                          (let [{:keys [before after]} diff]
+                            (cond
+                              (ref->ident after) (if (nil? after)
+                                                   [[:db/retract (str id) k (ref->ident before)]]
+                                                   [[:com.fulcrologic.rad.fn/add-ident (str id) k (ref->ident after)]])
 
-                            (and (sequential? after) (every? ref->ident after))
-                            (let [before   (into #{}
-                                             (comp (map ref->ident) (remove nil?))
-                                             before)
-                                  after    (into #{}
-                                             (comp (map ref->ident) (remove nil?))
-                                             after)
-                                  retracts (set/difference before after)
-                                  adds     (set/difference after before)
-                                  eid      (str id)]
-                              (vec
-                                (concat
-                                  (for [r retracts] [:db/retract eid k r])
-                                  (for [a adds] [:com.fulcrologic.rad.fn/add-ident eid k a]))))
+                              (and (sequential? after) (every? ref->ident after))
+                              (let [before   (into #{}
+                                               (comp (map ref->ident) (remove nil?))
+                                               before)
+                                    after    (into #{}
+                                               (comp (map ref->ident) (remove nil?))
+                                               after)
+                                    retracts (set/difference before after)
+                                    adds     (set/difference after before)
+                                    eid      (str id)]
+                                (vec
+                                  (concat
+                                    (for [r retracts] [:db/retract eid k r])
+                                    (for [a adds] [:com.fulcrologic.rad.fn/add-ident eid k a]))))
 
-                            (and (sequential? after) (every? keyword? after))
-                            (let [before   (into #{}
-                                             (comp (remove nil?))
-                                             before)
-                                  after    (into #{}
-                                             (comp (remove nil?))
-                                             after)
-                                  retracts (set/difference before after)
-                                  adds     (set/difference after before)
-                                  eid      (str id)]
-                              (vec
-                                (concat
-                                  (for [r retracts] [:db/retract eid k r])
-                                  (for [a adds] [:db/add eid k a]))))
+                              (and (sequential? after) (every? keyword? after))
+                              (let [before   (into #{}
+                                               (comp (remove nil?))
+                                               before)
+                                    after    (into #{}
+                                               (comp (remove nil?))
+                                               after)
+                                    retracts (set/difference before after)
+                                    adds     (set/difference after before)
+                                    eid      (str id)]
+                                (vec
+                                  (concat
+                                    (for [r retracts] [:db/retract eid k r])
+                                    (for [a adds] [:db/add eid k a]))))
 
-                            ;; Assume field is optional and omit
-                            (and (nil? before) (nil? after)) []
+                              ;; Assume field is optional and omit
+                              (and (nil? before) (nil? after)) []
 
-                            :else (if (nil? after)
-                                    (if (ref->ident before)
-                                      [[:db/retract (str id) k (ref->ident before)]]
-                                      [[:db/retract (str id) k before]])
-                                    [[:db/add (str id) k after]]))))
-                entity-diff)
-              {id-k id :db/id (str id)}))
+                              :else (if (nil? after)
+                                      (if (ref->ident before)
+                                        [[:db/retract (str id) k (ref->ident before)]]
+                                        [[:db/retract (str id) k before]])
+                                      [[:db/add (str id) k after]]))))
+                  entity-diff)
+                {id-k id :db/id (str id)})))
     delta))
 
-(defn save-form [connection params]
-  (let [txn (delta->datomic-txn (::form/delta params))]
-    @(d/transact connection txn))
+(def keys-in-delta
+  (memoize
+    (fn keys-in-delta [delta]
+      (let [id-keys  (into #{}
+                       (map first)
+                       (keys delta))
+            all-keys (into id-keys
+                       (mapcat keys)
+                       (vals delta))]
+        all-keys))))
+
+(defn schemas-for-delta [delta]
+  (let [all-keys (keys-in-delta delta)
+        schemas  (into #{}
+                   (keep #(-> % attr/key->attribute ::schema))
+                   all-keys)]
+    schemas))
+
+;; TASK: Is Two-phase commit possible, since multiple database might be saved to? We could auto-generate the inverse of
+;; the delta as an "undo", but it is hard to ensure an undo will succeed.
+;; TASK: UNTESTED.
+(defn save-form
+  "Do all of the possible Datomic operations for the given form delta (save to all Datomic databases involved)"
+  [env form-delta]
+  (let [schemas (schemas-for-delta form-delta)]
+    (log/info "Saving form across " schemas)
+    (doseq [schema schemas
+            :let [connection (-> env ::connections (get schema))
+                  txn        (delta->datomic-txn schema (::form/delta form-delta))]]
+      (log/info "Saving form delta" form-delta)
+      (log/info "on schema" schema)
+      (log/info "Running txn" txn)
+      (when (seq txn)
+        @(d/transact connection txn))))
   nil)
 
 (def suggested-logging-blacklist

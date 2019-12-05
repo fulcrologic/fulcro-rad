@@ -11,7 +11,6 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
