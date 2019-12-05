@@ -23,6 +23,12 @@
                                                      :frame-options  :sameorigin
                                                      :xss-protection false}}
 
+ :com.fulcrologic.rad.pathom/config     {:trace?         false
+                                         ;; TODO: Elide params and such in logging
+                                         :sensitive-keys #{:password :com.example.model.account/password}
+                                         :log-requests?  true
+                                         :log-responses? true}
+
  :taoensso.timbre/logging-config        {:level        :info
                                          :ns-whitelist []
                                          :ns-blacklist ["com.mchange.v2.c3p0.impl.C3P0PooledConnectionPool"

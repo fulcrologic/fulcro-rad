@@ -2,8 +2,8 @@
   (:require
     [com.fulcrologic.fulcro.server.config :as fserver]
     [mount.core :refer [defstate args]]
-    [com.wsscode.pathom.connect :as pc]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.rad.attributes :as attr]))
 
 (defn start-logging! [config]
   (let [{:keys [taoensso.timbre/logging-config]} config]
@@ -25,7 +25,6 @@
                loaded-config (merge (fserver/load-config {:config-path config}) overrides)]
            (log/warn "Loading config" config)
            (start-logging! loaded-config)
-
            loaded-config))
 
 

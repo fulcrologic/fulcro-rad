@@ -19,10 +19,21 @@
                     :opt [::target]))
 (>def ::attributes (s/every ::attribute))
 
-
 (def attribute-registry (atom {}))
 
-(>defn add-attribute!
+(defn register-attributes!
+  "Resets the attribute registry to include only the given attributes.
+   Should be called early in the startup of the client and server."
+  [attributes]
+  (swap! attribute-registry
+    (fn [r]
+      (reduce
+        (fn [reg {::keys [qualified-key] :as a}]
+          (assoc reg qualified-key a))
+        {}
+        attributes))))
+
+(>defn new-attribute
   "Add a data model attribute to the in-memory model.
 
   Type can be one of :string, :int, :uuid, etc. (more types are added over time,
@@ -35,20 +46,25 @@
   under the ::target key.
   "
   [kw type m]
-  [qualified-keyword? keyword? map? => keyword?]
+  [qualified-keyword? keyword? map? => ::attribute]
   (do
     (when (and (= :ref type) (not (contains? m ::target)))
       (log/warn "Reference attribute" kw "does not list a target ID. Resolver generation will not be accurate."))
-    (swap! attribute-registry assoc kw (-> m
-                                         (assoc ::type type)
-                                         (assoc ::qualified-key kw)))
-    kw))
+    (-> m
+      (assoc ::type type)
+      (assoc ::qualified-key kw))))
 
 (>defn key->attribute
   "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
   [k]
   [::qualified-key => ::attribute]
   (get @attribute-registry k))
+
+(>defn to-many?
+  "Returns true if the attribute with the given key is a to-many."
+  [k]
+  [keyword? => boolean?]
+  (= :many (-> k key->attribute ::cardinality)))
 
 (>defn to-int [str]
   [string? => int?]
@@ -114,5 +130,4 @@
            res                 (.getEncoded key)
            hashed-pw           (.encodeToString (Base64/getEncoder) res)]
        (str salt "|" iterations "|" hashed-pw))))
-
 

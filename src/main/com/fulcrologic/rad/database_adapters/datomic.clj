@@ -293,8 +293,8 @@
   [{:datomic/keys [driver schema prevent-changes?] :as config} schemas]
   (let [url             (config->url config)
         generator       (get schemas schema :auto)
-        created?        (d/create-database url)
-        mock?           (or (System/getProperty "mock-connections") prevent-changes?)
+        _               (d/create-database url)
+        mock?           (boolean (or prevent-changes? (System/getProperty "force.mocked.connection")))
         real-connection (d/connect url)
         conn            (if mock? (dm/fork-conn real-connection) real-connection)]
     (log/info "Adding form save support to database transactor functions.")
@@ -350,7 +350,7 @@ in for an attribute?
   whose values are the live database connection.
   "
   ([config]
-   (start-databases {}))
+   (start-databases config {}))
   ([config schemas]
    (reduce-kv
      (fn [m k v]
@@ -398,35 +398,6 @@ in for an attribute?
                                     (auth/redact env)))
      ::pc/input   #{id-key}}))
 
-(defn just-pc-keys [m]
-  (into {}
-    (keep (fn [k]
-            (when (or
-                    (= (namespace k) "com.wsscode.pathom.connect")
-                    (= (namespace k) "com.wsscode.pathom.core"))
-              [k (get m k)])))
-    (keys m)))
-
-(>defn attribute-resolver
-  [attr]
-  [::attr/attribute => (? ::pc/resolver)]
-  (log/info "Building attribute resolver for" (::attr/qualified-key attr))
-  (enc/if-let [resolver        (::pc/resolve attr)
-               secure-resolver (fn [env input]
-                                 (->>
-                                   (resolver env input)
-                                   (auth/redact env)))
-               k               (::attr/qualified-key attr)
-               output          [k]]
-    (merge
-      {::pc/output output}
-      (just-pc-keys attr)
-      {::pc/sym     (symbol (str k "-resolver"))
-       ::pc/resolve secure-resolver})
-    (do
-      (log/error "Virtual attribute " attr " is missing ::attr/resolver key.")
-      nil)))
-
 (defn generate-resolvers
   "Generate all of the resolvers that make sense for the given database config. This should be passed
   to your Pathom parser to register resolvers for each of your schemas."
@@ -442,6 +413,3 @@ in for an attribute?
                                 []
                                 entity-id->attributes)]
     entity-resolvers))
-
-(comment
-  (generate-resolvers :production))
