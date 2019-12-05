@@ -10,24 +10,24 @@
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
     [com.fulcrologic.rad.database-adapters.postgresql :as psql]
     [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.attributes :as attr :refer [add-attribute!]]
     [com.fulcrologic.rad.authorization :as auth]
     [taoensso.timbre :as log]))
 
-(defattr :user/email :string
+(add-attribute! :user/email :string
   {::psql/schema    :auth
    ::psql/table     "user"
    ::attr/unique?   true
    ::attr/required? true})
 
-(defattr :user/password :password
+(add-attribute! :user/password :password
   {::psql/schema    :auth
    ::psql/table     "user"
    ::attr/required? true})
 
 ;; Once logged in, this is placed in the session to identify the Datomic database
 ;; in which this user's data is stored
-(defattr :user/datomic-shard :keyword
+(add-attribute! :user/datomic-shard :keyword
   {::psql/schema    :auth
    ::psql/table     "user"
    ::attr/required? true})
@@ -37,7 +37,7 @@
 ;; that can be placed on entities that refers to some central thing (firm in this
 ;; example).
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defattr :firm/id :uuid
+(add-attribute! :firm/id :uuid
   {::attr/identity? true
    ::datomic/schema :production
    ::attr/required? true
@@ -54,7 +54,7 @@
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    ::auth/authority :local})
 
-(defattr :firm/name :string
+(add-attribute! :firm/name :string
   {::datomic/schema     :production
 
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -71,8 +71,9 @@
 
 (declare add-firm)
 
-(defattr :entity/firm :ref
-  {::datomic/schema     :production
+(add-attribute! :entity/firm :ref
+  {::attr/target        :firm/id
+   ::datomic/schema     :production
 
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
    ;; This attribute can live on any entity identified by this set.
@@ -85,7 +86,7 @@
    ;; might be generated for a single defattr). Overrides for this are simply db-centric options
    ;; like `::datomic/generate-resolvers? false` on an attribute, followed by manual resolvers
    ;; defined elsewhere in the source.
-   ::datomic/entity-ids #{::id :com.example.model.address/id :com.example.model.tag/id}
+   ::datomic/entity-ids #{::id :com.example.model.tag/id}
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -113,13 +114,13 @@
 
    ::auth/authority     :local})
 
-(defattr ::id :uuid
+(add-attribute! ::id :uuid
   {::attr/identity? true
    ::datomic/schema :production
    ::attr/required? true
    ::auth/authority :local})
 
-(defattr ::email :string
+(add-attribute! ::email :string
   {::attr/unique?       true
    ::datomic/schema     :production
    ::datomic/entity-ids #{::id}
@@ -127,7 +128,7 @@
    ::auth/authority     :local})
 
 ;; Save must put it in storage, and return a URL that is stored in the attribute.
-#_(defattr ::avatar :linked-binary
+#_(add-attribute! ::avatar :linked-binary
     {::auth/authority     :local
      ::datomic/schema     :production
      ::datomic/entity-ids #{::id}
@@ -135,14 +136,14 @@
      ::attr/binary-data   (fn [env url] (comment "returns binary data. optional."))
      ::attr/delete-binary (fn [env url] (comment "hook to delete binary. optional."))})
 
-(defattr ::active? :boolean
+(add-attribute! ::active? :boolean
   {::auth/authority     :local
    ::datomic/schema     :production
    ::datomic/entity-ids #{::id}
    ::form/default-value true
    ::attr/required?     true})
 
-(defattr ::password :password
+(add-attribute! ::password :password
   {;; TODO: context sense to allow for owner to write
    ::auth/authority          :local
    ::datomic/schema          :production
@@ -181,26 +182,28 @@
    ::attr/encrypt-iterations 100
    ::attr/required?          true})
 
-(defattr ::name :string
+(add-attribute! ::name :string
   {::auth/authority     :local
    ::datomic/schema     :production
    ::datomic/entity-ids #{::id}
    ::attr/required?     true})
 
 ;; In SQL engine default to one->many with target table holding back-ref
-(defattr ::addresses :ref
-  {::datomic/schema           :production
+(add-attribute! ::addresses :ref
+  {::attr/target              :com.example.model.address/id
+   ::attr/cardinality         :many
+   ::datomic/schema           :production
    ::datomic/intended-targets #{:com.example.model.address/id}
    ::datomic/component?       true
    ::datomic/entity-ids       #{::id}
-   ::attr/cardinality         :many
    ::auth/authority           :local})
 
-(defattr ::tags :ref
-  {::datomic/schema           :production
+(add-attribute! ::tags :ref
+  {::attr/target              :tag/id
+   ::attr/cardinality         :many
+   ::datomic/schema           :production
    ::datomic/intended-targets #{:com.example.model.tag/id}
    ::datomic/entity-ids       #{::id}
-   ::attr/cardinality         :many
    ::auth/authority           :local
    ;; In SQL engine, allow join generation override
    #_#_:sql/join [::id [:account-tags/account-id :account-tags/tag-id] :com.example.model.tag/id]})
@@ -211,8 +214,9 @@
 ;; here, but Fulcro reified mutations are probably sufficient in many cases where virtual attributes
 ;; support any kind of "create/update".
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defattr ::all-accounts :ref
-  {::auth/authority :local
+(add-attribute! ::all-accounts :ref
+  {::attr/target    ::id
+   ::auth/authority :local
    ::pc/output      [{::all-accounts [::id]}]
    ::pc/resolve     (fn [{:keys [query-params] :as env} input]
                       #?(:clj

@@ -2,6 +2,7 @@
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     [clojure.spec.alpha :as s]
+    [taoensso.timbre :as log]
     [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.database :as db])
@@ -11,39 +12,37 @@
               (javax.crypto SecretKeyFactory)
               (java.util Base64))))
 
+(>def ::qualified-key qualified-keyword?)
+(>def ::type keyword?)
+(>def ::target qualified-keyword?)
+(>def ::attribute (s/keys :req [::type ::qualified-key]
+                    :opt [::target]))
+(>def ::attributes (s/every ::attribute))
+
+
 (def attribute-registry (atom {}))
 
-#?(:clj
-   (>fdef defattr
-     [kw type m]
-     [qualified-keyword? keyword? map? => any?]))
+(>defn add-attribute!
+  "Add a data model attribute to the in-memory model.
 
-#?(:clj
-   (defmacro defattr
-     "Create a data model attribute. Type can be one of :string, :int, :uuid, etc. (more types are added over time,
-     so see main documentation and your database adapter for more information).
+  Type can be one of :string, :int, :uuid, etc. (more types are added over time,
+  so see main documentation and your database adapter for more information).
 
-     The remaining argument is an open map of additional things that any subsystem can
-     use to describe facets of this attribute that are important to your system.
-     "
-     [kw type m]
-     (let [definition `(do
-                         (swap! attribute-registry assoc ~kw ~(-> m
-                                                                (assoc ::type type)
-                                                                (assoc ::qualified-key kw)
-                                                                (dissoc ::spec)))
-                         ~kw)]
-       definition)))
+  The remaining argument is an open map of additional things that any subsystem can
+  use to describe facets of this attribute that are important to your system.
 
-;; TODO: rename ref-target
-(>def ::target qualified-keyword?)
-(>def ::qualified-key qualified-keyword?)
-(>def ::index? boolean?)
-(>def ::component? boolean?)
-(>def ::attribute (s/keys
-                    :req [::type ::qualified-key]
-                    :opt [::index? ::component? ::spec]))
-(>def ::attributes (s/every qualified-keyword?))
+  If `:ref` is used as the type then the ultimate ID of the target entity should be listed in `m`
+  under the ::target key.
+  "
+  [kw type m]
+  [qualified-keyword? keyword? map? => keyword?]
+  (do
+    (when (and (= :ref type) (not (contains? m ::target)))
+      (log/warn "Reference attribute" kw "does not list a target ID. Resolver generation will not be accurate."))
+    (swap! attribute-registry assoc kw (-> m
+                                         (assoc ::type type)
+                                         (assoc ::qualified-key kw)))
+    kw))
 
 (>defn key->attribute
   "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
@@ -85,17 +84,15 @@
 
 (>defn attributes->eql
   "Returns an EQL query for all of the attributes that are available for the given database-id"
-  [database-id attrs]
-  [::db/id ::attributes => vector?]
+  [attrs]
+  [::attributes => vector?]
   (reduce
     (fn [outs {::keys [qualified-key type target]}]
       (if (and target (= :ref type))
         (conj outs {qualified-key [target]})
         (conj outs qualified-key)))
     []
-    (filter
-      (fn [{::db/keys [id]}] (= id database-id))
-      (map key->attribute attrs))))
+    attrs))
 
 #?(:clj
    (defn ^String gen-salt []

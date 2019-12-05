@@ -2,16 +2,19 @@
   (:require
     [clojure.set :as set]
     [clojure.walk :as walk]
-    [com.fulcrologic.guardrails.core :refer [>defn =>]]
+    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.database-adapters.protocols :as dbp]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.ids :refer [select-keys-in-ns]]
     [datomic.api :as d]
     [datomock.core :as dm :refer [mock-conn]]
     [edn-query-language.core :as eql]
     [mount.core :refer [defstate]]
-    [taoensso.timbre :as log]))
+    [com.wsscode.pathom.connect :as pc]
+    [taoensso.timbre :as log]
+    [taoensso.encore :as enc]
+    [com.fulcrologic.rad.authorization :as auth]
+    [clojure.spec.alpha :as s]))
 
 (def type-map
   {:string   :db.type/string
@@ -65,6 +68,13 @@
      (if (sequential? result)
        (mapv transform-fn result)
        (transform-fn result)))))
+
+(defn get-by-ids [connection id-attr ids desired-output]
+  ;; TODO: Should use consistent DB for atomicity
+  (let [pk   (::attr/qualified-key id-attr)
+        eids (mapv (fn [id] [pk id]) ids)
+        db   (d/db connection)]
+    (pull-* db desired-output eids)))
 
 (defn ref->ident
   "Sometimes references on the client are actual idents and sometimes they are
@@ -128,18 +138,10 @@
               {id-k id :db/id (str id)}))
     delta))
 
-(defrecord DatomicAdapter [database-id connection]
-  dbp/DBAdapter
-  (get-by-ids [_ id-attr ids desired-output]
-    ;; TODO: Should use consistent DB for atomicity
-    (let [pk   (::attr/qualified-key id-attr)
-          eids (mapv (fn [id] [pk id]) ids)
-          db   (d/db connection)]
-      (pull-* db desired-output eids)))
-  (save-form [_ _ params]
-    (let [txn (delta->datomic-txn (::form/delta params))]
-      @(d/transact connection txn))
-    nil))
+(defn save-form [connection params]
+  (let [txn (delta->datomic-txn (::form/delta params))]
+    @(d/transact connection txn))
+  nil)
 
 (def suggested-logging-blacklist
   "A vector containing a list of namespace strings that generate a lot of debug noise when using Datomic. Can
@@ -356,3 +358,90 @@ in for an attribute?
        (assoc m k (start-database! v schemas)))
      {}
      (::databases config))))
+
+(defn entity-query
+  [{::keys      [schema id-attribute]
+    ::attr/keys [qualified-key]
+    :as         env} input]
+  (let [one? (not (sequential? input))]
+    (enc/if-let [id-key (::attr/qualified-key id-attribute)
+                 query  (or
+                          (get env :com.wsscode.pathom.core/parent-query)
+                          (get env ::default-query))
+                 ids    (if one?
+                          [(get input id-key)]
+                          (into [] (keep #(get % id-key) input)))]
+      (do
+        (log/info "Running" query "on entities with " id-key ":" ids)
+        (let [result (get-by-ids nil id-attribute ids query)]
+          (if one?
+            (first result)
+            result)))
+      (do
+        (log/info "Unable to complete query because the database adapter was missing.")
+        nil))))
+
+(>defn id-resolver
+  [id-key attributes]
+  [qualified-keyword? ::attr/attributes => ::pc/resolver]
+  (log/info "Building ID resolver for" id-key)
+  (let [outputs (attr/attributes->eql attributes)]
+    {::pc/sym     (symbol
+                    (str (namespace id-key))
+                    (str (name id-key) "-resolver"))
+     ::pc/output  outputs
+     ::pc/batch?  true
+     ::pc/resolve (fn [env input] (->>
+                                    (entity-query
+                                      (assoc env ::default-query outputs)
+                                      input)
+                                    (auth/redact env)))
+     ::pc/input   #{id-key}}))
+
+(defn just-pc-keys [m]
+  (into {}
+    (keep (fn [k]
+            (when (or
+                    (= (namespace k) "com.wsscode.pathom.connect")
+                    (= (namespace k) "com.wsscode.pathom.core"))
+              [k (get m k)])))
+    (keys m)))
+
+(>defn attribute-resolver
+  [attr]
+  [::attr/attribute => (? ::pc/resolver)]
+  (log/info "Building attribute resolver for" (::attr/qualified-key attr))
+  (enc/if-let [resolver        (::pc/resolve attr)
+               secure-resolver (fn [env input]
+                                 (->>
+                                   (resolver env input)
+                                   (auth/redact env)))
+               k               (::attr/qualified-key attr)
+               output          [k]]
+    (merge
+      {::pc/output output}
+      (just-pc-keys attr)
+      {::pc/sym     (symbol (str k "-resolver"))
+       ::pc/resolve secure-resolver})
+    (do
+      (log/error "Virtual attribute " attr " is missing ::attr/resolver key.")
+      nil)))
+
+(defn generate-resolvers
+  "Generate all of the resolvers that make sense for the given database config. This should be passed
+  to your Pathom parser to register resolvers for each of your schemas."
+  [schema]
+  (let [attributes            (filter #(= schema (::schema %)) (vals @attr/attribute-registry))
+        entity-id->attributes (group-by ::k (mapcat (fn [attribute]
+                                                      (map
+                                                        (fn [id-key] (assoc attribute ::k id-key))
+                                                        (get attribute ::entity-ids)))
+                                              attributes))
+        entity-resolvers      (reduce-kv
+                                (fn [result k v] (conj result (id-resolver k v)))
+                                []
+                                entity-id->attributes)]
+    entity-resolvers))
+
+(comment
+  (generate-resolvers :production))

@@ -1,32 +1,35 @@
 (ns com.example.model.address
   (:require
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.attributes :as attr :refer [add-attribute!]]
     [com.fulcrologic.rad.authorization :as auth]))
 
-(defattr ::id :uuid
+(add-attribute! ::id :uuid
   {::attr/unique?   true
-   ::datomic/id     :production
+   ::datomic/schema :production
    ::datomic/entity ::address
    ::attr/index?    true
    ::attr/required? true
    ::auth/authority :local})
 
-(defattr ::street :string
+(add-attribute! ::street :string
   {::attr/index?    true
-   ::datomic/id     :production
+   ::datomic/entity-ids #{::id}
+   ::datomic/schema :production
    ::datomic/entity ::address
    ::attr/required? true})
 
-(defattr ::city :string
+(add-attribute! ::city :string
   {::attr/index?    true
-   ::datomic/id     :production
+   ::datomic/entity-ids #{::id}
+   ::datomic/schema :production
    ::datomic/entity ::address
    ::attr/required? true})
 
-(defattr ::state :enum
+(add-attribute! ::state :enum
   {::attr/values    #{:AZ :AL :AK :CA :CT :DE :GA :HI :KS :MS :MO :MN :OR :WA}
-   ::datomic/id     :production
+   ::datomic/entity-ids #{::id}
+   ::datomic/schema :production
    ::datomic/entity ::address
    ::attr/index?    true
    ::attr/required? true
@@ -44,9 +47,10 @@
                      :OR "Oregon"
                      :WA "Washington"}})
 
-(defattr ::zip :string
+(add-attribute! ::zip :string
   {::attr/index?    true
-   ::datomic/id     :production
+   ::datomic/entity-ids #{::id}
+   ::datomic/schema :production
    ::datomic/entity ::address
    ::attr/required? true})
 
