@@ -10,6 +10,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.rad.attributes :as attr]
     [taoensso.timbre :as log]
     [com.example.model.account :as account]
     [com.example.model.tag :as tag]

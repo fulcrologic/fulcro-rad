@@ -3,13 +3,12 @@
     [clojure.pprint :refer [pprint]]
     [clojure.repl :refer [doc source]]
     [clojure.tools.namespace.repl :as tools-ns :refer [disable-reload! refresh clear set-refresh-dirs]]
-    [com.example.components.datomic :refer [production-database]]
+    [com.example.components.datomic :refer [datomic-databases]]
     [com.example.components.middleware]
     [com.example.components.server]
     [com.example.model.account :as account]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
-    [com.fulcrologic.rad.database-adapters.db-adapter :as dba]
     [com.fulcrologic.rad.database-adapters.postgresql :as psql]
     [com.fulcrologic.rad.resolvers :as res]
     [mount.core :as mount]
@@ -19,35 +18,36 @@
 
 (defn seed []
   (let [u new-uuid
-        {:keys [connection]} production-database]
-    (d/transact connection [{::account/id       (u 1)
-                             ::account/name     "Joe Blow"
-                             ::account/email    "joe@example.com"
-                             ::account/active?  true
-                             ::account/password (attr/encrypt "letmein" "some-salt"
-                                                  (::attr/encrypt-iterations
-                                                    (attr/key->attribute ::account/password)))}
-                            {::account/id       (u 2)
-                             ::account/name     "Sam Hill"
-                             ::account/email    "sam@example.com"
-                             ::account/active?  false
-                             ::account/password (attr/encrypt "letmein" "some-salt"
-                                                  (::attr/encrypt-iterations
-                                                    (attr/key->attribute ::account/password)))}
-                            {::account/id       (u 3)
-                             ::account/name     "Jose Haplon"
-                             ::account/email    "jose@example.com"
-                             ::account/active?  true
-                             ::account/password (attr/encrypt "letmein" "some-salt"
-                                                  (::attr/encrypt-iterations
-                                                    (attr/key->attribute ::account/password)))}
-                            {::account/id       (u 4)
-                             ::account/name     "Rose Small"
-                             ::account/email    "rose@example.com"
-                             ::account/active?  true
-                             ::account/password (attr/encrypt "letmein" "some-salt"
-                                                  (::attr/encrypt-iterations
-                                                    (attr/key->attribute ::account/password)))}])))
+        {:keys [connection]} datomic-databases]
+    (when connection
+      @(d/transact connection [{::account/id       (u 1)
+                                ::account/name     "Joe Blow"
+                                ::account/email    "joe@example.com"
+                                ::account/active?  true
+                                ::account/password (attr/encrypt "letmein" "some-salt"
+                                                     (::attr/encrypt-iterations
+                                                       (attr/key->attribute ::account/password)))}
+                               {::account/id       (u 2)
+                                ::account/name     "Sam Hill"
+                                ::account/email    "sam@example.com"
+                                ::account/active?  false
+                                ::account/password (attr/encrypt "letmein" "some-salt"
+                                                     (::attr/encrypt-iterations
+                                                       (attr/key->attribute ::account/password)))}
+                               {::account/id       (u 3)
+                                ::account/name     "Jose Haplon"
+                                ::account/email    "jose@example.com"
+                                ::account/active?  true
+                                ::account/password (attr/encrypt "letmein" "some-salt"
+                                                     (::attr/encrypt-iterations
+                                                       (attr/key->attribute ::account/password)))}
+                               {::account/id       (u 4)
+                                ::account/name     "Rose Small"
+                                ::account/email    "rose@example.com"
+                                ::account/active?  true
+                                ::account/password (attr/encrypt "letmein" "some-salt"
+                                                     (::attr/encrypt-iterations
+                                                       (attr/key->attribute ::account/password)))}]))))
 
 (defn start []
   (mount/start-with-args {:config "config/dev.edn"})

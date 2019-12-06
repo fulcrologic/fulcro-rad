@@ -38,10 +38,10 @@ The plugin-specific attribute parameters are:
 `::datomic/schema keyword`:: (required) A name that groups together attributes that go together in a schema
 on a database. A schema can be used on any number of databased (e.g. for sharding).
 `::datomic/entity-ids #{k k2 ...}`:: Required on *non*-identity attributes.
-A set of attribute keys that are `:db/unique :db.unique/identity`. This
-set indicates that the attribute in question can be placed on an entity that has one of those identity attributes.
+A set of attribute keys that are `:attr/identity? true`. This
+set indicates that the attribute can be *placed* on an entity that is identified by one of those identity attributes.
 This allows the Datomic plugin to figure out which properties can be co-located on an entity for storage
-in form saves, and queries in resolvers. It is a set in order to support the fact that Datomic allows
+in form saves and queries in resolvers. It is a set in order to support the fact that Datomic allows
 an attribute to appear on any entity, but your domain model will put it on a more limited subset of
 different entities. Failing to list this entry will result in failure to generate resolvers
 or form save logic for the attribute.
@@ -64,6 +64,21 @@ You can pull the current generated schema from the attribute database using
 `(datomic/automatic-schema schema-key)`.  NOTE: You must require all namespaces in
 your model that define attributes to ensure that they are all included in the generated
 schema.
+
+==== Enumerations
+
+The idiomatic way to represent enumerations in Datomic is with a ref and a set of entities known by
+well-known idents. The following is supported during automatic schema generation:
+
+[source, clojure]
+-----
+(new-attribute :address/state :enum
+  {:attr/enumerated-values #{:AL :address.state/CA {:db/ident :address.state/OR :db/doc "Oregon"}}})
+-----
+
+All three of the above forms are allowed. An unqualified keyword will be auto-qualified (AL and CA above
+could be represented either way), and a map will be treated like a full-blown entity definition
+(will be passed through untouched to the schema).
 
 === Validation
 

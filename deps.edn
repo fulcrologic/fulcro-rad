@@ -5,6 +5,7 @@
            camel-snake-kebab          {:mvn/version "0.4.0"}
            com.taoensso/encore        {:mvn/version "2.115.0"}
            com.fulcrologic/fulcro     {:mvn/version "3.0.13-SNAPSHOT"}
+           org.postgresql/postgresql  {:mvn/version "42.2.8"}
            com.fulcrologic/guardrails {:mvn/version "0.0.9"}
            com.wsscode/pathom         {:mvn/version "2.2.26"}
            org.clojure/clojure        {:mvn/version "1.10.1" :scope "provided"}

@@ -7,6 +7,7 @@
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.ids :refer [select-keys-in-ns]]
     [datomic.api :as d]
+    [datomic.function :as df]
     [datomock.core :as dm :refer [mock-conn]]
     [edn-query-language.core :as eql]
     [mount.core :refer [defstate]]
@@ -18,6 +19,7 @@
 
 (def type-map
   {:string   :db.type/string
+   :enum     :db.type/ref
    :boolean  :db.type/boolean
    :password :db.type/string
    :int      :db.type/long
@@ -171,8 +173,9 @@
       (log/info "Saving form delta" form-delta)
       (log/info "on schema" schema)
       (log/info "Running txn" txn)
-      (when (seq txn)
-        @(d/transact connection txn))))
+      (if (and connection (seq txn))
+        @(d/transact connection txn)
+        (log/error "Unable to save form. Either connection was missing in env, or txn was empty."))))
   nil)
 
 (def suggested-logging-blacklist
@@ -211,11 +214,7 @@
    "org.quartz.utils.UpdateChecker"
    "shadow.cljs.devtools.server.worker.impl"])
 
-(>defn automatic-schema
-  "Returns a Datomic transaction for the complete schema that is represented in the RAD attributes
-   that have a `::datomic/schema` that matches `schema-name`."
-  [schema-name]
-  [keyword? => vector?]
+(defn- attribute-schema [schema-name]
   (let [attributes (filter #(= schema-name (::schema %)) (vals @attr/attribute-registry))]
     (mapv
       (fn [{::attr/keys [unique? identity? type qualified-key cardinality] :as a}]
@@ -234,6 +233,30 @@
               identity? (assoc :db/unique :db.unique/identity))
             overrides)))
       attributes)))
+
+(defn- enumerated-values [schema-name]
+  (let [attributes (filter #(= schema-name (::schema %)) (vals @attr/attribute-registry))]
+    (mapcat
+      (fn [{::attr/keys [qualified-key type enumerated-values] :as a}]
+        (when (= :enum type)
+          (let [enum-nspc (str (namespace qualified-key) "." (name qualified-key))]
+            (keep (fn [v]
+                    (cond
+                      (map? v) v
+                      (qualified-keyword? v) {:db/ident v}
+                      :otherwise (let [enum-ident (keyword enum-nspc (name v))]
+                                   {:db/ident enum-ident})))
+              enumerated-values))))
+      attributes)))
+
+(>defn automatic-schema
+  "Returns a Datomic transaction for the complete schema that is represented in the RAD attributes
+   that have a `::datomic/schema` that matches `schema-name`."
+  [schema-name]
+  [keyword? => vector?]
+  (let [txn (attribute-schema schema-name)
+        txn (into txn (enumerated-values schema-name))]
+    txn))
 
 (let [db-url      (fn [] (str "datomic:mem://" (gensym "test-database")))
       pristine-db (atom nil)
@@ -280,6 +303,12 @@
 
 (defn config->postgres-url [{:postgresql/keys [user host port password database]
                              datomic-db       :datomic/database}]
+  (assert user ":postgresql/user must be specified")
+  (assert host ":postgresql/host must be specified")
+  (assert port ":postgresql/port must be specified")
+  (assert password ":postgresql/password must be specified")
+  (assert database ":postgresql/database must be specified")
+  (assert datomic-db ":datomic/database must be specified")
   (str "datomic:sql://" datomic-db "?jdbc:postgresql://" host (when port (str ":" port)) "/"
     database "?user=" user "&password=" password))
 
@@ -288,30 +317,25 @@
     :postgresql (config->postgres-url config)
     (throw (ex-info "Unsupported Datomic back-end driver." {:driver driver}))))
 
-(def add-ident-transactor-function-code
-  "The body of a RAD function that is needed by the pre-written form save logic."
-  "(do
-    (when-not (and (= 2 (count ident))
-                   (keyword? (first ident)))
-      (throw (IllegalArgumentException.
-              (str \"ident must be an ident, got \" ident))))
-    (let [ref-val (or (:db/id (datomic.api/entity db ident))
-                      (str (second ident)))]
-      [[:db/add eid rel ref-val]]))")
-
 (defn ensure-transactor-functions!
   "Must be called on any Datomic database that will be used with automatic form save. This
   adds transactor functions.  The built-in startup logic (if used) will automatically call this,
   but if you create/start your databases with custom code you should run this on your newly
   created database."
   [conn]
-  @(d/transact conn [#:db{:fn    {:db.fn/lang     :clojure
-                                  :db.fn/imports  []
-                                  :db.fn/requires []
-                                  :db.fn/params   '[db eid rel ident]
-                                  :db.fn/code     add-ident-transactor-function-code}
-                          ;; :id #db/id[:db.part/user -1000005]
-                          :ident :com.fulcrologic.rad.fn/add-ident}]))
+  @(d/transact conn [{:db/id    (d/tempid :db.part/user)
+                      :db/ident :com.fulcrologic.rad.fn/add-ident
+                      :db/fn    (df/construct
+                                  '{:lang   "clojure"
+                                    :params [db eid rel ident]
+                                    :code   (do
+                                              (when-not (and (= 2 (count ident))
+                                                          (keyword? (first ident)))
+                                                (throw (IllegalArgumentException.
+                                                         (str "ident must be an ident, got " ident))))
+                                              (let [ref-val (or (:db/id (datomic.api/entity db ident))
+                                                              (str (second ident)))]
+                                                [[:db/add eid rel ref-val]]))})}]))
 
 (defn start-database!
   "Starts a Datomic database connection given the standard sub-element config described

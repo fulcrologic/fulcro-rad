@@ -28,25 +28,25 @@
       ::attr/required?     true})
 
    (new-attribute ::state :enum
-     {::attr/values        #{:AZ :AL :AK :CA :CT :DE :GA :HI :KS :MS :MO :MN :OR :WA}
-      ::datomic/entity-ids #{::id}
-      ::datomic/schema     :production
-      ::datomic/entity     ::address
-      ::attr/index?        true
-      ::attr/required?     true
-      ::attr/labels        {:AZ "Arizona"
-                            :AL "Alabama"
-                            :AK "Alaska"
-                            :CA "California"
-                            :CT "Connecticut"
-                            :DE "Deleware"
-                            :GA "Georgia"
-                            :HI "Hawaii"
-                            :KS "Kansas"
-                            :MS "Mississippi"
-                            :MO "Missouri"
-                            :OR "Oregon"
-                            :WA "Washington"}})
+     {::attr/enumerated-values #{:AZ :AL :AK :CA :CT :DE :GA :HI :KS :MS :MO :MN :OR :WA}
+      ::datomic/entity-ids     #{::id}
+      ::datomic/schema         :production
+      ::datomic/entity         ::address
+      ::attr/index?            true
+      ::attr/required?         true
+      ::attr/labels            {:AZ "Arizona"
+                                :AL "Alabama"
+                                :AK "Alaska"
+                                :CA "California"
+                                :CT "Connecticut"
+                                :DE "Deleware"
+                                :GA "Georgia"
+                                :HI "Hawaii"
+                                :KS "Kansas"
+                                :MS "Mississippi"
+                                :MO "Missouri"
+                                :OR "Oregon"
+                                :WA "Washington"}})
 
    (new-attribute ::zip :string
      {::attr/index?        true

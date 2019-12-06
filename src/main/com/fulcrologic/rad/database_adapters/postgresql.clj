@@ -1,6 +1,5 @@
 (ns com.fulcrologic.rad.database-adapters.postgresql
   (:require
-    [com.fulcrologic.rad.database-adapters.protocols :as dbp]
     [camel-snake-kebab.core :as csk]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
@@ -76,15 +75,4 @@
 ;                      (str "ALTER TABLE " table-name " ADD COLUMN " column-name " " target-type " REFERENCES " target-table "(" target-column ");\n")))))
 ;              attributes))))
 ;      [(.toString creates) (.toString updates)]))
-
-(defrecord PostgreSQLAdapter [database-id]
-  dbp/DBAdapter
-  (get-by-ids [this id-attr ids desired-output]
-    (log/error "get by IDs not yet implemented on PostgreSQL")
-    [])
-  (save-form [this mutation-env params]
-    (log/error "PSQL Save Not implemented")
-    nil))
-
-
 

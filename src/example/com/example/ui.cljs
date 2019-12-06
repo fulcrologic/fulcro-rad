@@ -19,7 +19,7 @@
     [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]))
 
 (form/defsc-form AccountForm [this props]
-  {::attr/attributes   [::acct/id ::acct/name ::acct/email ::acct/last-login]
+  {::attr/attributes   [::acct/id ::acct/name ::acct/email ]
    ; ::form/read-only?   {::acct/email false}
    ::form/id           ::acct/id
    ::form/cancel-route ["landing-page"]

@@ -51,7 +51,7 @@
                               :body (s/* any?))))
 
 #?(:clj
-   (s/def ::defsc-form-options (s/keys :req [::attr/attributes ::rad/schema
+   (s/def ::defsc-form-options (s/keys :req [::attr/attributes
                                              ::id ::title ::cancel-route ::route-prefix])))
 
 #?(:clj
