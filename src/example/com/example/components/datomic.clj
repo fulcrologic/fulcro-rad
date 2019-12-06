@@ -5,6 +5,6 @@
     [mount.core :refer [defstate]]
     [com.example.components.config :refer [config]]))
 
-(defstate ^{:on-reload :noop} datomic-databases
+(defstate ^{:on-reload :noop} datomic-connections
   :start
   (datomic/start-databases config))

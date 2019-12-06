@@ -15,7 +15,8 @@
     [taoensso.timbre :as log]
     [taoensso.encore :as enc]
     [com.fulcrologic.rad.authorization :as auth]
-    [clojure.spec.alpha :as s]))
+    [clojure.spec.alpha :as s]
+    [com.example.components.config :as config]))
 
 (def type-map
   {:string   :db.type/string
@@ -71,11 +72,9 @@
        (mapv transform-fn result)
        (transform-fn result)))))
 
-(defn get-by-ids [connection id-attr ids desired-output]
+(defn get-by-ids [db pk ids desired-output]
   ;; TODO: Should use consistent DB for atomicity
-  (let [pk   (::attr/qualified-key id-attr)
-        eids (mapv (fn [id] [pk id]) ids)
-        db   (d/db connection)]
+  (let [eids (mapv (fn [id] [pk id]) ids)]
     (pull-* db desired-output eids)))
 
 (defn ref->ident
@@ -416,32 +415,35 @@ in for an attribute?
      (::databases config))))
 
 (defn entity-query
-  [{::keys      [schema id-attribute]
+  [{::keys      [schema]
     ::attr/keys [qualified-key]
     :as         env} input]
   (let [one? (not (sequential? input))]
-    (enc/if-let [id-key (::attr/qualified-key id-attribute)
-                 query  (or
-                          (get env :com.wsscode.pathom.core/parent-query)
-                          (get env ::default-query))
-                 ids    (if one?
-                          [(get input id-key)]
-                          (into [] (keep #(get % id-key) input)))]
+    (enc/if-let [db    (log/spy :info (get-in env [::databases (log/spy :info schema)]))
+                 query (log/spy :info (or
+                                        (get env :com.wsscode.pathom.core/parent-query)
+                                        (get env ::default-query)))
+                 ids   (log/spy :info (if one?
+                                        [(get input qualified-key)]
+                                        (into [] (keep #(get % qualified-key) input))))]
       (do
-        (log/info "Running" query "on entities with " id-key ":" ids)
-        (let [result (get-by-ids nil id-attribute ids query)]
+        (log/info "Running" query "on entities with " qualified-key ":" ids)
+        (let [
+              result (get-by-ids db qualified-key ids query)]
           (if one?
             (first result)
             result)))
       (do
-        (log/info "Unable to complete query because the database adapter was missing.")
+        (log/info "Unable to complete query.")
         nil))))
 
 (>defn id-resolver
   [id-key attributes]
   [qualified-keyword? ::attr/attributes => ::pc/resolver]
   (log/info "Building ID resolver for" id-key)
-  (let [outputs (attr/attributes->eql attributes)]
+  (enc/if-let [outputs   (attr/attributes->eql attributes)
+               attribute (attr/key->attribute id-key)
+               schema    (::schema attribute)]
     {::pc/sym     (symbol
                     (str (namespace id-key))
                     (str (name id-key) "-resolver"))
@@ -449,16 +451,23 @@ in for an attribute?
      ::pc/batch?  true
      ::pc/resolve (fn [env input] (->>
                                     (entity-query
-                                      (assoc env ::default-query outputs)
+                                      (assoc env
+                                        ::schema schema
+                                        ::attr/qualified-key id-key
+                                        ::default-query outputs)
                                       input)
                                     (auth/redact env)))
-     ::pc/input   #{id-key}}))
+     ::pc/input   #{id-key}}
+    (do
+      (log/error "Unable to generate id-resolver. "
+        "Attribute was missing schema, or could not be found in the attribute registry: " id-key)
+      nil)))
 
 (defn generate-resolvers
   "Generate all of the resolvers that make sense for the given database config. This should be passed
   to your Pathom parser to register resolvers for each of your schemas."
-  [schema]
-  (let [attributes            (filter #(= schema (::schema %)) (vals @attr/attribute-registry))
+  [attributes schema]
+  (let [attributes            (filter #(= schema (::schema %)) attributes)
         entity-id->attributes (group-by ::k (mapcat (fn [attribute]
                                                       (map
                                                         (fn [id-key] (assoc attribute ::k id-key))
@@ -469,3 +478,4 @@ in for an attribute?
                                 []
                                 entity-id->attributes)]
     entity-resolvers))
+

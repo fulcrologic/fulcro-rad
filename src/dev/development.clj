@@ -3,7 +3,7 @@
     [clojure.pprint :refer [pprint]]
     [clojure.repl :refer [doc source]]
     [clojure.tools.namespace.repl :as tools-ns :refer [disable-reload! refresh clear set-refresh-dirs]]
-    [com.example.components.datomic :refer [datomic-databases]]
+    [com.example.components.datomic :refer [datomic-connections]]
     [com.example.components.middleware]
     [com.example.components.server]
     [com.example.model.account :as account]
@@ -17,9 +17,10 @@
     [com.fulcrologic.rad.attributes :as attr]))
 
 (defn seed []
-  (let [u new-uuid
-        {:keys [connection]} datomic-databases]
+  (let [u          new-uuid
+        connection (:main datomic-connections)]
     (when connection
+      (log/info "SEEDING data.")
       @(d/transact connection [{::account/id       (u 1)
                                 ::account/name     "Joe Blow"
                                 ::account/email    "joe@example.com"

@@ -14,6 +14,11 @@
      (with-out-str (pprint ~v))
      "================================================================================"))
 
+(defn pretty
+  "Marks a data item for pretty formatting when logging it."
+  [v]
+  (with-meta v {:pretty true}))
+
 (defn custom-output-fn
   "Derived from Timbre's default output function."
   ([data] (custom-output-fn nil data))
@@ -33,8 +38,18 @@
 
 (defn start-logging! [config]
   (let [{:keys [taoensso.timbre/logging-config]} config]
-    (log/merge-config! (assoc logging-config :output-fn custom-output-fn))
-    (log/info "Configured Timbre with" (p logging-config))))
+    (log/merge-config!
+      (assoc logging-config
+        :middleware [(fn [data]
+                       (update data :vargs (fn [args]
+                                             (mapv
+                                               (fn [v]
+                                                 (if (-> v meta :pretty)
+                                                   (with-out-str (pprint v))
+                                                   v))
+                                               args))))]
+        :output-fn custom-output-fn))
+    (log/info "Configured Timbre" (pretty logging-config))))
 
 (defstate config
   "The overrides option in args is for overriding

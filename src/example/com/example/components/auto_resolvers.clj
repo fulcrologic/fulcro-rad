@@ -9,5 +9,6 @@
 (defstate automatic-resolvers
   :start
   (vec
-    (concat (res/generate-resolvers all-attributes)
-      (datomic/generate-resolvers all-attributes))))
+    (concat
+      (res/generate-resolvers all-attributes)
+      (datomic/generate-resolvers all-attributes :production))))

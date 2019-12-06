@@ -14,6 +14,19 @@
     [com.fulcrologic.rad.authorization :as auth]
     [taoensso.timbre :as log]))
 
+(defn all-accounts
+  [db query-params]
+  #?(:clj
+     (let [ids (if (:ui/show-inactive? query-params)
+                 (d/q [:find '[?uuid ...]
+                       :where
+                       ['?dbid ::id '?uuid]] db)
+                 (d/q [:find '[?uuid ...]
+                       :where
+                       ['?dbid ::active? true]
+                       ['?dbid ::id '?uuid]] db))]
+       {::all-accounts (mapv (fn [id] {::id id}) ids)})))
+
 (def attributes
   [(new-attribute :user/email :string
      {::psql/schema    :auth
@@ -215,18 +228,9 @@
      {::attr/target    ::id
       ::auth/authority :local
       ::pc/output      [{::all-accounts [::id]}]
-      ::pc/resolve     (fn [{:keys [query-params] :as env} input]
-                         #?(:clj
-                            (let [{:keys [db]} env
-                                  ids (if (:ui/show-inactive? query-params)
-                                        (d/q [:find '[?uuid ...]
-                                              :where
-                                              ['?dbid ::id '?uuid]] db)
-                                        (d/q [:find '[?uuid ...]
-                                              :where
-                                              ['?dbid ::active? true]
-                                              ['?dbid ::id '?uuid]] db))]
-                              {::all-accounts (mapv (fn [id] {::id id}) ids)})))})])
+      ::pc/resolve     (fn [{:keys          [query-params] :as env
+                             ::datomic/keys [databases]} input]
+                         (all-accounts (:production databases) query-params))})])
 
 #?(:clj
    (defmutation login [env {:keys [username password]}]
