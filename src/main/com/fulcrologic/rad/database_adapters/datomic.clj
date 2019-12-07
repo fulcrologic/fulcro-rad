@@ -419,13 +419,13 @@ in for an attribute?
     ::attr/keys [qualified-key]
     :as         env} input]
   (let [one? (not (sequential? input))]
-    (enc/if-let [db    (log/spy :info (get-in env [::databases (log/spy :info schema)]))
-                 query (log/spy :info (or
-                                        (get env :com.wsscode.pathom.core/parent-query)
-                                        (get env ::default-query)))
-                 ids   (log/spy :info (if one?
-                                        [(get input qualified-key)]
-                                        (into [] (keep #(get % qualified-key) input))))]
+    (enc/if-let [db    (get-in env [::databases schema])
+                 query (or
+                         (get env :com.wsscode.pathom.core/parent-query)
+                         (get env ::default-query))
+                 ids   (if one?
+                         [(get input qualified-key)]
+                         (into [] (keep #(get % qualified-key) input)))]
       (do
         (log/info "Running" query "on entities with " qualified-key ":" ids)
         (let [

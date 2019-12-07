@@ -16,12 +16,13 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :refer [defrouter]]
-    [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]))
+    [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
+    [taoensso.timbre :as log]))
 
 (form/defsc-form AccountForm [this props]
-  {::attr/attributes   [::acct/id ::acct/name ::acct/email ]
+  {::form/id           acct/id
+   ::form/attributes   [acct/name acct/email]
    ; ::form/read-only?   {::acct/email false}
-   ::form/id           ::acct/id
    ::form/cancel-route ["landing-page"]
    ::form/route-prefix "account"
    ::form/title        "Edit Account"

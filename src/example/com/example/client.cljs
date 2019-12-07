@@ -19,7 +19,6 @@
 ;; TODO: Constructor function. Allow option to completely autogenerate forms if desired.
 
 (defonce app (app/fulcro-app {:remotes              {:remote (http/fulcro-http-remote {})}
-
                               :global-eql-transform (fn [ast]
                                                       (let [kw-namespace (fn [k] (and (keyword? k) (namespace k)))]
                                                         (df/elide-ast-nodes ast (fn [k]

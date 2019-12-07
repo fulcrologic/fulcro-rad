@@ -6,9 +6,7 @@
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
     [com.fulcrologic.rad.pathom :as pathom]
     [mount.core :refer [defstate]]
-    [taoensso.timbre :as log]
-    [datomic.api :as d]
-    [com.fulcrologic.rad.form :as form]))
+    [datomic.api :as d]))
 
 (defstate parser
   :start

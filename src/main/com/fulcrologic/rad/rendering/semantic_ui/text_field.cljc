@@ -6,13 +6,14 @@
        [com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]])
     [com.fulcrologic.rad.attributes :as attr]
     [clojure.string :as str]
+    [taoensso.timbre :as log]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.rad.form :refer [render-field]]))
 
-(defmethod render-field :text [this k props]
-  (let [attribute  (attr/key->attribute k)
+(defmethod render-field :text [this attribute props]
+  (let [k          (::attr/qualified-key attribute)
         {::form/keys [field-label]} attribute
         read-only? (form/read-only? this attribute)
         value      (or (and attribute (get props k)) "")]

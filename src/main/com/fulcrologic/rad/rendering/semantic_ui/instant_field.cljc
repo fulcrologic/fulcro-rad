@@ -9,8 +9,8 @@
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.form :refer [render-field]]))
 
-(defmethod render-field :inst [this k props]
-  (let [attribute  (attr/key->attribute k)
+(defmethod render-field :inst [this attribute props]
+  (let [k          (::attr/qualified-key attribute)
         {::form/keys [field-label]} attribute
         read-only? (form/read-only? this attribute)
         value      (or (and attribute (get props k)) "")]
