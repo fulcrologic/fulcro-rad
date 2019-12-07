@@ -14,7 +14,7 @@
 (defmethod report/render-layout :default [this]
   (let [{::report/keys [source-attribute BodyItem parameters]} (comp/component-options this)
         {::report/keys [columns column-headings edit-form]} (comp/component-options BodyItem)
-        id-key (some-> edit-form comp/component-options ::form/id)
+        id-key (some-> edit-form comp/component-options ::form/id ::attr/qualified-key)
         props  (comp/props this)
         rows   (get props source-attribute [])]
     (log/info "Rendering report layout")
