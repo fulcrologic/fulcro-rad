@@ -2,8 +2,6 @@
   (:require
     ;; This require pulls in the multimethods for rendering w/semantic UI
     [com.fulcrologic.rad.rendering.semantic-ui.semantic-ui-controls]
-
-    [com.example.schema :as ex-schema]
     [com.example.model.account :as acct]
     [com.example.ui.login-dialog :refer [LoginForm]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
@@ -16,26 +14,22 @@
     [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
-    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :refer [defrouter]]
     [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.fulcro.algorithms.form-state :as fs]))
+    [taoensso.timbre :as log]))
 
 (form/defsc-form AccountForm [this props]
-  {::attr/attributes   [::acct/id ::acct/name ::acct/email ::acct/last-login]
+  {::form/id           acct/id
+   ::form/attributes   [acct/name acct/email]
    ; ::form/read-only?   {::acct/email false}
-   ::form/id           ::acct/id
    ::form/cancel-route ["landing-page"]
    ::form/route-prefix "account"
    ::form/title        "Edit Account"
    ;;::form/confirm-exit? true
    ;; TODO: Derive query of attributes that are needed to manage the entities that hold the
    ;; attributes being edited.
-   ::rad/schema        ex-schema/latest-schema})
+   })
 
 (defsc AccountListItem [this {::acct/keys [id name active? last-login] :as props}]
   {::report/columns         [::acct/name ::acct/active? ::acct/last-login]

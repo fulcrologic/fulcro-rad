@@ -11,31 +11,27 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.database :as db]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.controller :as controller]
-    #?(:clj [com.fulcrologic.rad.database-adapters.db-adapter :as dba])
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.wsscode.pathom.connect :as pc]
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
+    #?(:cljs [goog.object])
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [expound.alpha :as expound]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(def data-type->field-type
-  {:string :text
-   })
+(def data-type->field-type {:string :text})
 
-(defmulti render-field (fn [this k props]
-                         (when-let [attr (attr/key->attribute k)]
-                           (or
-                             (::field-type attr)
-                             (some-> attr ::attr/type data-type->field-type)
-                             (some-> attr ::attr/type)))))
+(defmulti render-field (fn [this attr props]
+                         (or
+                           (::field-type attr)
+                           (some-> attr ::attr/type data-type->field-type)
+                           (some-> attr ::attr/type))))
 
 (defmethod render-field :default
   [_ attr _]
@@ -54,56 +50,64 @@
                               :body (s/* any?))))
 
 #?(:clj
-   (s/def ::defsc-form-options (s/keys :req [::attr/attributes ::rad/schema
-                                             ::id ::title ::cancel-route ::route-prefix])))
+   (s/def ::defsc-form-options (s/keys :req [::attr/attributes])))
 
-#?(:clj
-   (defn convert-options [env options]
-     (when-not (s/valid? ::defsc-form-options options)
-       (throw (ana/error env (str "Invalid options. " (-> (s/explain-data ::defsc-form-options options)
-                                                        ::s/problems
-                                                        first
-                                                        :pred
-                                                        seq) " is invalid."))))
-     (let [{::attr/keys [attributes]} options
-           {::keys [id route-prefix]} options
-           form-field? (fn [{::attr/keys [unique] ::db/keys [id]}]
-                         (and (not unique) id))
-           query       (vec (concat [:ui/new? :ui/confirmation-message [::uism/asm-id ''_]]
-                              attributes
-                              [`fs/form-config-join]))]
-       (-> (dissoc options ::route-prefix)
-         (assoc :route-segment [route-prefix :action :id]
-                ::rad/type ::rad/form
-                ::rad/io? true
-                :ident id
-                :will-enter `(fn [~'app {:keys [~'id]}]
-                               (dr/route-immediate [~id (new-uuid ~'id)]))
-                :form-fields (->> attributes
-                               (mapv attr/key->attribute)
-                               (filter form-field?)
-                               (map ::attr/qualified-key)
-                               (into #{}))
-                :query query)))))
+(defn convert-options
+  "Runtime conversion of form options to what comp/configure-component! needs."
+  [options]
+  (let [{::keys [id attributes route-prefix]} options
+        id-key      (::attr/qualified-key id)
+        attr-keys   (mapv ::attr/qualified-key attributes)
+        form-field? (fn [{::attr/keys [identity?]}] (not identity?))
+        query       (into
+                      [id-key :ui/new? :ui/confirmation-message [::uism/asm-id '_] fs/form-config-join]
+                      attr-keys)]
+    (merge options
+      {:query         (fn [_] query)
+       :ident         (fn [_ props] [id-key (get props id-key)])
+       :form-fields   (->> attributes
+                        (filter form-field?)
+                        (map ::attr/qualified-key)
+                        (into #{}))
+       :route-segment [route-prefix :action :id]
+       ::rad/type     ::rad/form
+       ::rad/io?      true
+       :will-enter    (fn [_ params]
+                        (let [id (get params :id)]
+                          (dr/route-immediate [id-key (new-uuid id)])))})))
 
 #?(:clj
    (defn form-body [argslist body]
      (if (empty? body)
-       `[(render-layout ~(first argslist) (comp/props ~(first argslist)))]
+       `[(render-layout ~(first argslist) ~(second argslist))]
        body)))
 
 #?(:clj
    (defn defsc-form*
      [env args]
-     (when-not (s/valid? ::defsc-form-args args)
-       (throw (ana/error env (str "Invalid arguments. " (-> (s/explain-data ::defsc-form-args args)
-                                                          ::s/problems
-                                                          first
-                                                          :path) " is invalid."))))
-     (let [{:keys [sym arglist options body]} (s/conform ::defsc-form-args args)]
-       `(comp/defsc ~sym ~arglist
-          ~(convert-options env options)
-          ~@(form-body arglist body)))))
+     (let [{:keys [sym doc arglist options body]} (s/conform ::defsc-form-args args)
+           nspc        (if (comp/cljs? env) (-> env :ns :name str) (name (ns-name *ns*)))
+           fqkw        (keyword (str nspc) (name sym))
+           body        (form-body arglist body)
+           [thissym propsym computedsym extra-args] arglist
+           render-form (#'comp/build-render sym thissym propsym computedsym extra-args body)]
+       (if (comp/cljs? env)
+         `(do
+            (declare ~sym)
+            (let [options# (assoc (convert-options ~options) :render ~render-form)]
+              (defonce ~(vary-meta sym assoc :doc doc :jsdoc ["@constructor"])
+                (fn [props#]
+                  (cljs.core/this-as this#
+                    (if-let [init-state# (get options# :initLocalState)]
+                      (set! (.-state this#) (cljs.core/js-obj "fulcro$state" (init-state# this# (goog.object/get props# "fulcro$value"))))
+                      (set! (.-state this#) (cljs.core/js-obj "fulcro$state" {})))
+                    nil)))
+              (com.fulcrologic.fulcro.components/configure-component! ~sym ~fqkw options#)))
+         `(do
+            (declare ~sym)
+            (let [options# (assoc (convert-options ~options) :render ~render-form)]
+              (def ~(vary-meta sym assoc :doc doc :once true)
+                (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~fqkw options#))))))))
 
 #?(:clj
    (defmacro defsc-form [& args]
@@ -121,9 +125,8 @@
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::diff ::delta}}
-     ;; FIXME: Find correct adapter based on content of diff
-     (let [adapter (-> env :com.fulcrologic.rad.database-adapters.db-adapter/adapters :production)]
-       (dba/save-form adapter env params)))
+     ;; TODO: Write across all plugins
+     )
    :cljs
    (m/defmutation save-form [params]
      (action [env] :noop)))
@@ -181,11 +184,11 @@
         ;; TODO: Make sure there is one and only one unique identity key on the form
         initial-value  (into {:ui/new? true}
                          (keep (fn [{::keys      [default-value]
-                                     ::attr/keys [qualified-key unique]}]
+                                     ::attr/keys [qualified-key unique?]}]
                                  ;; NOTE: default value can come from attribute or be set/overridden on form itself
                                  (let [default-value (or (get default-values qualified-key) default-value)]
                                    (cond
-                                     (= unique :identity) [qualified-key tempid]
+                                     (= unique? true) [qualified-key tempid]
                                      default-value [qualified-key default-value]))))
                          fields)
         filled-fields  (keys initial-value)
@@ -362,13 +365,7 @@
 (>defn read-only?
   [this attr]
   [comp/component? ::attr/attribute => boolean?]
-  (let [k          (get attr ::attr/qualified-key)
-        read-only? (-> this comp/component-options ::read-only? (get k))]
-    (boolean
-      (if (boolean? read-only?)
-        read-only?
-        ;; TODO: Use attr permissions function? (client-side version?)
-        (nil? (-> attr ::db/id))))))
+  (boolean (or (::attr/identity? attr) (::pc/resolve attr))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID."

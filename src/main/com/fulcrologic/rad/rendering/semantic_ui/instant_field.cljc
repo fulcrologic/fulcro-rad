@@ -7,15 +7,11 @@
     [com.fulcrologic.rad.attributes :as attr]
     [clojure.string :as str]
     [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.fulcro.dom.events :as evt]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.rad.form :refer [render-field]]))
 
-(defmethod render-field :inst [this k props]
-  (let [attribute  (attr/key->attribute k)
+(defmethod render-field :inst [this attribute props]
+  (let [k          (::attr/qualified-key attribute)
         {::form/keys [field-label]} attribute
-        asm-id     (comp/get-ident this)
         read-only? (form/read-only? this attribute)
         value      (or (and attribute (get props k)) "")]
     (div :.ui.field {:key (str k)}

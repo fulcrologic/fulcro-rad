@@ -4,19 +4,17 @@
     [taoensso.timbre :as log]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.components :as comp]
     #?(:cljs
        [com.fulcrologic.fulcro.dom :as dom]
        :clj
        [com.fulcrologic.fulcro.dom-server :as dom])
-    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.rad.form :as form]))
 
 (defmethod report/render-layout :default [this]
   (let [{::report/keys [source-attribute BodyItem parameters]} (comp/component-options this)
         {::report/keys [columns column-headings edit-form]} (comp/component-options BodyItem)
-        id-key (some-> edit-form comp/component-options ::form/id)
+        id-key (some-> edit-form comp/component-options ::form/id ::attr/qualified-key)
         props  (comp/props this)
         rows   (get props source-attribute [])]
     (log/info "Rendering report layout")
@@ -28,10 +26,9 @@
         (dom/div :.ui.form
           (map-indexed
             (fn [idx k]
-              (let [kind (get parameters k)]
-                (dom/div :.ui.inline.field {:key idx}
-                  (dom/label (some-> k name str/capitalize))
-                  (report/render-parameter-input this k))))
+              (dom/div :.ui.inline.field {:key idx}
+                (dom/label (some-> k name str/capitalize))
+                (report/render-parameter-input this k)))
             (keys parameters))))
       (dom/div :.ui.attached.segment
         (when (seq rows)

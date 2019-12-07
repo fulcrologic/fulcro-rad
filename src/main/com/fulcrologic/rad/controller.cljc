@@ -8,10 +8,7 @@
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
-    [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.fulcro.algorithms.merge :as merge]
-    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [clojure.set :as set]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.components :as comp]))

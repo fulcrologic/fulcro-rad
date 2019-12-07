@@ -1,57 +1,93 @@
-(ns com.fulcrologic.rad.attributes
+(ns ^:always-reload com.fulcrologic.rad.attributes
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :as gr :refer [>defn => >def >fdef ?]]
-    [com.fulcrologic.rad.ids :refer [new-uuid]]
-    [com.fulcrologic.rad.database :as db]
-    [com.fulcrologic.fulcro.components :as comp]
-    [clojure.set :as set])
+    [clojure.walk :as walk]
+    [taoensso.timbre :as log]
+    [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
+    [com.fulcrologic.rad.ids :refer [new-uuid]])
   #?(:clj
      (:import (clojure.lang IFn)
               (javax.crypto.spec PBEKeySpec)
               (javax.crypto SecretKeyFactory)
               (java.util Base64))))
 
-(def attribute-registry (atom {}))
+(>def ::qualified-key qualified-keyword?)
+(>def ::type keyword?)
+(>def ::target qualified-keyword?)
+(>def ::attribute (s/keys :req [::type ::qualified-key]
+                    :opt [::target]))
+(>def ::attributes (s/every ::attribute))
+
+(declare map->Attribute)
+
+(>defn new-attribute
+  "Create a new attribute, which is represented as an Attribute record.
+
+  NOTE: attributes are usable as functions which act like their qualified keyword. This allows code-navigable
+  use of attributes throughout the system...e.g (account/id props) is like (::account/id props), but will
+  be understood by an IDE's jump-to feature when you want to analyze what account/id is.  Use `defattr` to
+  populate this into a symbol.
+
+  Type can be one of :string, :int, :uuid, etc. (more types are added over time,
+  so see main documentation and your database adapter for more information).
+
+  The remaining argument is an open map of additional things that any subsystem can
+  use to describe facets of this attribute that are important to your system.
+
+  If `:ref` is used as the type then the ultimate ID of the target entity should be listed in `m`
+  under the ::target key.
+  "
+  [kw type m]
+  [qualified-keyword? keyword? map? => ::attribute]
+  (do
+    (when (and (= :ref type) (not (contains? m ::target)))
+      (log/warn "Reference attribute" kw "does not list a target ID. Resolver generation will not be accurate."))
+    (map->Attribute
+      (-> m
+        (assoc ::type type)
+        (assoc ::qualified-key kw)))))
 
 #?(:clj
-   (>fdef defattr
-     [kw type m]
-     [qualified-keyword? keyword? map? => any?]))
+   (defrecord Attribute []
+     IFn
+     (invoke [this m] (get m (::qualified-key this))))
+   :cljs
+   (defrecord Attribute []
+     IFn
+     (-invoke [this m] (get m (::qualified-key this)))))
 
 #?(:clj
    (defmacro defattr
-     "Create a data model attribute. Type can be one of :string, :int, :uuid, etc. (more types are added over time,
-     so see main documentation and your database adapter for more information).
+     "Define a new attribute into a sym. Equivalent to (def sym (new-attribute k type m))."
+     [sym k type m]
+     `(def ~sym (new-attribute ~k ~type ~m))))
 
-     The remaining argument is an open map of additional things that any subsystem can
-     use to describe facets of this attribute that are important to your system.
-     "
-     [kw type m]
-     (let [definition `(do
-                         (swap! attribute-registry assoc ~kw ~(-> m
-                                                                (assoc ::type type)
-                                                                (assoc ::qualified-key kw)
-                                                                (dissoc ::spec)))
-                         ~kw)]
-       definition)))
+(def attribute-registry (atom {}))
 
-;; TODO: rename ref-target
-(>def ::target qualified-keyword?)
-(>def ::qualified-key qualified-keyword?)
-(>def ::index? boolean?)
-(>def ::component? boolean?)
-(>def ::attribute (s/keys
-                    :req [::type ::qualified-key]
-                    :opt [::index? ::component? ::spec]))
-(>def ::attributes (s/every qualified-keyword?))
+(defn register-attributes!
+  "Resets the attribute registry to include only the given attributes.
+   Should be called early in the startup of the client and server."
+  [attributes]
+  (swap! attribute-registry
+    (fn [r]
+      (reduce
+        (fn [reg {::keys [qualified-key] :as a}]
+          (assoc reg qualified-key a))
+        {}
+        attributes))))
 
 (>defn key->attribute
   "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
   [k]
-  [::qualified-key => ::attribute]
+  [::qualified-key => (? ::attribute)]
   (get @attribute-registry k))
+
+(>defn to-many?
+  "Returns true if the attribute with the given key is a to-many."
+  [k]
+  [keyword? => boolean?]
+  (= :many (-> k key->attribute ::cardinality)))
 
 (>defn to-int [str]
   [string? => int?]
@@ -83,21 +119,19 @@
 (>defn identity?
   [k]
   [qualified-keyword? => boolean?]
-  (boolean (some-> k key->attribute ::unique (= :identity))))
+  (boolean (some-> k key->attribute ::unique? (= true))))
 
 (>defn attributes->eql
   "Returns an EQL query for all of the attributes that are available for the given database-id"
-  [database-id attrs]
-  [::db/id ::attributes => vector?]
+  [attrs]
+  [::attributes => vector?]
   (reduce
     (fn [outs {::keys [qualified-key type target]}]
       (if (and target (= :ref type))
         (conj outs {qualified-key [target]})
         (conj outs qualified-key)))
     []
-    (filter
-      (fn [{::db/keys [id]}] (= id database-id))
-      (map key->attribute attrs))))
+    attrs))
 
 #?(:clj
    (defn ^String gen-salt []
@@ -120,4 +154,18 @@
            hashed-pw           (.encodeToString (Base64/getEncoder) res)]
        (str salt "|" iterations "|" hashed-pw))))
 
+(>defn attribute?
+  [v]
+  [any? => boolean?]
+  (instance? Attribute v))
 
+(>defn eql-query
+  "Convert a query that uses attributes (records) as keys into the proper EQL query. I.e. (eql-query [account/id]) => [::account/id]
+   Honors metadata and join nesting."
+  [attr-query]
+  [vector? => vector?]
+  (walk/prewalk
+    (fn [ele]
+      (if (attribute? ele)
+        (::qualified-key ele)
+        ele)) attr-query))

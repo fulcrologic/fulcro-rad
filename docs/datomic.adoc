@@ -1,0 +1,175 @@
+= Datomic Database Plugin
+
+The following namespace aliases are used in the content of this document:
+
+[source, clojure]
+-----
+(ns x
+  (:require
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]))
+-----
+
+== Schemas
+
+It is common for larger applications to desire some kind of sharding of their data, particularly
+in cases of high write load.  The Datomic plugin has you model attributes on a Datomic schema
+which can then be applied to any number of runtime databases in your application. Of course, you
+must have some scheme for selecting the *correct* runtime database for mutations and read resolvers
+during operation.
+
+=== Attribute Facets
+
+Every attribute in the system that is stored in Datomic using this plugin *must* include
+a `::datomic/schema <k>` entry, where `<k>` is a keyword representing a schema name. All attributes
+that share the same schema name will be stored together in a database that has that schema (see
+Selecting a Database During Operation).
+
+The following common attribute keys are supported automatically:
+
+`::attr/unique?`:: Causes the attribute to be a unique *value*, unless a Datomic-specific
+override for uniqueness is supplied or the attribute is marked as an `::attr/identity?`.
+`::attr/identity?`:: Causes the attribute to be a unique *identity*. If supplied, then `::attr/unique?` is
+assumed.
+`::attr/cardinality`:: `:one` or `:many` (or you can specify it with normal datomic keys).
+
+The plugin-specific attribute parameters are:
+
+`::datomic/schema keyword`:: (required) A name that groups together attributes that go together in a schema
+on a database. A schema can be used on any number of databased (e.g. for sharding).
+`::datomic/entity-ids #{k k2 ...}`:: Required on *non*-identity attributes.
+A set of attribute keys that are `:attr/identity? true`. This
+set indicates that the attribute can be *placed* on an entity that is identified by one of those identity attributes.
+This allows the Datomic plugin to figure out which properties can be co-located on an entity for storage
+in form saves and queries in resolvers. It is a set in order to support the fact that Datomic allows
+an attribute to appear on any entity, but your domain model will put it on a more limited subset of
+different entities. Failing to list this entry will result in failure to generate resolvers
+or form save logic for the attribute.
+
+*Any* of the normal Datomic schema definition attributes can be included as well (e.g. `:db/cardinality`), and
+will take precedence over anything above. Be careful when changing these, as the result can cause
+incompatible change errors.
+
+=== Automatic Generation
+
+During development you may choose to create a transaction that can be used to create/update
+the schema in one or more Datomic databases. This feature is will work as long as your team
+follows a strict policy of only ever making compatible changes to schema (e.g. mostly additions).
+
+This feature is great for early development, but it may become necessary over time to
+adopt a migration system or other more manual schema management policy. This feature
+is therefore easy to opt in/out of at any time.
+
+You can pull the current generated schema from the attribute database using
+`(datomic/automatic-schema schema-key)`.  NOTE: You must require all namespaces in
+your model that define attributes to ensure that they are all included in the generated
+schema.
+
+==== Enumerations
+
+The idiomatic way to represent enumerations in Datomic is with a ref and a set of entities known by
+well-known idents. The following is supported during automatic schema generation:
+
+[source, clojure]
+-----
+(new-attribute :address/state :enum
+  {:attr/enumerated-values #{:AL :address.state/CA {:db/ident :address.state/OR :db/doc "Oregon"}}})
+-----
+
+All three of the above forms are allowed. An unqualified keyword will be auto-qualified (AL and CA above
+could be represented either way), and a map will be treated like a full-blown entity definition
+(will be passed through untouched to the schema).
+
+=== Validation
+
+If you are not using automatic schema generation then it is recommended that you at least
+enable schema *validation*.  This feature can be used to check the schema of an existing
+database against the current code of your attributes to detect inconsistencies between
+the two at startup. This ensures you will not run into runtime errors due to code that
+does not match the schema of the target database.
+
+TODO: Write the validator, and document it.
+
+== Databases
+
+It is up to you to configure, create, migrate, and manage your database infrastructure; however,
+this plugin comes with various ustilities that can help you set up and manage the runtime
+environment. You *must* follow certain conventions for things to work at all, and *may choose* to
+opt into various features that make it easy to get started and evolve your system.
+
+== Runtime Operation
+
+=== Mocked Connections during Development
+
+The Datomock library is a particularly useful tool during experimental phases of development where
+you have yet to stabilize a particular portion of schema (attribute declarations). It allows you to
+"fork" a real database connection such that any changes (to schema or otherwise) are thrown away on
+application restarts.
+
+This allows you to play with new schema without worrying about incompatible schema changes.
+
+It is also quite useful for testing, since it can be used to pre-create (and cache) an in memory database
+that can be used to exercise Datomic code against your schema without the complete overhead of
+starting an external database with new schema.
+
+=== Selecting a Database During Operation
+
+When you set up your Pathom parser you can provide plugins that modify the environment that will
+be passed by Pathom to all resolvers and mutations on the server.  The generated resolvers and mutations
+for the Datomic plugin need to be able to decide *which* database should be used for a
+particular schema in the context of the request. Atomic consistency on reads requires that such a database
+be provided as a value, whereas mutations will need a connection.
+
+The `env` must therefore be augmented to contain the following well-known things:
+
+`::datomic/connections` - A map, keyed by schema, of the database connection that should be used
+in the context of the current request.
+`::datomic/databases` - A map, keyed by schema, of the most recent database value that
+should be used in the context of the current request (for consistent reads across multiple resolvers).
+
+TODO: Supply helper funtions that can help with this
+
+== Testing
+
+Custom mutations and resolvers are easiest to write if you have a simple way of
+testing them against a database that looks like your real one.
+This plugin supports some helpful testing tools that leverage Datomock to give you a
+fast an consistent starting point for your tests.
+
+=== Seeding Development Data
+
+We recommend using UUID domain IDs for all entities (e.g. `:account/id`). This not only enables
+much of the resolver logic, it also allows you to easily and consistently seed development
+data for things like live coding and tests.
+
+The `com.fulcrologic.rad.ids/new-uuid` function can be used to generate a new random UUID in CLJC, but
+it can also be used to generate a constant (well-known) UUID for testing.
+
+=== A Sample Test
+
+The core function to use is `datomic/empty-db-connection`, which can work with
+automatically-generated schema or a manual schema. It returns a Datomic connection
+which has the supplied schema (and is memoized for fast startup on sequences of tests).
+
+A typical test might look like the following:
+
+[source, clojure]
+-----
+(deftest sample-test
+  ;; the empty-db-connection can accept a schema txn if needed.
+  (let [conn        (datomic/empty-db-connection :production)
+        sample-data [{::acct/id   (new-uuid 1)
+                      ::acct/name "Joe"}]]
+    @(d/transact conn sample-data)
+
+    (let [db (d/db conn)
+          a  (d/pull db [::acct/name] [::acct/id (new-uuid 1)])]
+      (is (= "Joe" (::acct/name a))))))
+-----
+
+NOTE: The connection is memoized based on the schema key (not any supplied migration data). You
+can use `(datomic/reset-test-schema k)` to forget the current memoized version.
+
+== Resolver Generation
+
+

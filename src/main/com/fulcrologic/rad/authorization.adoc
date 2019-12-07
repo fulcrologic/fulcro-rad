@@ -26,8 +26,8 @@ The central concept we want to support in this feature is that there is a single
    |              |
    |              v
 +--+-------------------+   +----------------------+
-| Form's UISM          |   | Report's UISM        |
-|                      |   |                      |   ...
+| Controller UISM      |   | Form's UISM          |
+|                      +<->+                      |   ...
 |                      |   |                      |
 +----------------------+   +----------------------+
 
@@ -35,10 +35,10 @@ The central concept we want to support in this feature is that there is a single
 
 The core functionality is that some bit of UI that is about to be routed to:
 
-1. Tells the auth UISM that it is about to be routed to. This event includes
+1. Tells the auth UISM that it is about to route something. This event includes
 the ID of the UISM to reply to, along with other important details such as
-the attributes the UI will need to be able to access. The form/report/ui
-state machine can optionally show some kind of progress/loader.
+the attributes the UI will need to be able to access. The UI containing the controller can
+use its state to show loading bar, etc.
 2. The Auth UISM checks its state. If it does not have sufficient *authentication*
 to even check authorization, then it will control the UI to obtains such
 authentication. Once it has authentication, it could do a number of authorization
