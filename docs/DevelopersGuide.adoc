@@ -1,0 +1,173 @@
+= Fulcro Developers Guide
+:author: Tony Kay
+:revdate: December 8, 2019
+:lang: en
+:encoding: UTF-8
+:doctype: book
+:source-highlighter: coderay
+:source-language: clojure
+:toc: left
+:toclevels: 2
+:sectlinks:
+:sectanchors:
+:leveloffset: 1
+:sectnums:
+:imagesdir: /assets/img
+:scriptsdir: js
+:imagesoutdir: assets/img
+:favicon: assets/favicon.ico
+
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+ifdef::env-github[]
+toc::[]
+endif::[]
+
+++++
+<style>
+@media screen {
+  button.inspector {
+    float: right;
+    right: 0px;
+    font-size: 10pt;
+    margin-bottom: 6px;
+    padding: 6px;
+    border-radius: 14px;
+  }
+}
+@media print {
+  button.inspector {display: none;}
+}
+.example {
+  clear: both;
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  min-height: 400px;
+  background-color: lightgray;
+  border: 3px groove white;
+  border-radius: 5px;
+  padding: 5px;
+}
+.narrow.example { width: 50%; }
+.wide.example { width: 80%; }
+.short.example { min-height: 200px; }
+.tall.example { min-height: 800px; }
+</style>
+++++
+
+= About This Book
+
+This is a guide for developers that wish to use the RAD tools for Fulcro
+full-stack application development. The RAD system is intended to be augmented
+with any number of plugins that can handle anything from back-end database
+management to front-end UI automation.
+
+The core system has the following general ideals:
+
+* Everything is optional. Applications written using RAD should be
+able to choose which aspects are useful, and easily escape from aspects
+if they don't fit their needs.
+* Reasonable defaults and utilities for common needs.
+
+The common features that are intended to be well-supported in early versions
+of the library include:
+
+* Declarative and extensible data model.
+* Reasonable defaults for CRUD interfaces (form generation) to arbitrary graphs
+of that data model, including to-one and to-many relations.
+* Reasonable defaults for common reporting needs, especially when tabular.
+* An opt-in extensible authentication mechanism.
+
+= Attributes
+
+Fulcro encourages the use of a graph-based data model that is agnostic
+to the underlying representation of your data. This turns out to be a quite
+powerful abstraction, as it frees you from the general limitations and
+restrictions of a rigid class/table-based schema while
+still giving you adequate structure for your data model.
+
+== Extensibility
+
+Attributes are represented as open maps. There are a core set of keys that
+the core library defines for generalized use, but most plugins will use
+keywords namespaced to their library to extend the configuration stored
+on attributes. These keys can define anything, and form the central
+feature of RAD's extensibility.
+
+= Resolving Data
+
+The core of data interfacing is Pathom, a library for writing EQL parsers on
+clients and servers. Many RAD plugins will auto-generate Pathom resolvers for
+you. For example, the SQL plugin will auto-generate resolvers that can look
+up attributes that have been declared to be stored in an SQL database.
+
+Rad itself has the ability to generate resolvers for arbitrary attributes,
+but in truth this is just a thin wrapper since you will simply declare
+Pathom-specific keys on the attribute to indicate the need for such a resolver.
+This is particularly important in the case of reports, where the data
+generated for the rows is very often derived data that requires more
+complex queries on a back-end database to resolve.
+
+== Resolving Attributes you Control
+
+== Resolving Federated Attributes
+
+= RAD UI
+
+RAD comes with a set of utilities for generating UI based on
+attributes such as forms and reports. This system include basic
+UI routing, HTML5 history support, and automatic authentication
+management.
+
+All of these features are opt-in, and each of them has a number
+of customization hooks that allow you to progressively take more
+control of their functionality as the need arises.
+
+The elements in RAD UI are also meant to be as flexible in
+composition as possible.
+
+== The Main Controller
+
+The main controller is a component that can control a sub-portion of
+your application's UI and routing. You can compose a controller anywhere
+into your application, though controllers are not intended to nest within
+other controllers (it is possible to relax that restriction, but not sure
+what makes sense yet).
+
+The controller has the following jobs:
+
+* Control the routes. All attempts to reach screens managed by the controller
+go through the controller API.
+* Integrate with authentication. Controllers can examine upcoming routes
+to see what authentication is needed, and communicate with the authentication
+system to trigger things like login.
+* Prevent undesirable behaviors, like navigating away from an unsaved form.
+
+== Authentication
+
+RAD comes with a pluggable authentication and authorization system. The
+base system comes with support for local traditional logins, and plugins
+that support things like OAuth or OpenID Connect should be simple
+to integrate.
+
+The primary purpose of the authentication system in RAD is to handle the
+boilerplate logic that is common to almost all applications: ensuring that
+a user is logged in to the appropriate system(s) before sensitive screens
+are accessed.  Thus, the authentication system integrates with the
+controller to prevent routing until such permission can be obtained.
+
+Some kind of authentication system must be configured for the controller
+to work at all, but it is simple enough to configure a no-op authenticator
+that simply ignores the concern.
+
+== Forms
+
+== Reports
+
