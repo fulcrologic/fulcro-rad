@@ -53,7 +53,10 @@
 #?(:clj
    (s/def ::defsc-form-options (s/keys :req [::attr/attributes])))
 
-(defn form-options->form-query [form-options]
+;; NOTE: This MUST be used within a lambda in the component, not as a static bit of query at compile time.
+(defn form-options->form-query
+  "Converts form options to a proper EQL query."
+  [form-options]
   (let [attr               (::attributes form-options)
         id-attr            (::id form-options)
         id-key             (::attr/qualified-key id-attr)
@@ -75,18 +78,14 @@
 
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
-  [options]
-  (required! "Form must include a ::form/attributes option" options ::id vector?)
-  (required! "Form must include a ::form/id option" options ::id attr/attribute?)
+  [location options]
+  (required! location options ::attributes vector?)
+  (required! location options ::id attr/attribute?)
   (let [{::keys [id attributes route-prefix]} options
         id-key      (::attr/qualified-key id)
-        attr-keys   (mapv ::attr/qualified-key attributes)
-        form-field? (fn [{::attr/keys [identity?]}] (not identity?))
-        query       (into
-                      [id-key :ui/new? :ui/confirmation-message [::uism/asm-id '_] fs/form-config-join]
-                      attr-keys)]
+        form-field? (fn [{::attr/keys [identity?]}] (not identity?))]
     (merge options
-      {:query         (fn [_] query)
+      {:query         (fn [this] (form-options->form-query (comp/component-options this)))
        :ident         (fn [_ props] [id-key (get props id-key)])
        :form-fields   (->> attributes
                         (filter form-field?)
@@ -113,11 +112,12 @@
            fqkw        (keyword (str nspc) (name sym))
            body        (form-body arglist body)
            [thissym propsym computedsym extra-args] arglist
+           location    (str nspc "." sym)
            render-form (#'comp/build-render sym thissym propsym computedsym extra-args body)]
        (if (comp/cljs? env)
          `(do
             (declare ~sym)
-            (let [options# (assoc (convert-options ~options) :render ~render-form)]
+            (let [options# (assoc (convert-options ~location ~options) :render ~render-form)]
               (defonce ~(vary-meta sym assoc :doc doc :jsdoc ["@constructor"])
                 (fn [props#]
                   (cljs.core/this-as this#
@@ -128,7 +128,7 @@
               (com.fulcrologic.fulcro.components/configure-component! ~sym ~fqkw options#)))
          `(do
             (declare ~sym)
-            (let [options# (assoc (convert-options ~options) :render ~render-form)]
+            (let [options# (assoc (convert-options ~location ~options) :render ~render-form)]
               (def ~(vary-meta sym assoc :doc doc :once true)
                 (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~fqkw options#))))))))
 

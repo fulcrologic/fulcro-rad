@@ -14,8 +14,8 @@
       `(when-not (and
                    (contains? ~m ~k)
                    (~pred (get ~m ~k)))
-         (log/error ~context ": MUST contain key " ~k " that satisfies predicate " ~(str pred))))
+         (log/error ~context "MUST include" ~k "that satisfies predicate" ~(str pred))))
      ([context m k]
       `(when-not (contains? ~m ~k)
-         (log/error ~context ": You must supply key " ~k)))))
+         (log/error ~context "MUST include" ~k)))))
 

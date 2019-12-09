@@ -121,6 +121,18 @@
   [qualified-keyword? => boolean?]
   (boolean (some-> k key->attribute ::unique? (= true))))
 
+(>defn attributes->eql
+  "Returns an EQL query for all of the attributes that are available for the given database-id"
+  [attrs]
+  [::attributes => vector?]
+  (reduce
+    (fn [outs {::keys [qualified-key type target]}]
+      (if (and target (= :ref type))
+        (conj outs {qualified-key [target]})
+        (conj outs qualified-key)))
+    []
+    attrs))
+
 #?(:clj
    (defn ^String gen-salt []
      (let [sr   (java.security.SecureRandom/getInstance "SHA1PRNG")
@@ -147,8 +159,8 @@
   [any? => boolean?]
   (instance? Attribute v))
 
-(>defn query->eql
-  "Convert a query that uses attributes as keys into the proper EQL query. I.e. (eql-query [account/id]) => [::account/id]
+(>defn eql-query
+  "Convert a query that uses attributes (records) as keys into the proper EQL query. I.e. (eql-query [account/id]) => [::account/id]
    Honors metadata and join nesting."
   [attr-query]
   [vector? => vector?]

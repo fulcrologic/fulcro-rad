@@ -42,15 +42,5 @@
     (let [eql       (form/form-options->form-query (comp/component-options AccountForm))
           eql-items (set eql)]
       (assertions
-        "Returns an EQL vector"
-        (vector? eql) => true
-        "Includes the ID of the form in the query"
-        (contains? eql-items :account/id) => true
-        "Includes the ASM table"
-        (contains? eql-items [::uism/asm-id '_]) => true
-        "Includes the form config join"
-        (contains? eql-items fs/form-config-join) => true
-        "Includes the scalar attribute keys"
-        (contains? eql-items :account/email) => true
         "Includes a join to the proper sub-query"
         (contains? eql-items {:account/addresses [:mocked/query]}) => true))))
