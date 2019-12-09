@@ -10,7 +10,7 @@
            org.clojure/clojurescript  {:mvn/version "1.10.520" :scope "provided"}
            org.clojure/core.async     {:mvn/version "0.4.490"}}
 
- :aliases {:test      {:extra-paths ["src/test"]
+ :aliases {:tests     {:extra-paths ["src/test"]
                        :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.4"}}}
 
            :clj-tests {:extra-paths ["src/test"]

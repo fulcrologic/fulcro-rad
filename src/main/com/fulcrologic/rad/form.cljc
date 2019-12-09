@@ -11,6 +11,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad :as rad]
+    [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
@@ -52,9 +53,31 @@
 #?(:clj
    (s/def ::defsc-form-options (s/keys :req [::attr/attributes])))
 
+(defn form-options->form-query [form-options]
+  (let [attr               (::attributes form-options)
+        id-attr            (::id form-options)
+        id-key             (::attr/qualified-key id-attr)
+        {refs true scalars false} (group-by #(= :ref (::attr/type %)) attr)
+        query-with-scalars (into
+                             [id-key :ui/new? :ui/confirmation-message [::uism/asm-id '_] fs/form-config-join]
+                             (map ::attr/qualified-key)
+                             scalars)
+        subforms           (::subforms form-options)
+        full-query         (into query-with-scalars
+                             (map (fn [{::attr/keys [qualified-key target]}]
+                                    (required! (str "Form attribute " qualified-key
+                                                 " is a reference type. The ::form/subforms map")
+                                      subforms qualified-key #(contains? % ::ui))
+                                    (let [subform (get-in subforms [qualified-key ::ui])]
+                                      {qualified-key (comp/get-query subform)})))
+                             refs)]
+    full-query))
+
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
   [options]
+  (required! "Form must include a ::form/attributes option" options ::id vector?)
+  (required! "Form must include a ::form/id option" options ::id attr/attribute?)
   (let [{::keys [id attributes route-prefix]} options
         id-key      (::attr/qualified-key id)
         attr-keys   (mapv ::attr/qualified-key attributes)
