@@ -7,7 +7,8 @@
     [com.wsscode.pathom.core :as p]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]
-    [com.fulcrologic.rad.attributes :as attr]))
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.config :as rad.config]))
 
 (defn preprocess-parser-plugin
   "Helper to create a plugin that can view/modify the env/tx of a top-level request.
@@ -117,6 +118,10 @@
              env          (assoc env :query-params query-params)]
          (parser env tx))))})
 
+(alias
+  'rad.sql
+  'com.fulcrologic.rad.database-adapters.sql)
+
 (defn parser-args [{::keys [trace? log-requests? log-responses?] :as config} augment-env resolvers]
   {::p/mutate  pc/mutate
    ::p/env     {::p/reader               [p/map-reader pc/reader2 pc/index-reader
@@ -124,7 +129,11 @@
                 ::p/placeholder-prefixes #{">"}}
    ::p/plugins (into []
                  (keep identity
-                   [(pc/connect-plugin {::pc/register resolvers})
+                   [(pc/connect-plugin {::pc/register (cond-> resolvers
+                                                        (rad.config/sql? config)
+                                                        (conj rad.sql/save-form)
+                                                        (rad.config/datomic? config)
+                                                        identity)})
                     (p/env-plugin {::p/process-error process-error})
                     (when augment-env (p/env-wrap-plugin augment-env))
                     (when log-requests? (preprocess-parser-plugin log-request!))
