@@ -6,10 +6,9 @@
        [com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]])
     [com.fulcrologic.rad.attributes :as attr]
     [clojure.string :as str]
-    [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.rad.form :refer [render-field]]))
+    [com.fulcrologic.rad.form :as form]))
 
-(defmethod render-field :inst [this attribute props]
+(defn render-field [this attribute props]
   (let [k          (::attr/qualified-key attribute)
         {::form/keys [field-label]} attribute
         read-only? (form/read-only? this attribute)

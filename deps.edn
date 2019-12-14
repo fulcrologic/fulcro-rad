@@ -1,14 +1,15 @@
 {:paths   ["src/main"]
 
- :deps    {edn-query-language/eql     {:mvn/version "0.0.9"}
-           com.taoensso/timbre        {:mvn/version "4.10.0"}
-           com.taoensso/encore        {:mvn/version "2.115.0"}
-           com.fulcrologic/fulcro     {:mvn/version "3.0.13-SNAPSHOT"}
-           com.fulcrologic/guardrails {:mvn/version "0.0.9"}
-           com.wsscode/pathom         {:mvn/version "2.2.26"}
-           org.clojure/clojure        {:mvn/version "1.10.1" :scope "provided"}
-           org.clojure/clojurescript  {:mvn/version "1.10.520" :scope "provided"}
-           org.clojure/core.async     {:mvn/version "0.4.490"}}
+ :deps    {edn-query-language/eql      {:mvn/version "0.0.9"}
+           com.taoensso/timbre         {:mvn/version "4.10.0"}
+           com.taoensso/encore         {:mvn/version "2.115.0"}
+           com.fulcrologic/fulcro      {:mvn/version "3.0.15"}
+           com.fulcrologic/fulcro-i18n {:mvn/version "0.0.1-SNAPSHOT"}
+           com.fulcrologic/guardrails  {:mvn/version "0.0.9"}
+           com.wsscode/pathom          {:mvn/version "2.2.26"}
+           org.clojure/clojure         {:mvn/version "1.10.1" :scope "provided"}
+           org.clojure/clojurescript   {:mvn/version "1.10.520" :scope "provided"}
+           org.clojure/core.async      {:mvn/version "0.4.490"}}
 
  :aliases {:tests     {:extra-paths ["src/test"]
                        :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.4"}}}

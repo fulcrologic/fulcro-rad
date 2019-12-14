@@ -12,7 +12,7 @@
     [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.rad.form :refer [render-field]]))
 
-(defmethod render-field :text [this attribute props]
+(defn render-field [this attribute props]
   (let [k          (::attr/qualified-key attribute)
         {::form/keys [field-label]} attribute
         read-only? (form/read-only? this attribute)

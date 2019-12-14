@@ -2,6 +2,7 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.form]))
   (:require
     [clojure.spec.alpha :as s]
+    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
@@ -28,19 +29,29 @@
 
 (def data-type->field-type {:string :text})
 
-(defmulti render-field (fn [this attr props]
-                         (or
-                           (::field-type attr)
-                           (some-> attr ::attr/type data-type->field-type)
-                           (some-> attr ::attr/type))))
+(defn attr->renderer [this {::attr/keys [type]}]
+  (let [{::app/keys [runtime-atom]} (comp/any->app this)
+        ;; TODO: Look up preferred style on form
+        control-map (some-> runtime-atom deref ::controls ::type->style->control)]
+    (get-in control-map [type :default])))
 
-(defmethod render-field :default
-  [_ attr _]
-  (log/debug "NOTE: Attempt to render a field that did not have anything to dispatch to."
-    "Did you remember to require the namespace that implements the field type:"
-    attr))
+(defn render-field [this attr props]
+  (let [render (attr->renderer this attr)]
+    (if render
+      (render this attr props)
+      (do
+        (log/error "No renderer installed to support attribute" attr)
+        nil))))
 
-(defmulti render-layout (fn [this props] (some-> this comp/component-options ::layout)))
+(defn render-layout [form-instance props]
+  (let [{::app/keys [runtime-atom]} (comp/any->app this)
+        ;; TODO: Look up preferred style on form
+        layout (some-> runtime-atom deref ::controls ::style->layout :default)]
+    (if layout
+      (layout props {::form-instance form-instance})
+      (do
+        (log/error "No layout function found for forms")
+        nil))))
 
 #?(:clj
    (s/def ::defsc-form-args (s/cat
@@ -409,3 +420,11 @@
       {::attr/qualified-key k
        :form-ident          asm-id
        :value               value})))
+
+(defn install!
+  "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting
+  your app. The `controls` is just a map from data type to a sub-map that contains a :default key, with optional
+  alternate renderings for that data type that can be selected with `::form/field-style {attr-key style-key}`."
+  [app controls]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc ::controls controls)))
