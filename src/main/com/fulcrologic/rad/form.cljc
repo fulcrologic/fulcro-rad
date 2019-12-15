@@ -172,8 +172,8 @@
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::diff ::delta}}
-     ;; TODO: Write across all plugins
-     )
+     (when-let [f (resolve 'com.fulcrologic.rad.database-adapters.sql.plugin/save-form!)]
+       (f env params)))
    :cljs
    (m/defmutation save-form [params]
      (action [env] :noop)))
