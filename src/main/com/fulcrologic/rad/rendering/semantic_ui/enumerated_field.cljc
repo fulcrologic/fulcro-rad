@@ -77,10 +77,11 @@
   a number of things (:search, :closeOnBlue, openOnFocus, selectOnBlue, and :selectOnNavigation) to true, but you can"
   (comp/factory WrappedDropdown))
 
-(defn render-field [this attribute props]
+(defn render-field [{::form/keys [form-instance] :as env} attribute]
   (let [k          (::attr/qualified-key attribute)
         {::form/keys [field-label]} attribute
-        read-only? (form/read-only? this attribute)
+        props      (comp/props form-instance)
+        read-only? (form/read-only? form-instance attribute)
         options    (mapv (fn [k]
                            {:text (name k) :value k}) (::attr/enumerated-values attribute))
         value      (get props k)]
@@ -91,8 +92,7 @@
                                :options  options
                                :value    value
                                :onChange (fn [v]
-                                           (log/spy :info (comp/get-computed this))
-                                           (form/input-changed! this k v))}))
+                                           (form/input-changed! env k v))}))
        :clj
        (dom/div :.ui.selection.dropdown
          (dom/input {:type "hidden"})
