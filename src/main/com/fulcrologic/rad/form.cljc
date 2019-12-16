@@ -52,14 +52,16 @@
 
 (defn render-layout [form-instance props]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        cprops       (comp/get-computed props)
-        layout-style (or (some-> form-instance comp/component-options ::layout-style) :default)
-        layout       (some-> runtime-atom deref ::controls ::style->layout layout-style)]
+        cprops        (comp/get-computed props)
+        rendering-env cprops
+        layout-style  (or (some-> form-instance comp/component-options ::layout-style) :default)
+        layout        (some-> runtime-atom deref ::controls ::style->layout layout-style)]
     (if layout
-      (layout {::master-form    (master-form form-instance)
-               ::form-instance  form-instance
-               ::props          props
-               ::computed-props cprops})
+      (layout (merge rendering-env
+                {::master-form    (master-form form-instance)
+                 ::form-instance  form-instance
+                 ::props          props
+                 ::computed-props cprops}))
       (do
         (log/error "No layout function found for form layout style" layout-style)
         nil))))
