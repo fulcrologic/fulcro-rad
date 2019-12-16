@@ -8,7 +8,7 @@
        :clj
        [com.fulcrologic.fulcro.dom-server :as dom])))
 
-(defmethod report/render-parameter-input :boolean [this k]
+(defn render-input [this k]
   (let [value (get (comp/props this) k)]
     (dom/input {:type     "checkbox"
                 :onChange #(m/set-value! this k (not value))

@@ -127,7 +127,7 @@
   [::attributes => vector?]
   (reduce
     (fn [outs {::keys [qualified-key type target]}]
-      (if (and target (= :ref type))
+      (if (and target (#{:ref} type))
         (conj outs {qualified-key [target]})
         (conj outs qualified-key)))
     []

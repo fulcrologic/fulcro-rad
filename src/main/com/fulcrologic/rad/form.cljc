@@ -2,6 +2,8 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.form]))
   (:require
     [clojure.spec.alpha :as s]
+    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
+    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
@@ -11,6 +13,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad :as rad]
+    [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
@@ -25,21 +28,43 @@
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defn master-form
+  "Return the master form for the given component instance."
+  [component]
+  (or (some-> component comp/get-computed ::master-form) component))
+
 (def data-type->field-type {:string :text})
 
-(defmulti render-field (fn [this attr props]
-                         (or
-                           (::field-type attr)
-                           (some-> attr ::attr/type data-type->field-type)
-                           (some-> attr ::attr/type))))
+(defn attr->renderer [{::keys [form-instance]} {::attr/keys [type qualified-key]}]
+  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
+        field-style (or (some-> form-instance comp/component-options ::field-style qualified-key) :default)
+        control-map (some-> runtime-atom deref ::controls ::type->style->control)
+        control     (get-in control-map [type field-style])]
+    control))
 
-(defmethod render-field :default
-  [_ attr _]
-  (log/debug "NOTE: Attempt to render a field that did not have anything to dispatch to."
-    "Did you remember to require the namespace that implements the field type:"
-    attr))
+(defn render-field [env attr]
+  (let [render (attr->renderer env attr)]
+    (if render
+      (render env attr)
+      (do
+        (log/error "No renderer installed to support attribute" attr)
+        nil))))
 
-(defmulti render-layout (fn [this props] (some-> this comp/component-options ::layout)))
+(defn render-layout [form-instance props]
+  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
+        cprops        (comp/get-computed props)
+        rendering-env cprops
+        layout-style  (or (some-> form-instance comp/component-options ::layout-style) :default)
+        layout        (some-> runtime-atom deref ::controls ::style->layout layout-style)]
+    (if layout
+      (layout (merge rendering-env
+                {::master-form    (master-form form-instance)
+                 ::form-instance  form-instance
+                 ::props          props
+                 ::computed-props cprops}))
+      (do
+        (log/error "No layout function found for form layout style" layout-style)
+        nil))))
 
 #?(:clj
    (s/def ::defsc-form-args (s/cat
@@ -52,18 +77,39 @@
 #?(:clj
    (s/def ::defsc-form-options (s/keys :req [::attr/attributes])))
 
+;; NOTE: This MUST be used within a lambda in the component, not as a static bit of query at compile time.
+(defn form-options->form-query
+  "Converts form options to a proper EQL query."
+  [form-options]
+  (let [attr               (::attributes form-options)
+        id-attr            (::id form-options)
+        id-key             (::attr/qualified-key id-attr)
+        {refs true scalars false} (group-by #(= :ref (::attr/type %)) attr)
+        query-with-scalars (into
+                             [id-key :ui/new? :ui/confirmation-message [::uism/asm-id '_] fs/form-config-join]
+                             (map ::attr/qualified-key)
+                             scalars)
+        subforms           (::subforms form-options)
+        full-query         (into query-with-scalars
+                             (map (fn [{::attr/keys [qualified-key target]}]
+                                    (required! (str "Form attribute " qualified-key
+                                                 " is a reference type. The ::form/subforms map")
+                                      subforms qualified-key #(contains? % ::ui))
+                                    (let [subform (get-in subforms [qualified-key ::ui])]
+                                      {qualified-key (comp/get-query subform)})))
+                             refs)]
+    full-query))
+
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
-  [options]
+  [location options]
+  (required! location options ::attributes vector?)
+  (required! location options ::id attr/attribute?)
   (let [{::keys [id attributes route-prefix]} options
         id-key      (::attr/qualified-key id)
-        attr-keys   (mapv ::attr/qualified-key attributes)
-        form-field? (fn [{::attr/keys [identity?]}] (not identity?))
-        query       (into
-                      [id-key :ui/new? :ui/confirmation-message [::uism/asm-id '_] fs/form-config-join]
-                      attr-keys)]
+        form-field? (fn [{::attr/keys [identity?]}] (not identity?))]
     (merge options
-      {:query         (fn [_] query)
+      {:query         (fn [this] (form-options->form-query (comp/component-options this)))
        :ident         (fn [_ props] [id-key (get props id-key)])
        :form-fields   (->> attributes
                         (filter form-field?)
@@ -90,11 +136,12 @@
            fqkw        (keyword (str nspc) (name sym))
            body        (form-body arglist body)
            [thissym propsym computedsym extra-args] arglist
+           location    (str nspc "." sym)
            render-form (#'comp/build-render sym thissym propsym computedsym extra-args body)]
        (if (comp/cljs? env)
          `(do
             (declare ~sym)
-            (let [options# (assoc (convert-options ~options) :render ~render-form)]
+            (let [options# (assoc (convert-options ~location ~options) :render ~render-form)]
               (defonce ~(vary-meta sym assoc :doc doc :jsdoc ["@constructor"])
                 (fn [props#]
                   (cljs.core/this-as this#
@@ -105,7 +152,7 @@
               (com.fulcrologic.fulcro.components/configure-component! ~sym ~fqkw options#)))
          `(do
             (declare ~sym)
-            (let [options# (assoc (convert-options ~options) :render ~render-form)]
+            (let [options# (assoc (convert-options ~location ~options) :render ~render-form)]
               (def ~(vary-meta sym assoc :doc doc :once true)
                 (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~fqkw options#))))))))
 
@@ -279,61 +326,95 @@
     :state/saving
     (merge global-events
       {::uism/events
-       {:event/save-failed {::uism/handler (fn [env]
-                                             ;; TODO: Handle failures
-                                             (uism/activate env :state/editing))}
-        :event/saved       {::uism/handler (fn [env]
-                                             (let [form-ident (uism/actor->ident env :actor/form)]
-                                               (-> env
-                                                 (uism/apply-action fs/entity->pristine* (log/spy :info form-ident))
-                                                 (uism/activate :state/editing))))}}})
+       {:event/save-failed
+        {::uism/handler (fn [env]
+                          ;; TODO: Handle failures
+                          (uism/activate env :state/editing))}
+        :event/saved
+        {::uism/handler (fn [env]
+                          (let [form-ident (uism/actor->ident env :actor/form)]
+                            (-> env
+                              (uism/apply-action fs/entity->pristine* form-ident)
+                              (uism/activate :state/editing))))}}})
 
     :state/editing
     (merge global-events
       {::uism/events
-       {:event/attribute-changed {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                   ;; NOTE: value at this layer is ALWAYS typed to the attribute.
-                                                   ;; The rendering layer is responsible for converting the value to/from
-                                                   ;; the representation needed by the UI component (e.g. string)
-                                                   (let [{:keys       [value]
-                                                          ::attr/keys [qualified-key]} event-data
-                                                         form-ident     (uism/actor->ident env :actor/form)
-                                                         path           (when (and form-ident qualified-key)
-                                                                          (conj form-ident qualified-key))
-                                                         ;; TODO: Decide when to properly set the field to marked
-                                                         mark-complete? true]
-                                                     (when-not path
-                                                       (log/error "Unable to record attribute change. Path cannot be calculated."))
-                                                     (cond-> env
-                                                       mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
-                                                       ;; FIXME: Data coercion needs to happen at UI and db layer, but must
-                                                       ;; be extensible. You should be able to select a variant of a form
-                                                       ;; control for a given db-supported type. This allows the types
-                                                       ;; to be fully extensible since the db adapter can isolate that
-                                                       ;; coercion, and the UI control variant can do coercion at the UI
-                                                       ;; layer.
-                                                       ;; FIXME: One catch with coercion: sometimes the value has transient
-                                                       ;; values during input that will not properly coerce. This means UI
-                                                       ;; controls will need to buffer the user-interaction value and only
-                                                       ;; do the commit/coercion at the end.
-                                                       path (uism/apply-action assoc-in path value))))}
-        :event/blur              {::uism/handler (fn [env] env)}
-        :event/save              {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                   (let [form-class   (uism/actor-class env :actor/form)
-                                                         data-to-save (calc-diff env)
-                                                         params       (merge event-data data-to-save)]
-                                                     (-> env
-                                                       (uism/trigger-remote-mutation :actor/form `save-form
-                                                         (merge params
-                                                           {::uism/error-event :event/save-failed
-                                                            ;; TODO: Make return optional?
-                                                            ::m/returning      form-class
-                                                            ::uism/ok-event    :event/saved}))
-                                                       (uism/activate :state/saving))))}
-        :event/reset             {::uism/handler (fn [env]
-                                                   (let [form-ident (uism/actor->ident env :actor/form)]
-                                                     (uism/apply-action env fs/pristine->entity* form-ident)))}
-        :event/cancel            {::uism/handler (fn [env] (exit-form env))}}})}})
+       {:event/attribute-changed
+        {::uism/handler
+         (fn [{::uism/keys [event-data] :as env}]
+           ;; NOTE: value at this layer is ALWAYS typed to the attribute.
+           ;; The rendering layer is responsible for converting the value to/from
+           ;; the representation needed by the UI component (e.g. string)
+           (let [{:keys       [value form-ident]
+                  ::attr/keys [qualified-key]} event-data
+                 ;form-ident     (uism/actor->ident env :actor/form)
+                 path           (when (and form-ident qualified-key)
+                                  (conj form-ident qualified-key))
+                 ;; TODO: Decide when to properly set the field to marked
+                 mark-complete? true]
+             (when-not path
+               (log/error "Unable to record attribute change. Path cannot be calculated."))
+             (cond-> env
+               mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
+               ;; FIXME: Data coercion needs to happen at UI and db layer, but must
+               ;; be extensible. You should be able to select a variant of a form
+               ;; control for a given db-supported type. This allows the types
+               ;; to be fully extensible since the db adapter can isolate that
+               ;; coercion, and the UI control variant can do coercion at the UI
+               ;; layer.
+               ;; FIXME: One catch with coercion: sometimes the value has transient
+               ;; values during input that will not properly coerce. This means UI
+               ;; controls will need to buffer the user-interaction value and only
+               ;; do the commit/coercion at the end.
+               path (uism/apply-action assoc-in path value))))}
+
+        :event/blur
+        {::uism/handler (fn [env] env)}
+
+        :event/add-row
+        {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                          (let [{::keys [parent-relation parent child-class]} event-data
+                                id-key      (some-> child-class comp/component-options ::id ::attr/qualified-key)
+                                target-path (conj (comp/get-ident parent) parent-relation)
+                                ;; TODO: initialize all fields...use get-initial-state perhaps?
+                                new-child   {id-key (tempid/tempid)}
+                                child-ident (comp/get-ident child-class new-child)]
+                            (uism/apply-action env
+                              (fn [s]
+                                (-> s
+                                  (merge/merge-component child-class new-child
+                                    :append target-path)
+                                  ;; TODO: mark default fields complete...
+                                  (fs/add-form-config* child-class child-ident))))))}
+
+        :event/delete-row
+        {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                          (let [{::keys [form-instance]} event-data
+                                child-ident (comp/get-ident form-instance)]
+                            (uism/apply-action env fns/remove-entity child-ident)))}
+
+        :event/save
+        {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                          (let [form-class   (uism/actor-class env :actor/form)
+                                data-to-save (calc-diff env)
+                                params       (merge event-data data-to-save)]
+                            (-> env
+                              (uism/trigger-remote-mutation :actor/form `save-form
+                                (merge params
+                                  {::uism/error-event :event/save-failed
+                                   ;; TODO: Make return optional?
+                                   ::m/returning      form-class
+                                   ::uism/ok-event    :event/saved}))
+                              (uism/activate :state/saving))))}
+
+        :event/reset
+        {::uism/handler (fn [env]
+                          (let [form-ident (uism/actor->ident env :actor/form)]
+                            (uism/apply-action env fs/pristine->entity* form-ident)))}
+
+        :event/cancel
+        {::uism/handler (fn [env] (exit-form env))}}})}})
 
 (defmethod controller/-start-io! ::rad/form
   [{::uism/keys [fulcro-app] :as env} TargetClass {::controller/keys [id]
@@ -355,12 +436,22 @@
       (start-edit! fulcro-app TargetClass event-data))
     (uism/activate env :state/routing)))
 
-(defn save! [this]
+(defn save! [{this ::master-form}]
   (uism/trigger! this (comp/get-ident this) :event/save {}))
-(defn undo-all! [this]
+
+(defn undo-all! [{this ::master-form}]
   (uism/trigger! this (comp/get-ident this) :event/reset {}))
-(defn cancel! [this]
+
+(defn cancel! [{this ::master-form}]
   (uism/trigger! this (comp/get-ident this) :event/cancel {}))
+
+(defn add-child! [{::keys [master-form] :as env}]
+  (let [asm-id (comp/get-ident master-form)]
+    (uism/trigger! master-form asm-id :event/add-row env)))
+
+(defn delete-child! [{::keys [master-form] :as env}]
+  (let [asm-id (comp/get-ident master-form)]
+    (uism/trigger! master-form asm-id :event/delete-row env)))
 
 (>defn read-only?
   [this attr]
@@ -373,16 +464,27 @@
   (let [[root & _] (-> form-class comp/component-options :route-segment)]
     (controller/route-to! this :main-controller [root "edit" (str entity-id)])))
 
-(defn input-blur! [this k value]
-  (let [asm-id (comp/get-ident this)]
-    (uism/trigger! this asm-id :event/blur
+(defn input-blur! [{::keys [form-instance master-form]} k value]
+  (let [form-ident (comp/get-ident form-instance)
+        asm-id     (comp/get-ident master-form)]
+    (uism/trigger! master-form asm-id :event/blur
       {::attr/qualified-key k
-       :form-ident          asm-id
+       :form-ident          form-ident
        :value               value})))
 
-(defn input-changed! [this k value]
-  (let [asm-id (comp/get-ident this)]
-    (uism/trigger! this asm-id :event/attribute-changed
+(defn input-changed! [{::keys [form-instance master-form]} k value]
+  (let [{::keys [nested? parent]} (comp/get-computed form-instance)
+        form-ident (comp/get-ident form-instance)
+        asm-id     (comp/get-ident master-form)]
+    (uism/trigger! form-instance asm-id :event/attribute-changed
       {::attr/qualified-key k
-       :form-ident          asm-id
+       :form-ident          form-ident
        :value               value})))
+
+(defn install!
+  "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting
+  your app. The `controls` is just a map from data type to a sub-map that contains a :default key, with optional
+  alternate renderings for that data type that can be selected with `::form/field-style {attr-key style-key}`."
+  [app controls]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc ::controls controls)))
