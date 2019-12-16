@@ -44,11 +44,12 @@
         nil))))
 
 (defn render-layout [form-instance props]
-  (let [{::app/keys [runtime-atom]} (comp/any->app this)
+  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         ;; TODO: Look up preferred style on form
-        layout (some-> runtime-atom deref ::controls ::style->layout :default)]
+        computed-props (assoc (comp/get-computed form-instance) ::form-instance form-instance)
+        layout         (some-> runtime-atom deref ::controls ::style->layout :default)]
     (if layout
-      (layout props {::form-instance form-instance})
+      (layout props computed-props)
       (do
         (log/error "No layout function found for forms")
         nil))))
@@ -319,7 +320,7 @@
         :event/saved       {::uism/handler (fn [env]
                                              (let [form-ident (uism/actor->ident env :actor/form)]
                                                (-> env
-                                                 (uism/apply-action fs/entity->pristine* (log/spy :info form-ident))
+                                                 (uism/apply-action fs/entity->pristine* form-ident)
                                                  (uism/activate :state/editing))))}}})
 
     :state/editing
@@ -329,9 +330,9 @@
                                                    ;; NOTE: value at this layer is ALWAYS typed to the attribute.
                                                    ;; The rendering layer is responsible for converting the value to/from
                                                    ;; the representation needed by the UI component (e.g. string)
-                                                   (let [{:keys       [value]
+                                                   (let [{:keys       [value form-ident]
                                                           ::attr/keys [qualified-key]} event-data
-                                                         form-ident     (uism/actor->ident env :actor/form)
+                                                         ;form-ident     (uism/actor->ident env :actor/form)
                                                          path           (when (and form-ident qualified-key)
                                                                           (conj form-ident qualified-key))
                                                          ;; TODO: Decide when to properly set the field to marked
@@ -415,10 +416,12 @@
        :value               value})))
 
 (defn input-changed! [this k value]
-  (let [asm-id (comp/get-ident this)]
+  (let [{::keys [nested? parent]} (comp/get-computed this)
+        parent-ident (log/spy :info (some-> parent comp/get-ident))
+        asm-id       (or parent-ident (comp/get-ident this))]
     (uism/trigger! this asm-id :event/attribute-changed
       {::attr/qualified-key k
-       :form-ident          asm-id
+       :form-ident          (comp/get-ident this)
        :value               value})))
 
 (defn install!

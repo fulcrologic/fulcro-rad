@@ -1,4 +1,4 @@
-(ns com.fulcrologic.rad.rendering.semantic-ui.text-field
+(ns com.fulcrologic.rad.rendering.semantic-ui.boolean-field
   (:require
     #?(:cljs
        [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
@@ -13,14 +13,15 @@
   (let [k          (::attr/qualified-key attribute)
         {::form/keys [field-label]} attribute
         read-only? (form/read-only? this attribute)
-        value      (or (and attribute (get props k)) "")]
+        value      (get props k false)]
     (div :.ui.field {:key (str k)}
-      (label (or field-label (some-> k name str/capitalize)))
-      (if read-only?
-        (div value)
-        (input {:value    value
-                :onBlur   (fn [evt]
-                            (form/input-blur! this k (evt/target-value evt)))
+      (div :.ui.checkbox
+        (input {:checked  value
+                :type     "checkbox"
+                :disabled (boolean read-only?)
                 :onChange (fn [evt]
-                            (form/input-changed! this k (evt/target-value evt)))})))))
+                            (let [v (not value)]
+                              (form/input-blur! this k v)
+                              (form/input-changed! this k v)))})
+        (label (or field-label (some-> k name str/capitalize)))))))
 
