@@ -33,10 +33,10 @@
         (dom/div :.ui.basic.segment
           (dom/button :.ui.icon.button
             {:onClick (fn [_]
-                        (form/add-row! (assoc env
-                                         ::form/parent-relation k
-                                         ::form/parent form-instance
-                                         ::form/child-class ui)))}
+                        (form/add-child! (assoc env
+                                           ::form/parent-relation k
+                                           ::form/parent form-instance
+                                           ::form/child-class ui)))}
             (dom/i :.plus.icon)))))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
@@ -105,8 +105,7 @@
           (when can-delete?
             (dom/button :.ui.icon.primary.right.floated.button {:disabled (not (can-delete? props))
                                                                 :onClick  (fn []
-                                                                            (log/error "TODO: implement child delete")
-                                                                            #_(form/delete-child! parent parent-relation props))}
+                                                                            (form/delete-child! env))}
               (dom/i :.times.icon)))
           (if layout
             (render-layout env options)

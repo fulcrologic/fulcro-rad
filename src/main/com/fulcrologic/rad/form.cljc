@@ -374,7 +374,6 @@
 
         :event/add-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                          (log/info "Adding a row")
                           (let [{::keys [parent-relation parent child-class]} event-data
                                 id-key      (some-> child-class comp/component-options ::id ::attr/qualified-key)
                                 target-path (conj (comp/get-ident parent) parent-relation)
@@ -388,6 +387,12 @@
                                     :append target-path)
                                   ;; TODO: mark default fields complete...
                                   (fs/add-form-config* child-class child-ident))))))}
+
+        :event/delete-row
+        {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                          (let [{::keys [form-instance]} event-data
+                                child-ident (comp/get-ident form-instance)]
+                            (uism/apply-action env fns/remove-entity child-ident)))}
 
         :event/save
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
@@ -440,9 +445,13 @@
 (defn cancel! [{this ::master-form}]
   (uism/trigger! this (comp/get-ident this) :event/cancel {}))
 
-(defn add-row! [{::keys [master-form] :as env}]
+(defn add-child! [{::keys [master-form] :as env}]
   (let [asm-id (comp/get-ident master-form)]
     (uism/trigger! master-form asm-id :event/add-row env)))
+
+(defn delete-child! [{::keys [master-form] :as env}]
+  (let [asm-id (comp/get-ident master-form)]
+    (uism/trigger! master-form asm-id :event/delete-row env)))
 
 (>defn read-only?
   [this attr]
