@@ -35,41 +35,43 @@
   "Wraps userOnChange fn with try/catch and sui-form->user-format conversion."
   [props userOnChange]
   (fn [_ v]
-    (try
-      (if (and (.-value v) (seq (.-value v)))
-        (let [value (sui-format->user-format props (.-value v))]
-          (when (and value userOnChange) (userOnChange value)))
-        (userOnChange nil))
-      (catch :default e
-        (log/error e "Unable to read dropdown value " (when v (.-value v)))))))
+    #?(:cljs
+       (try
+         (if (and (.-value v) (seq (.-value v)))
+           (let [value (sui-format->user-format props (.-value v))]
+             (when (and value userOnChange) (userOnChange value)))
+           (userOnChange nil))
+         (catch :default e
+           (log/error e "Unable to read dropdown value " (when v (.-value v))))))))
 
 (defsc WrappedDropdown [this {:keys [onChange value multiple] :as props}]
-  (let [userOnChange onChange
-        options      (mapv (fn [{:keys [text value]}] {:text text :value (ftransit/transit-clj->str value)}) (:options props))
-        value        (when (or value (boolean? value))
-                       (if multiple
-                         (mapv #(ftransit/transit-clj->str %) value)
-                         (ftransit/transit-clj->str value)))
-        props        (merge
-                       {:search             true
-                        :selection          true
-                        :closeOnBlur        true
-                        :openOnFocus        true
-                        :selectOnBlur       true
-                        :selectOnNavigation true}
-                       props
-                       {:value    value
-                        :options  options
-                        :onChange (fn [e v]
-                                    (try
-                                      (let [value (if multiple
-                                                    (mapv #(ftransit/transit-str->clj %) (.-value v))
-                                                    (ftransit/transit-str->clj (.-value v)))]
-                                        (when (and (or value (boolean? value)) userOnChange)
-                                          (userOnChange value)))
-                                      (catch :default e
-                                        (log/error "Unable to read dropdown value " e (when v (.-value v))))))})]
-    (ui-dropdown props)))
+  #?(:cljs
+     (let [userOnChange onChange
+           options      (mapv (fn [{:keys [text value]}] {:text text :value (ftransit/transit-clj->str value)}) (:options props))
+           value        (when (or value (boolean? value))
+                          (if multiple
+                            (mapv #(ftransit/transit-clj->str %) value)
+                            (ftransit/transit-clj->str value)))
+           props        (merge
+                          {:search             true
+                           :selection          true
+                           :closeOnBlur        true
+                           :openOnFocus        true
+                           :selectOnBlur       true
+                           :selectOnNavigation true}
+                          props
+                          {:value    value
+                           :options  options
+                           :onChange (fn [e v]
+                                       (try
+                                         (let [value (if multiple
+                                                       (mapv #(ftransit/transit-str->clj %) (.-value v))
+                                                       (ftransit/transit-str->clj (.-value v)))]
+                                           (when (and (or value (boolean? value)) userOnChange)
+                                             (userOnChange value)))
+                                         (catch :default e
+                                           (log/error "Unable to read dropdown value " e (when v (.-value v))))))})]
+       (ui-dropdown props))))
 
 (def ui-wrapped-dropdown
   "Draw a SUI dropdown with the given props.  The arguments are identical to sui/ui-dropdown, but options and onChange
