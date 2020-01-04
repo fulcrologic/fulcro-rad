@@ -65,6 +65,11 @@
 
 (def attribute-registry (atom {}))
 
+(defn clear-registry!
+  "Remove all attributes from the registry. Useful for tests."
+  []
+  (reset! attribute-registry {}))
+
 (defn register-attributes!
   "Resets the attribute registry to include only the given attributes.
    Should be called early in the startup of the client and server."

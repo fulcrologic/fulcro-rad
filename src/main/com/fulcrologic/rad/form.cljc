@@ -177,9 +177,9 @@
        (reduce
          (fn [result handler]
            (update result :tempids merge (:tempids (handler env params))))
-         {}
+         {:tempids {}}
          save-handlers)
-       (log/error "No save middleware registered with RAD forms.")))
+       (log/error "No save handlers are in the parser env.")))
    :cljs
    (m/defmutation save-form [params]
      (action [env] :noop)))
