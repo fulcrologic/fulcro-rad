@@ -172,11 +172,18 @@
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::diff ::delta}}
-     ;; TODO: Write across all plugins
-     )
+     (log/info "Save invoked from client with " params)
+     (if-let [save-handlers (seq (::save-handlers env))]
+       (reduce
+         (fn [result handler]
+           (update result :tempids merge (:tempids (handler env params))))
+         {}
+         save-handlers)
+       (log/error "No save middleware registered with RAD forms.")))
    :cljs
    (m/defmutation save-form [params]
      (action [env] :noop)))
+
 ;; TODO: Support for a generalized focus mechanism to show the first field that has a problem
 
 ;; TODO: Allow form to override validation on a field, with fallback to what is declared on the attribute
