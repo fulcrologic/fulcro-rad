@@ -1,6 +1,7 @@
 (ns com.fulcrologic.rad.report
   #?(:cljs (:require-macros com.fulcrologic.rad.report))
   (:require
+    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.controller :as controller :refer [io-complete!]]
     [com.fulcrologic.fulcro.data-fetch :as df]
@@ -12,9 +13,26 @@
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defmulti render-layout (fn [this] (-> this comp/component-options ::layout)))
-(defmulti render-parameter-input (fn [this parameter-key]
-                                   (-> this comp/component-options ::parameters (get parameter-key))))
+(defn render-layout [report-instance]
+  (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
+        layout-style (or (some-> report-instance comp/component-options ::layout-style) :default)
+        layout       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
+    (if layout
+      (layout report-instance)
+      (do
+        (log/error "No layout function found for form layout style" layout-style)
+        nil))))
+
+(defn render-parameter-input [this parameter-key]
+  (let [{::app/keys [runtime-atom]} (comp/any->app this)
+        input-type  (some-> this comp/component-options ::parameters (get parameter-key))
+        input-style :default                                ; TODO: Support parameter styles
+        input       (some-> runtime-atom deref ::rad/controls ::parameter-type->style->input (get-in [input-type input-style]))]
+    (if input
+      (input this parameter-key)
+      (do
+        (log/error "No renderer installed to support parameter " parameter-key)
+        nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LOGIC

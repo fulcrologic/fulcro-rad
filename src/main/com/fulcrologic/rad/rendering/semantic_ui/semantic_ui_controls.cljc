@@ -11,12 +11,16 @@
     [com.fulcrologic.rad.rendering.semantic-ui.text-field :as text-field]))
 
 (def all-controls
-  {:com.fulcrologic.rad.form/style->layout        {:default sui-form/ui-render-layout}
+  {;; Form-related UI
+   :com.fulcrologic.rad.form/style->layout        {:default sui-form/ui-render-layout}
    :com.fulcrologic.rad.form/type->style->control {:layout  {:default sui-form/ui-render-layout}
                                                    :text    {:default text-field/render-field}
                                                    :enum    {:default enumerated-field/render-field}
                                                    :string  {:default text-field/render-field}
                                                    :boolean {:default boolean-field/render-field}
                                                    :instant {:default instant/render-field}}
-   :com.fulcrologic.rad.input/type->style->input  {:boolean {:default boolean-input/render-input}}})
+
+   ;; Report-related controls
+   :com.fulcrologic.rad.report/style->layout      {:default sui-report/ui-render-layout}
+   :com.fulcrologic.rad.report/parameter-type->style->input  {:boolean {:default boolean-input/render-input}}})
 

@@ -38,7 +38,7 @@
 (defn attr->renderer [{::keys [form-instance]} {::attr/keys [type qualified-key]}]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (or (some-> form-instance comp/component-options ::field-style qualified-key) :default)
-        control-map (some-> runtime-atom deref ::controls ::type->style->control)
+        control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)
         control     (get-in control-map [type field-style])]
     control))
 
@@ -55,7 +55,7 @@
         cprops        (comp/get-computed props)
         rendering-env cprops
         layout-style  (or (some-> form-instance comp/component-options ::layout-style) :default)
-        layout        (some-> runtime-atom deref ::controls ::style->layout layout-style)]
+        layout        (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
     (if layout
       (layout (merge rendering-env
                 {::master-form    (master-form form-instance)
@@ -481,10 +481,10 @@
        :form-ident          form-ident
        :value               value})))
 
-(defn install!
+(defn install-ui-controls!
   "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting
   your app. The `controls` is just a map from data type to a sub-map that contains a :default key, with optional
   alternate renderings for that data type that can be selected with `::form/field-style {attr-key style-key}`."
   [app controls]
   (let [{::app/keys [runtime-atom]} app]
-    (swap! runtime-atom assoc ::controls controls)))
+    (swap! runtime-atom assoc :com.fulcrologic.rad/controls controls)))
