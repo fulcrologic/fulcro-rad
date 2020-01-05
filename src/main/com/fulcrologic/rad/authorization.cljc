@@ -200,5 +200,4 @@
                 {:keys [~'local]} ~'props
                 ~'factory (comp/computed-factory ~(get authority-map :local))]
             (~'factory ~'local {:visible? ~'authenticating?}))))))
-;(macroexpand-1 '(defauthenticator AuthController {:local LoginForm}))
 

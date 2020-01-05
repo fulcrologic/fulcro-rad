@@ -30,7 +30,8 @@
                                 (some-> TargetClass (comp/component-options ::rad/type))))
 
 (defmethod -desired-attributes :default [c]
-  (or (some->> c comp/component-options ::attr/attributes (mapv attr/key->attribute)) []))
+  (log/warn "No implementation found for `-desired-attributes` for the target component of the route " (comp/component-name c))
+  [])
 
 (>defn io-complete!
   "Custom components should call this to indicate that they are done with I/O, allowing the

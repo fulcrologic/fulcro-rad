@@ -17,7 +17,7 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
-    #?(:clj [com.rpl.specter :as sp])
+    [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
@@ -426,6 +426,13 @@
         :event/cancel
         {::uism/handler (fn [env] (exit-form env))}}})}})
 
+(defmethod controller/-desired-attributes ::rad/form [c]
+  (let [{::keys [subforms attributes]} (comp/component-options c)
+        all-attributes (into attributes (mapcat
+                                          #(-> % comp/component-options ::attributes)
+                                          (sp/select [sp/MAP-VALS (sp/keypath ::ui)] subforms)))]
+    all-attributes))
+
 (defmethod controller/-start-io! ::rad/form
   [{::uism/keys [fulcro-app] :as env} TargetClass {::controller/keys [id]
                                                    ::rad/keys        [target-route] :as options}]
@@ -473,6 +480,31 @@
   [this form-class entity-id]
   (let [[root & _] (-> form-class comp/component-options :route-segment)]
     (controller/route-to! this :main-controller [root "edit" (str entity-id)])))
+
+;; TASK: Probably should move the server implementations to a diff ns, so that this is all consistent with
+;; running UI headless (or SSR) on back-end.
+#?(:clj
+   (pc/defmutation delete-entity [env params]
+     {}
+     (let [ident (first params)]
+       (if-let [delete-handlers (seq (::delete-handlers env))]
+         (doseq [handler delete-handlers] (handler env ident))
+         (log/error "No delete handlers are in the parser env."))))
+   :cljs
+   (m/defmutation delete-entity [params]
+     (ok-action [{:keys [state]}]
+       (let [target-ident (first params)]
+         (log/info "Removing entity" target-ident)
+         (swap! state fns/remove-entity target-ident)))
+     (remote [_] true)))
+
+(defn delete!
+  "Delete the given entity from local app state and the remote (if present)."
+  [this id-key entity-id]
+  #?(:cljs
+     (comp/transact! this [(delete-entity {id-key entity-id})])))
+
+
 
 (defn input-blur! [{::keys [form-instance master-form]} k value]
   (let [form-ident (comp/get-ident form-instance)
