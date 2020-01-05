@@ -79,7 +79,7 @@
       (reduce
         (fn [reg {::keys [qualified-key] :as a}]
           (assoc reg qualified-key a))
-        {}
+        r
         attributes))))
 
 (>defn key->attribute

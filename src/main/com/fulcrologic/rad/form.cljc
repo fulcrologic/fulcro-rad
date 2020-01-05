@@ -17,6 +17,7 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
+    #?(:clj [com.rpl.specter :as sp])
     [com.wsscode.pathom.connect :as pc]
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
@@ -170,16 +171,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 #?(:clj
-   (pc/defmutation save-form [env params]
-     {::pc/params #{::diff ::delta}}
+   (pc/defmutation save-form [env {::keys [master-pk delta] :as params}]
+     {::pc/params #{::master-pk ::diff ::delta}}
      (log/info "Save invoked from client with " params)
-     (if-let [save-handlers (seq (::save-handlers env))]
-       (reduce
-         (fn [result handler]
-           (update result :tempids merge (:tempids (handler env params))))
-         {:tempids {}}
-         save-handlers)
-       (log/error "No save handlers are in the parser env.")))
+     (let [idents (keys delta)
+           pk     (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
+       (if-let [save-handlers (seq (::save-handlers env))]
+         (reduce
+           (fn [result handler]
+             (update result :tempids merge (handler env params)))
+           {master-pk pk
+            :tempids  {}}
+           save-handlers)
+         (log/error "No save handlers are in the parser env."))))
    :cljs
    (m/defmutation save-form [params]
      (action [env] :noop)))
@@ -317,9 +321,6 @@
                           (log/error "Controller ID not sent to form SM."))
                         (when-not (#{:create :edit} action)
                           (log/error "Unexpected action" action))
-                        (if (= :create action)
-                          (start-create! fulcro-app Form event-data)
-                          (start-edit! fulcro-app Form event-data))
                         (-> env
                           (uism/store ::action action)
                           (uism/store ::controller/id id)
@@ -404,12 +405,14 @@
         :event/save
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                           (let [form-class   (uism/actor-class env :actor/form)
+                                master-pk    (-> form-class comp/component-options (get-in [::id ::attr/qualified-key]))
                                 data-to-save (calc-diff env)
                                 params       (merge event-data data-to-save)]
                             (-> env
                               (uism/trigger-remote-mutation :actor/form `save-form
                                 (merge params
                                   {::uism/error-event :event/save-failed
+                                   ::master-pk        master-pk
                                    ;; TODO: Make return optional?
                                    ::m/returning      form-class
                                    ::uism/ok-event    :event/saved}))
