@@ -58,16 +58,15 @@
   "Returns a set of providers that are required to properly render the given route"
   [{::uism/keys [event-data] :as env}]
   ;; TODO: Calculate providers from attributes that are on the query of the given route
-  (log/spy :debug event-data)
   (let [{::rad/keys [target-route]} event-data]
     (if (empty? target-route)
       #{}
       (let [router      (uism/actor-class env :actor/router)
-            {:keys [target]} (log/spy :debug (dr/route-target router target-route))
-            attributes  (log/spy :debug (some-> target desired-attributes))
-            authorities (log/spy :debug (into #{}
-                                          (keep ::auth/authority)
-                                          attributes))]
+            {:keys [target]} (dr/route-target router target-route)
+            attributes  (some-> target desired-attributes)
+            authorities (into #{}
+                          (keep ::auth/authority)
+                          attributes)]
         authorities))))
 
 (defn activate-route [{::uism/keys [fulcro-app] :as env} target-route]
@@ -90,6 +89,7 @@
       ;; The main thing we end up needing to know is the target class, and from
       ;; that we can pull the information we need to do the remaining steps.
       ;; I.e. Load, create a new, etc.
+      ;; TODO: Consider that a route might contain *layers* that need I/O...not just the ultimate (leaf) target
       (let [router (uism/actor-class env :actor/router)
             {:keys [target]} (dr/route-target router target-route)]
         (if (does-io? target)
@@ -134,8 +134,8 @@
     {::uism/events
      {:event/route        {::uism/handler prepare-for-route}
       :event/route-loaded {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                            (let [loaded-route (log/spy :debug (get event-data ::rad/target-route))
-                                                  target-route (log/spy :debug (uism/retrieve env ::rad/target-route))]
+                                            (let [loaded-route (get event-data ::rad/target-route)
+                                                  target-route (uism/retrieve env ::rad/target-route)]
                                               (if (= loaded-route target-route)
                                                 (activate-route env target-route)
                                                 (do

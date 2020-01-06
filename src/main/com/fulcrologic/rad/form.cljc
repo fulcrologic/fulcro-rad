@@ -2,6 +2,7 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.form]))
   (:require
     [clojure.spec.alpha :as s]
+    [clojure.set :as set]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
@@ -19,6 +20,7 @@
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
+    [taoensso.encore :as enc]
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
     #?(:cljs [goog.object])
@@ -121,7 +123,9 @@
        ::rad/io?      true
        :will-enter    (fn [_ params]
                         (let [id (get params :id)]
-                          (dr/route-immediate [id-key (new-uuid id)])))})))
+                          (dr/route-immediate [id-key (if (tempid/tempid? id)
+                                                        id
+                                                        (new-uuid id))])))})))
 
 #?(:clj
    (defn form-body [argslist body]
@@ -226,43 +230,96 @@
                         (fs/mark-complete* [id-key id]))
                       (controller/io-complete! app options))})))
 
-;; TODO: ID generation pluggable? Use tempids?  NOTE: The controller has to generate the ID because the incoming
-;; route is already determined
-(defn- start-create! [app TargetClass {machine-id ::id
+(declare default-state)
+
+(defn- default-to-many [FormClass attribute]
+  (let [{::keys [subforms default]} (comp/component-options FormClass)
+        {::attr/keys [qualified-key type default-value]} attribute
+        default-value (get default qualified-key default-value)]
+    (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])
+                 id-key   (some-> SubClass comp/component-options ::id)]
+      (if (or (nil? default-value) (vector? default-value))
+        (mapv (fn [v]
+                (let [id (tempid/tempid)]
+                  (merge
+                    (default-state SubClass id)
+                    v
+                    {id-key id})))
+          default-value)
+        (do
+          (log/error "Default value for" qualified-key "MUST be a vector.")
+          []))
+      (do
+        (log/error "Subform not declared (or is missing ::form/id) for" qualified-key "on" (comp/component-name FormClass))
+        []))))
+
+(defn- default-to-one [FormClass attribute]
+  (let [{::keys [subforms default]} (comp/component-options FormClass)
+        {::attr/keys [qualified-key default-value]} attribute
+        default-value (get default qualified-key default-value)]
+    (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])
+                 id-key   (some-> SubClass comp/component-options ::id)
+                 id       (tempid/tempid)]
+      (if (map? default-value)
+        (merge
+          (default-state SubClass id)
+          default-value
+          {id-key id})
+        (do
+          (log/error "Default value for" qualified-key "MUST be a (possibly empty) map.")
+          nil))
+      (do
+        (log/error "Subform not declared (or is missing ::form/id) for" qualified-key "on" (comp/component-name FormClass))
+        nil))))
+
+(defn default-state
+  "Generate a potentially recursive tree of data that represents the tree of initial
+  state for the given FormClass. Such generated trees will be rooted with the provided
+  `new-id`, and will generate Fulcro tempids for all nested entities. To-one relations
+  that have no default will not be included. To-many relations that have no default
+  will default to an empty vector."
+  [FormClass new-id]
+  (let [{::keys [id attributes default]} (comp/component-options FormClass)
+        {id-key ::attr/qualified-key} id]
+    (reduce
+      (fn [result {::attr/keys [qualified-key type default-value] :as attr}]
+        (let [default-value (get default qualified-key default-value)]
+          (cond
+            (and (= :ref type) (attr/to-many? qualified-key))
+            (assoc result qualified-key (default-to-many FormClass attr))
+
+            (and (= :ref type) default-value)
+            (assoc result qualified-key (default-to-one FormClass attr))
+
+            :otherwise
+            (if-let [default-value (get default qualified-key default-value)]
+              (assoc result qualified-key default-value)
+              result))))
+      {id-key new-id}
+      attributes)))
+
+(defn mark-filled-fields-complete* [state-map {:keys [entity-ident initialized-keys]}]
+  (let [mark-complete* (fn [entity {::fs/keys [fields complete?] :as form-config}]
+                         (let [to-mark (set/union (set complete?) (set/intersection (set fields) (set initialized-keys)))]
+                           [entity (assoc form-config ::fs/complete? to-mark)]))]
+    (fs/update-forms state-map mark-complete* entity-ident)))
+
+(defn- start-create! [env TargetClass {machine-id ::id
                                        ::rad/keys [target-route tempid]}]
   (when-not machine-id
     (log/error "Controller failed to pass machine id"))
-  (when-not tempid
-    (log/error "Creating an entity, but initial ID missing"))
-  (log/debug "START CREATE" (comp/component-name TargetClass))
-  (let [id-key         (some-> TargetClass (comp/ident {}) first)
-        ident          [id-key tempid]
-        fields         (map attr/key->attribute (comp/component-options TargetClass ::attr/attributes))
-        default-values (comp/component-options TargetClass ::default-values)
-        ;; TODO: Make sure there is one and only one unique identity key on the form
-        initial-value  (into {:ui/new? true}
-                         (keep (fn [{::keys      [default-value]
-                                     ::attr/keys [qualified-key unique?]}]
-                                 ;; NOTE: default value can come from attribute or be set/overridden on form itself
-                                 (let [default-value (or (get default-values qualified-key) default-value)]
-                                   (cond
-                                     (= unique? true) [qualified-key tempid]
-                                     default-value [qualified-key default-value]))))
-                         fields)
-        filled-fields  (keys initial-value)
-        tx             (into []
-                         (map (fn [k]
-                                (fs/mark-complete! {:entity-ident ident
-                                                    :field        k})))
-                         filled-fields)]
-    ;; NOTE: pre-merge of form does add of form config...this is probably not right. Should probably trigger a self
-    ;; event for that
-    (merge/merge-component! app TargetClass initial-value)
-    (when (seq tx)
-      (log/debug "Marking fields with default values complete")
-      (comp/transact! app tx))
-    (controller/io-complete! app {::controller/id    machine-id
-                                  ::rad/target-route target-route})))
+  (let [id-key           (some-> TargetClass comp/component-options ::id ::attr/qualified-key)
+        ident            [id-key tempid]
+        {::uism/keys [fulcro-app]} env
+        initial-state    (default-state TargetClass tempid)
+        entity-to-merge  (fs/add-form-config TargetClass initial-state)
+        initialized-keys (set (sp/select (sp/walker keyword?) initial-state))]
+    (controller/io-complete! fulcro-app {::controller/id machine-id
+                                         ::rad/target-route target-route})
+    (-> env
+      (uism/apply-action merge/merge-component TargetClass entity-to-merge)
+      (uism/apply-action mark-filled-fields-complete* {:entity-ident     ident
+                                                       :initialized-keys initialized-keys}))))
 
 (defn confirm-exit? [env]
   (boolean (some-> env (uism/actor-class :actor/form) comp/component-options ::confirm-exit?)))
@@ -438,7 +495,8 @@
                                                    ::rad/keys        [target-route] :as options}]
   (log/info "Starting I/O processing for RAD Form" (comp/component-name TargetClass))
   (let [[_ action id] target-route
-        target-id       (new-uuid id)
+        target-id       (cond-> (new-uuid id)
+                          (= "create" action) (tempid/tempid))
         form-machine-id [(first (comp/ident TargetClass {})) target-id]
         event-data      (assoc options
                           ::id form-machine-id
@@ -448,10 +506,10 @@
     (uism/begin! fulcro-app form-machine form-machine-id
       {:actor/form (uism/with-actor-class form-machine-id TargetClass)}
       event-data)
-    (if (= action "create")
-      (start-create! fulcro-app TargetClass event-data)
-      (start-edit! fulcro-app TargetClass event-data))
-    (uism/activate env :state/routing)))
+    (cond-> env
+      (= action "create") (start-create! TargetClass event-data)
+      (= action "edit") (start-edit! TargetClass event-data)
+      :and (uism/activate :state/routing))))
 
 (defn save! [{this ::master-form}]
   (uism/trigger! this (comp/get-ident this) :event/save {}))
@@ -466,7 +524,10 @@
   (let [asm-id (comp/get-ident master-form)]
     (uism/trigger! master-form asm-id :event/add-row env)))
 
-(defn delete-child! [{::keys [master-form] :as env}]
+(defn delete-child!
+  "Delete a child of a master form. Only use this on nested forms that are actively being edited. See
+   also `delete!`."
+  [{::keys [master-form] :as env}]
   (let [asm-id (comp/get-ident master-form)]
     (uism/trigger! master-form asm-id :event/delete-row env)))
 
@@ -480,6 +541,13 @@
   [this form-class entity-id]
   (let [[root & _] (-> form-class comp/component-options :route-segment)]
     (controller/route-to! this :main-controller [root "edit" (str entity-id)])))
+
+(defn create!
+  "Create a new instance of the given form-class using the provided `entity-id` and then route
+   to that form for editing."
+  [app-ish form-class]
+  (let [[root & _] (-> form-class comp/component-options :route-segment)]
+    (controller/route-to! app-ish :main-controller [root "create" (str (new-uuid))])))
 
 ;; TASK: Probably should move the server implementations to a diff ns, so that this is all consistent with
 ;; running UI headless (or SSR) on back-end.
@@ -499,12 +567,11 @@
      (remote [_] true)))
 
 (defn delete!
-  "Delete the given entity from local app state and the remote (if present)."
+  "Delete the given entity from local app state and the remote (if present). This method assumes that the
+   given entity is *not* currently being edited and can be used from anyplace else in the application."
   [this id-key entity-id]
   #?(:cljs
      (comp/transact! this [(delete-entity {id-key entity-id})])))
-
-
 
 (defn input-blur! [{::keys [form-instance master-form]} k value]
   (let [form-ident (comp/get-ident form-instance)

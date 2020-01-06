@@ -85,7 +85,7 @@
 (>defn key->attribute
   "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
   [k]
-  [::qualified-key => (? ::attribute)]
+  [keyword? => (? ::attribute)]
   (get @attribute-registry k))
 
 (>defn to-many?

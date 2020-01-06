@@ -3,7 +3,7 @@
   (:require
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.controller :as controller :refer [io-complete!]]
+    [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
