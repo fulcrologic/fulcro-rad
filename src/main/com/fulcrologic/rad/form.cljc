@@ -3,6 +3,8 @@
   (:require
     [clojure.spec.alpha :as s]
     [clojure.set :as set]
+    [clojure.pprint :refer [pprint]]
+    [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
@@ -26,6 +28,9 @@
     #?(:cljs [goog.object])
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [expound.alpha :as expound]))
+
+(def create-action "create")
+(def edit-action "edit")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
@@ -121,11 +126,10 @@
        :route-segment [route-prefix :action :id]
        ::rad/type     ::rad/form
        ::rad/io?      true
-       :will-enter    (fn [_ params]
-                        (let [id (get params :id)]
-                          (dr/route-immediate [id-key (if (tempid/tempid? id)
-                                                        id
-                                                        (new-uuid id))])))})))
+       :will-enter    (fn [_ {:keys [action id]}]
+                        (let [real-id (cond-> (new-uuid id)
+                                        (= create-action action) (tempid/tempid))]
+                          (dr/route-immediate (log/spy :info [id-key real-id]))))})))
 
 #?(:clj
    (defn form-body [argslist body]
@@ -209,26 +213,27 @@
   "Mutation helper: Set the given attribute's value in app state."
   [state-map form attribute value])
 
-(defn- start-edit! [app TargetClass {machine-id ::id
-                                     ::rad/keys [id target-route] :as options}]
+(defn- start-edit! [{::uism/keys [fulcro-app] :as env} TargetClass {machine-id ::id
+                                                                    ::rad/keys [id target-route] :as options}]
   (when-not machine-id
     (log/error "Missing form machine id route on start-edit!"))
   (when-not target-route
     (log/error "Missing target route on start-edit!"))
   (when-not id
     (log/error "Missing ID on start-edit!"))
-  (log/debug "START EDIT" (comp/component-name TargetClass))
+  (log/debug "START EDIT" (comp/component-name TargetClass) "with id" id)
   (let [id-key (some-> TargetClass (comp/ident {}) first)
         ;; TODO: Coercion from string IDs to type of ID field
         id     (new-uuid id)]
-    (df/load! app [id-key id] TargetClass
+    (log/info "Issuing load")
+    (uism/load env [id-key id] TargetClass
       {:post-action (fn [{:keys [state]}]
                       (log/debug "Marking the form complete")
                       (fns/swap!-> state
                         (assoc-in [id-key id :ui/new?] false)
                         (fs/add-form-config* TargetClass [id-key id])
                         (fs/mark-complete* [id-key id]))
-                      (controller/io-complete! app options))})))
+                      (controller/io-complete! fulcro-app options))})))
 
 (declare default-state)
 
@@ -305,7 +310,8 @@
     (fs/update-forms state-map mark-complete* entity-ident)))
 
 (defn- start-create! [env TargetClass {machine-id ::id
-                                       ::rad/keys [target-route tempid]}]
+                                       ::rad/keys [tempid] :as options}]
+  (log/info "Starting a create" options)
   (when-not machine-id
     (log/error "Controller failed to pass machine id"))
   (let [id-key           (some-> TargetClass comp/component-options ::id ::attr/qualified-key)
@@ -314,8 +320,7 @@
         initial-state    (default-state TargetClass tempid)
         entity-to-merge  (fs/add-form-config TargetClass initial-state)
         initialized-keys (set (sp/select (sp/walker keyword?) initial-state))]
-    (controller/io-complete! fulcro-app {::controller/id machine-id
-                                         ::rad/target-route target-route})
+    (controller/io-complete! fulcro-app options)
     (-> env
       (uism/apply-action merge/merge-component TargetClass entity-to-merge)
       (uism/apply-action mark-filled-fields-complete* {:entity-ident     ident
@@ -339,6 +344,65 @@
     (uism/activate env :state/asking-to-discard-changes)
     (exit-form env)))
 
+(defn strip-tempid-idents [v]
+  (cond
+    (and (eql/ident? v) (tempid/tempid? (second v)))
+    nil
+
+    (and (vector? v) (every? eql/ident? v)) (vec (keep strip-tempid-idents v))
+
+    :else v))
+
+(defn dirty-fields
+  ([ui-entity as-delta?] (dirty-fields ui-entity as-delta? {}))
+  ([ui-entity as-delta? {:keys [new-entity?] :as opts}]
+   (let [{::fs/keys [id fields pristine-state subforms] :as config} (get ui-entity ::fs/config)
+         subform-keys       (-> subforms keys set)
+         subform-ident      (fn [k entity] (some-> (get subforms k) meta :component (comp/get-ident entity)))
+         new-entity?        (or new-entity? (tempid/tempid? (second id)))
+         delta              (into {} (keep (fn [k]
+                                             (let [before (get pristine-state k)
+                                                   after  (get ui-entity k)]
+                                               (if (or new-entity? (not= before after))
+                                                 (if as-delta?
+                                                   [k {:before before :after after}]
+                                                   [k after])
+                                                 nil))) fields))
+         delta-with-refs    (into delta
+                              (keep
+                                (fn [k]
+                                  (let [items         (get ui-entity k)
+                                        old-value     (get-in ui-entity [::fs/config ::fs/pristine-state k])
+                                        current-value (cond
+                                                        (map? items) (subform-ident k items)
+                                                        (vector? items) (mapv #(subform-ident k %) items)
+                                                        :else items)
+                                        has-tempids?  (if (every? eql/ident? current-value)
+                                                        (some #(tempid/tempid? (second %)) current-value)
+                                                        (tempid/tempid? (second current-value)))]
+                                    (if (or new-entity? has-tempids? (not= old-value current-value))
+                                      (let [old-value (strip-tempid-idents old-value)]
+                                        (if as-delta?
+                                          [k {:before old-value :after current-value}]
+                                          [k current-value]))
+                                      nil)))
+                                subform-keys))
+         local-dirty-fields (if (empty? delta-with-refs) {} {id delta-with-refs})
+         complete-delta     (reduce
+                              (fn [dirty-fields-so-far subform-join-field]
+                                (let [subform (get ui-entity subform-join-field)]
+                                  (cond
+                                    ; to many
+                                    (vector? subform) (reduce (fn [d f] (merge d (dirty-fields f as-delta? opts))) dirty-fields-so-far subform)
+                                    ; to one
+                                    (map? subform) (let [dirty-subform-fields (dirty-fields subform as-delta? opts)]
+                                                     (merge dirty-fields-so-far dirty-subform-fields))
+                                    ; missing subform
+                                    :else dirty-fields-so-far)))
+                              local-dirty-fields
+                              subform-keys)]
+     complete-delta)))
+
 (>defn calc-diff
   [env]
   [::uism/env => (s/keys :req [::delta])]
@@ -346,9 +410,8 @@
         form-ident (uism/actor->ident env :actor/form)
         Form       (uism/actor-class env :actor/form)
         props      (fns/ui->props state-map Form form-ident)
-        new?       (uism/alias-value env :new?)
-        delta      (fs/dirty-fields props true {:new-entity? new?})
-        diff       (fs/dirty-fields props false {:new-entity? new?})]
+        delta      (dirty-fields props true)]
+    (log/info (with-out-str (pprint delta)))
     {::delta delta}))
 
 (def global-events
@@ -471,7 +534,7 @@
                                   {::uism/error-event :event/save-failed
                                    ::master-pk        master-pk
                                    ;; TODO: Make return optional?
-                                   ::m/returning      form-class
+                                   ;::m/returning      form-class
                                    ::uism/ok-event    :event/saved}))
                               (uism/activate :state/saving))))}
 
@@ -496,7 +559,7 @@
   (log/info "Starting I/O processing for RAD Form" (comp/component-name TargetClass))
   (let [[_ action id] target-route
         target-id       (cond-> (new-uuid id)
-                          (= "create" action) (tempid/tempid))
+                          (= create-action action) (tempid/tempid))
         form-machine-id [(first (comp/ident TargetClass {})) target-id]
         event-data      (assoc options
                           ::id form-machine-id
@@ -506,9 +569,10 @@
     (uism/begin! fulcro-app form-machine form-machine-id
       {:actor/form (uism/with-actor-class form-machine-id TargetClass)}
       event-data)
+    (log/info "Processing initial action")
     (cond-> env
-      (= action "create") (start-create! TargetClass event-data)
-      (= action "edit") (start-edit! TargetClass event-data)
+      (= action create-action) (start-create! TargetClass event-data)
+      (= action edit-action) (start-edit! TargetClass event-data)
       :and (uism/activate :state/routing))))
 
 (defn save! [{this ::master-form}]
@@ -540,14 +604,14 @@
   "Route to the given form for editing the entity with the given ID."
   [this form-class entity-id]
   (let [[root & _] (-> form-class comp/component-options :route-segment)]
-    (controller/route-to! this :main-controller [root "edit" (str entity-id)])))
+    (controller/route-to! this :main-controller [root edit-action (str entity-id)])))
 
 (defn create!
   "Create a new instance of the given form-class using the provided `entity-id` and then route
    to that form for editing."
   [app-ish form-class]
   (let [[root & _] (-> form-class comp/component-options :route-segment)]
-    (controller/route-to! app-ish :main-controller [root "create" (str (new-uuid))])))
+    (controller/route-to! app-ish :main-controller [root create-action (str (new-uuid))])))
 
 ;; TASK: Probably should move the server implementations to a diff ns, so that this is all consistent with
 ;; running UI headless (or SSR) on back-end.

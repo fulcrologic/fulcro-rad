@@ -39,7 +39,7 @@
   [app {::keys     [id]
         ::rad/keys [target-route]}]
   [::app/app (s/keys :req [::rad/target-route ::id]) => any?]
-  (log/debug "Controller notified that target route I/O is complete." target-route)
+  (log/debug id "Controller notified that target route I/O is complete." target-route)
   (uism/trigger! app id :event/route-loaded {::rad/target-route target-route}))
 
 (>defn desired-attributes
@@ -70,6 +70,7 @@
         authorities))))
 
 (defn activate-route [{::uism/keys [fulcro-app] :as env} target-route]
+  (log/info "Activating route" target-route)
   (dr/change-route fulcro-app target-route)
   (-> env
     (uism/store ::rad/target-route nil)
