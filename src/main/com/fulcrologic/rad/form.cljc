@@ -344,65 +344,6 @@
     (uism/activate env :state/asking-to-discard-changes)
     (exit-form env)))
 
-(defn strip-tempid-idents [v]
-  (cond
-    (and (eql/ident? v) (tempid/tempid? (second v)))
-    nil
-
-    (and (vector? v) (every? eql/ident? v)) (vec (keep strip-tempid-idents v))
-
-    :else v))
-
-(defn dirty-fields
-  ([ui-entity as-delta?] (dirty-fields ui-entity as-delta? {}))
-  ([ui-entity as-delta? {:keys [new-entity?] :as opts}]
-   (let [{::fs/keys [id fields pristine-state subforms] :as config} (get ui-entity ::fs/config)
-         subform-keys       (-> subforms keys set)
-         subform-ident      (fn [k entity] (some-> (get subforms k) meta :component (comp/get-ident entity)))
-         new-entity?        (or new-entity? (tempid/tempid? (second id)))
-         delta              (into {} (keep (fn [k]
-                                             (let [before (get pristine-state k)
-                                                   after  (get ui-entity k)]
-                                               (if (or new-entity? (not= before after))
-                                                 (if as-delta?
-                                                   [k {:before before :after after}]
-                                                   [k after])
-                                                 nil))) fields))
-         delta-with-refs    (into delta
-                              (keep
-                                (fn [k]
-                                  (let [items         (get ui-entity k)
-                                        old-value     (get-in ui-entity [::fs/config ::fs/pristine-state k])
-                                        current-value (cond
-                                                        (map? items) (subform-ident k items)
-                                                        (vector? items) (mapv #(subform-ident k %) items)
-                                                        :else items)
-                                        has-tempids?  (if (every? eql/ident? current-value)
-                                                        (some #(tempid/tempid? (second %)) current-value)
-                                                        (tempid/tempid? (second current-value)))]
-                                    (if (or new-entity? has-tempids? (not= old-value current-value))
-                                      (let [old-value (strip-tempid-idents old-value)]
-                                        (if as-delta?
-                                          [k {:before old-value :after current-value}]
-                                          [k current-value]))
-                                      nil)))
-                                subform-keys))
-         local-dirty-fields (if (empty? delta-with-refs) {} {id delta-with-refs})
-         complete-delta     (reduce
-                              (fn [dirty-fields-so-far subform-join-field]
-                                (let [subform (get ui-entity subform-join-field)]
-                                  (cond
-                                    ; to many
-                                    (vector? subform) (reduce (fn [d f] (merge d (dirty-fields f as-delta? opts))) dirty-fields-so-far subform)
-                                    ; to one
-                                    (map? subform) (let [dirty-subform-fields (dirty-fields subform as-delta? opts)]
-                                                     (merge dirty-fields-so-far dirty-subform-fields))
-                                    ; missing subform
-                                    :else dirty-fields-so-far)))
-                              local-dirty-fields
-                              subform-keys)]
-     complete-delta)))
-
 (>defn calc-diff
   [env]
   [::uism/env => (s/keys :req [::delta])]
@@ -410,7 +351,7 @@
         form-ident (uism/actor->ident env :actor/form)
         Form       (uism/actor-class env :actor/form)
         props      (fns/ui->props state-map Form form-ident)
-        delta      (dirty-fields props true)]
+        delta      (fs/dirty-fields props true)]
     (log/info (with-out-str (pprint delta)))
     {::delta delta}))
 
