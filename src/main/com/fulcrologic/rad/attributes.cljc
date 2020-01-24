@@ -147,7 +147,11 @@
 
 #?(:clj
    (defn ^String encrypt
-     "Encrypt the given password, returning a string."
+     "Returns a cryptographycally-secure hashed password based on the given a plain-text password,
+      a random salt string (see `gen-salt`), and a number of iterations.  You should save the hashed result, salt, and
+      iterations in your database. Checking a password is then taking the password the user supplied, passing it through
+      this function with the original salt and iterations, and seeing if the hashed result is the same as the original.
+     "
      [^String password ^String salt ^Long iterations]
      (let [keyLength           512
            password-characters (.toCharArray password)
@@ -157,7 +161,7 @@
            key                 (.generateSecret skf spec)
            res                 (.getEncoded key)
            hashed-pw           (.encodeToString (Base64/getEncoder) res)]
-       (str salt "|" iterations "|" hashed-pw))))
+       hashed-pw)))
 
 (>defn attribute?
   [v]
