@@ -91,7 +91,7 @@
   (let [source-machine-id (uism/retrieve env :source-machine-id)]
     (log/info "Sending" event "to" source-machine-id)
     (cond-> (uism/store env :source-machine-id nil)
-      source-machine-id (uism/trigger source-machine-id event))))
+      (and source-machine-id (not= :none source-machine-id)) (uism/trigger source-machine-id event))))
 
 (defn- -add-authenticated-provider [env p]
   (let [current (uism/retrieve env :authenticated)]
@@ -132,6 +132,8 @@
 
 (def global-events
   {:event/logout          {::uism/handler log-out}
+   :event/logged-in       {::uism/handler logged-in}
+   :event/failed          {::uism/handler logged-out}
    :event/session-checked {::uism/handler (fn [{::uism/keys [state-map event-data] :as env}]
                                             (let [provider (:provider event-data)
                                                   status   (get-in state-map [::authorization provider ::status])
@@ -158,34 +160,24 @@
     :status   [:actor/session]}
 
    ::uism/states
-   {:initial
-    {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                      (let [actors (keys (uism/asm-value env ::uism/actor->ident))]
-                        ;; Doing this as a side-effect, since we may need to handle the mutation via
-                        ;; client request instead of server remote
-                        (doseq [actor actors
-                                :let [m (some-> env (uism/actor-class actor) comp/component-options
-                                          ::check-session)]]
-                          (when m
-                            (comp/transact! fulcro-app `[(~m)])))
-                        (-> env
-                          ;; TODO: Ping auth providers to see if we already have auth. These could just sent `logged-in`
-                          ;; events back to this machine async, and that will add them to the list of valid providers.
-                          (uism/store :authenticated #{})
-                          (uism/activate :state/idle))))}
+   {:initial                     {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
+                                                   (let [actors (keys (uism/asm-value env ::uism/actor->ident))]
+                                                     ;; Doing this as a side-effect, since we may need to handle the mutation via
+                                                     ;; client request instead of server remote
+                                                     (doseq [actor actors
+                                                             :let [m (some-> env (uism/actor-class actor) comp/component-options
+                                                                       ::check-session)]]
+                                                       (when m
+                                                         (comp/transact! fulcro-app `[(~m)])))
+                                                     (-> env
+                                                       ;; TODO: Ping auth providers to see if we already have auth. These could just sent `logged-in`
+                                                       ;; events back to this machine async, and that will add them to the list of valid providers.
+                                                       (uism/store :authenticated #{})
+                                                       (uism/activate :state/idle))))}
 
-    :state/idle
-    {::uism/events
-     (merge global-events
-       {;; We allow auth providers to update state at any time
-        :event/logged-in {::uism/handler logged-in}
-        :event/failed    {::uism/handler logged-out}})}
+    :state/idle                  {::uism/events global-events}
 
-    :state/gathering-credentials
-    {::uism/events
-     (merge global-events
-       {:event/failed    {::uism/hander logged-out}
-        :event/logged-in {::uism/handler logged-in}})}}})
+    :state/gathering-credentials {::uism/events global-events}}})
 
 (defn start!
   "Start the authentication system and configure it to use the provided UI components (with options).
@@ -195,9 +187,15 @@
   should return a Session from a remote that has looked for an existing session.)"
   [app authority-ui-roots]
   (let [actors (into {}
-                 (map (fn [c]
-                        (let [{::keys [provider]} (comp/component-options c)]
-                          [provider c])))
+                 (keep (fn [c]
+                         (let [{::keys [provider]} (comp/component-options c)]
+                           (if provider
+                             (do
+                               (log/info "Installing auth UI for provider" provider)
+                               [provider c])
+                             (do
+                               (log/error "Unable to add auth root. Missing ::auth/provider key on" (comp/component-name c))
+                               nil)))))
                  authority-ui-roots)]
     (uism/begin! app auth-machine machine-id actors)))
 
