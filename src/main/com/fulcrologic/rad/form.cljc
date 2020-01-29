@@ -4,14 +4,12 @@
     [clojure.spec.alpha :as s]
     [clojure.set :as set]
     [clojure.pprint :refer [pprint]]
-    [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
@@ -26,8 +24,7 @@
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
     #?(:cljs [goog.object])
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [expound.alpha :as expound]))
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
 
 (def create-action "create")
 (def edit-action "edit")
@@ -100,7 +97,7 @@
                              scalars)
         subforms           (::subforms form-options)
         full-query         (into query-with-scalars
-                             (map (fn [{::attr/keys [qualified-key target]}]
+                             (map (fn [{::attr/keys [qualified-key]}]
                                     (required! (str "Form attribute " qualified-key
                                                  " is a reference type. The ::form/subforms map")
                                       subforms qualified-key #(contains? % ::ui))
@@ -139,8 +136,8 @@
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
   [get-class location options]
-  ;(required! location options ::attributes vector?)
-  ;(required! location options ::id attr/attribute?)
+  (required! location options ::attributes vector?)
+  (required! location options ::id attr/attribute?)
   (let [{::keys [id attributes route-prefix]} options
         id-key      (::attr/qualified-key id)
         form-field? (fn [{::attr/keys [identity?]}] (not identity?))]
@@ -186,7 +183,8 @@
               (com.fulcrologic.fulcro.components/configure-component! ~sym ~fqkw options#)))
          `(do
             (declare ~sym)
-            (let [options# (assoc (convert-options ~sym ~location ~options) :render ~render-form)]
+            (let [get-class# (fn [] ~sym)
+                  options#   (assoc (convert-options get-class# ~location ~options) :render ~render-form)]
               (def ~(vary-meta sym assoc :doc doc :once true)
                 (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~fqkw options#))))))))
 
@@ -218,8 +216,8 @@
            save-handlers)
          (log/error "No save handlers are in the parser env."))))
    :cljs
-   (m/defmutation save-form [params]
-     (action [env] :noop)))
+   (m/defmutation save-form [_]
+     (action [_] :noop)))
 
 ;; TODO: Support for a generalized focus mechanism to show the first field that has a problem
 
@@ -234,11 +232,7 @@
   [(-> env ::uism/event-data ::attr/qualified-key)
    (-> env ::uism/event-data :value)])
 
-(defn set-attribute*
-  "Mutation helper: Set the given attribute's value in app state."
-  [state-map form attribute value])
-
-(defn- start-edit [{::uism/keys [fulcro-app] :as env} options]
+(defn- start-edit [env _]
   (let [FormClass  (uism/actor-class env :actor/form)
         form-ident (uism/actor->ident env :actor/form)]
     (log/info "Issuing load")
@@ -251,7 +245,7 @@
 
 (defn- default-to-many [FormClass attribute]
   (let [{::keys [subforms default]} (comp/component-options FormClass)
-        {::attr/keys [qualified-key type default-value]} attribute
+        {::attr/keys [qualified-key default-value]} attribute
         default-value (get default qualified-key default-value)]
     (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])
                  id-key   (some-> SubClass comp/component-options ::id)]
@@ -321,7 +315,7 @@
                            [entity (assoc form-config ::fs/complete? to-mark)]))]
     (fs/update-forms state-map mark-complete* entity-ident)))
 
-(defn- start-create [env options]
+(defn- start-create [env _]
   (let [FormClass        (uism/actor-class env :actor/form)
         form-ident       (uism/actor->ident env :actor/form)
         id               (second form-ident)
@@ -339,7 +333,7 @@
 
 (defn exit-form
   "Discard all changes and change route."
-  [{::uism/keys [fulcro-app] :as env}]
+  [env]
   (let [Form         (uism/actor-class env :actor/form)
         cancel-route (some-> Form comp/component-options ::cancel-route)]
     (when-not cancel-route
@@ -349,7 +343,7 @@
       (uism/activate :state/abandoned)
       (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1))))
 
-(defn ask-before-leaving [{::uism/keys [fulcro-app] :as env}]
+(defn ask-before-leaving [env]
   (if (confirm-exit? env)
     (uism/activate env :state/asking-to-discard-changes)
     (exit-form env)))
@@ -357,7 +351,7 @@
 (>defn calc-diff
   [env]
   [::uism/env => (s/keys :req [::delta])]
-  (let [{::uism/keys [state-map event-data]} env
+  (let [{::uism/keys [state-map]} env
         form-ident (uism/actor->ident env :actor/form)
         Form       (uism/actor-class env :actor/form)
         props      (fns/ui->props state-map Form form-ident)
@@ -365,7 +359,7 @@
     (log/info (with-out-str (pprint delta)))
     {::delta delta}))
 
-(defn target-ready
+(defn route-target-ready
   "Same as dynamic routing target-ready, but works in UISM via env."
   [{::uism/keys [state-map] :as env} target]
   (let [router-id (dr/router-for-pending-target state-map target)]
@@ -419,7 +413,7 @@
              (-> env
                (uism/apply-action fs/add-form-config* FormClass form-ident)
                (uism/apply-action fs/mark-complete* form-ident)
-               (target-ready form-ident)
+               (route-target-ready form-ident)
                (uism/activate :state/editing))))}
         :event/failed
         {::uism/handler
@@ -570,19 +564,17 @@
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
   [this form-class entity-id]
-  (let [[root & _] (-> form-class comp/component-options :route-segment)]
-    ;; FIXME: need to figure out base path
-    (dr/change-route this (dr/path-to form-class {:action edit-action
-                                                  :id     entity-id}))))
+  ;; FIXME: need to figure out base path
+  (dr/change-route this (dr/path-to form-class {:action edit-action
+                                                :id     entity-id})))
 
 (defn create!
   "Create a new instance of the given form-class using the provided `entity-id` and then route
    to that form for editing."
   [app-ish form-class]
-  (let [[root & _] (-> form-class comp/component-options :route-segment)]
-    ;; FIXME: need to figure out base path of route
-    (dr/change-route app-ish (dr/path-to form-class {:action create-action
-                                                     :id     (new-uuid)}))))
+  ;; FIXME: need to figure out base path of route
+  (dr/change-route app-ish (dr/path-to form-class {:action create-action
+                                                   :id     (new-uuid)})))
 
 ;; TASK: Probably should move the server implementations to a diff ns, so that this is all consistent with
 ;; running UI headless (or SSR) on back-end.
@@ -617,8 +609,7 @@
        :value               value})))
 
 (defn input-changed! [{::keys [form-instance master-form]} k value]
-  (let [{::keys [nested? parent]} (comp/get-computed form-instance)
-        form-ident (comp/get-ident form-instance)
+  (let [form-ident (comp/get-ident form-instance)
         asm-id     (comp/get-ident master-form)]
     (uism/trigger! form-instance asm-id :event/attribute-changed
       {::attr/qualified-key k
