@@ -153,7 +153,6 @@
                       :route-segment [route]
                       :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
                       :will-leave `report-will-leave
-                      ::rad/type ::rad/report
                       :query query
                       :ident (list 'fn [] [:component/id (keyword sym)]))
            body     (if (seq (rest args))

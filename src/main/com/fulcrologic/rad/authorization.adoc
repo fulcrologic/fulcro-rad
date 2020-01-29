@@ -20,8 +20,6 @@ WARNING: The remainder of this document is an incomplete and inaccurate picture 
 
 +----------------------+       +----------------------+
 | Auth Provider (OAUTH)|       | Auth Provider (local)|
-|                      |       |                      |
-|                      |       |                      |
 +----------------------+       +----------------------+
      ^                              ^
      |            (2)               |
@@ -30,18 +28,17 @@ WARNING: The remainder of this document is an incomplete and inaccurate picture 
      v
 +----+-----------------+
 | Auth State Machine   |
-|                      |
-|                      |
 +-----------------+----+
    ^              |
    |              |
-   | (1)          | (3)
-   |              |
+   | (1)          v (3)
++--+-------------------+
+| ROUTING LAYER        |
++-----------------+----+
+   ^              |
    |              v
 +--+-------------------+
-| UI Layer UISM        |
-|                      |
-|                      |
+| UI Layer             |
 +----------------------+
 
 ------
