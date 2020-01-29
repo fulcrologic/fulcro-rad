@@ -16,7 +16,6 @@
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.controller :as controller]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
@@ -529,7 +528,9 @@
     :state/abandoned
     {::uism/events global-events}}})
 
-(defmethod controller/-desired-attributes ::rad/form [c]
+(defn desired-attributes
+  "Returns the list of recursive attributes desired by the query of `c`"
+  [c]
   (let [{::keys [subforms attributes]} (comp/component-options c)
         all-attributes (into attributes (mapcat
                                           #(-> % comp/component-options ::attributes)
