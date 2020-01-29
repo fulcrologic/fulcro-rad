@@ -1,4 +1,5 @@
 (ns com.fulcrologic.rad.controller
+  "DEPRECATED: Here in case I want to pull code out somewhere else."
   (:require
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
