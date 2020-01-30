@@ -1,9 +1,11 @@
 (ns com.fulcrologic.rad.rendering.semantic-ui.form
   (:require
+    [clojure.string :as str]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.fulcro-i18n.i18n :as i18n :refer [tr]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.mutations :as m]
     #?(:cljs
        [com.fulcrologic.fulcro.dom :as dom]
        :clj
@@ -17,9 +19,10 @@
         parent      (comp/props form-instance)
         can-delete? (fn [item] (can-delete-row? parent item))
         items       (-> form-instance comp/props k)
+        title       (or (some-> ui (comp/component-options ::form/title)) "")
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (dom/div :.ui.basic.segment {:key (str k)}
-      (dom/h3 "Addresses")
+      (dom/h3 title)
       (mapv
         (fn [props]
           (ui-factory props
@@ -40,19 +43,39 @@
             (dom/i :.plus.icon)))))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
-  (let [{::form/keys [ui can-delete-row?]} (get subforms k)
+  (let [{::form/keys [ui can-delete-row? options-query label] :as subform-options} (get subforms k)
+        picker?    (boolean options-query)
         parent     (comp/props form-instance)
-        props      (-> form-instance comp/props k)
-        ui-factory (comp/computed-factory ui)]
-    (when props
-      (ui-factory props (merge
-                          env
-                          {::form/nested?         true
-                           ::form/parent          form-instance
-                           ::form/parent-relation k
-                           ::form/can-delete?     (if can-delete-row?
-                                                    (partial can-delete-row? parent)
-                                                    false)})))))
+        _          (log/spy :info k)
+        form-props (comp/props form-instance)
+        props      (get form-props k)
+        title      (or (some-> ui (comp/component-options ::form/title)) "")
+        ui-factory (comp/computed-factory ui)
+        std-props  {::form/nested?         true
+                    ::form/parent          form-instance
+                    ::form/parent-relation k
+                    ::form/can-delete?     (if can-delete-row?
+                                             (partial can-delete-row? parent)
+                                             false)}]
+    (log/info "Rendering to-one relation for " (comp/component-name ui))
+    (cond
+      picker?
+      (let [selected-option props
+            picker-key      (form/picker-join-key k)
+            picker-props    (get form-props picker-key)]
+        (dom/div :.field
+          (dom/label (str (or label (some-> k name str/capitalize))))
+          (ui-factory picker-props
+            (merge std-props subform-options {:currently-selected-value selected-option
+                                              :onSelect                 (fn [v] (m/set-value! form-instance k v))}))))
+
+      props
+      (dom/div
+        (dom/h3 :.ui.header title)
+        (ui-factory props (merge env std-props)))
+
+      :else
+      (dom/div "Nothing Selected."))))
 
 (defn render-ref [env {::attr/keys [cardinality] :as attr} options]
   (if (= :many cardinality)

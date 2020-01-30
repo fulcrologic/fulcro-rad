@@ -29,6 +29,13 @@
 (def edit-action "edit")
 (declare form-machine)
 
+(>defn picker-join-key
+  "Returns a :ui/picker keyword customized to the qualified keyword"
+  [qualified-key]
+  [qualified-keyword? => qualified-keyword?]
+  (keyword "ui" (str (namespace qualified-key) "-"
+                  (name qualified-key)
+                  "-picker")))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -44,7 +51,11 @@
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (or (some-> form-instance comp/component-options ::field-style qualified-key) :default)
         control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)
-        control     (get-in control-map [type field-style])]
+        control     (or
+                      (get-in control-map [type field-style])
+                      (do
+                        (log/warn "Custom field style not found: " field-style)
+                        (get-in control-map [type :default])))]
     control))
 
 (defn render-field [env attr]
@@ -96,12 +107,16 @@
                              scalars)
         subforms           (::subforms form-options)
         full-query         (into query-with-scalars
-                             (map (fn [{::attr/keys [qualified-key]}]
-                                    (required! (str "Form attribute " qualified-key
-                                                 " is a reference type. The ::form/subforms map")
-                                      subforms qualified-key #(contains? % ::ui))
-                                    (let [subform (get-in subforms [qualified-key ::ui])]
-                                      {qualified-key (comp/get-query subform)})))
+                             (mapcat (fn [{::attr/keys [qualified-key]}]
+                                       (required! (str "Form attribute " qualified-key
+                                                    " is a reference type. The ::form/subforms map")
+                                         subforms qualified-key #(contains? % ::ui))
+                                       (let [subform (get-in subforms [qualified-key ::ui])
+                                             picker? (boolean (get-in subforms [qualified-key ::options-query]))]
+                                         (if picker?
+                                           (let [picker-key (picker-join-key qualified-key)]
+                                             [qualified-key {picker-key (comp/get-query subform)}])
+                                           [{qualified-key (comp/get-query subform)}]))))
                              refs)]
     full-query))
 
@@ -234,7 +249,7 @@
 (defn- start-edit [env _]
   (let [FormClass  (uism/actor-class env :actor/form)
         form-ident (uism/actor->ident env :actor/form)]
-    (log/info "Issuing load")
+    (log/info "Issuing load of pre-existing form entity" form-ident)
     (-> env
       (uism/load form-ident FormClass {::uism/ok-event    :event/loaded
                                        ::uism/error-event :event/failed})
@@ -264,23 +279,38 @@
         []))))
 
 (defn- default-to-one [FormClass attribute]
+  (log/info "Getting to-one state for" (comp/component-name FormClass))
   (let [{::keys [subforms default]} (comp/component-options FormClass)
         {::attr/keys [qualified-key default-value]} attribute
-        default-value (get default qualified-key default-value)]
-    (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])
-                 id-key   (some-> SubClass comp/component-options ::id)
-                 id       (tempid/tempid)]
+        default-value (get default qualified-key default-value)
+        SubClass      (get-in subforms [qualified-key ::ui])
+        picker?       (boolean (get-in subforms [qualified-key ::options-query]))
+        new-id        (tempid/tempid)
+        id-key        (comp/component-options SubClass ::id)]
+    (cond
+      (and SubClass picker?)
+      nil
+      #_(comp/get-initial-state SubClass {:id (new-uuid)})
+
+      picker?
+      (do
+        (log/error "Picker does not have a ::ui in ::subforms")
+        nil)
+
+      id-key
       (if (map? default-value)
         (merge
-          (default-state SubClass id)
+          (default-state SubClass new-id)
           default-value
-          {id-key id})
+          {id-key new-id})
         (do
           (log/error "Default value for" qualified-key "MUST be a (possibly empty) map.")
-          nil))
+          {}))
+
+      :otherwise
       (do
         (log/error "Subform not declared (or is missing ::form/id) for" qualified-key "on" (comp/component-name FormClass))
-        nil))))
+        {}))))
 
 (defn default-state
   "Generate a potentially recursive tree of data that represents the tree of initial
@@ -289,17 +319,20 @@
   that have no default will not be included. To-many relations that have no default
   will default to an empty vector."
   [FormClass new-id]
-  (let [{::keys [id attributes default]} (comp/component-options FormClass)
+  (let [{::keys [id attributes default subforms]} (comp/component-options FormClass)
         {id-key ::attr/qualified-key} id]
     (reduce
       (fn [result {::attr/keys [qualified-key type default-value] :as attr}]
-        (let [default-value (get default qualified-key default-value)]
+        (let [default-value (get default qualified-key default-value)
+              picker?       (some-> subforms (get-in [qualified-key ::options-query]) (boolean))
+              picker-state  (some-> subforms (get-in [qualified-key ::ui]) (comp/get-initial-state {:id (new-uuid)}))]
           (cond
             (and (= :ref type) (attr/to-many? qualified-key))
             (assoc result qualified-key (default-to-many FormClass attr))
 
-            (and (= :ref type) default-value)
-            (assoc result qualified-key (default-to-one FormClass attr))
+            (and (= :ref type) (not (attr/to-many? qualified-key)))
+            (cond-> (assoc result qualified-key (default-to-one FormClass attr))
+              picker? (assoc (picker-join-key qualified-key) picker-state))
 
             :otherwise
             (if-let [default-value (get default qualified-key default-value)]
@@ -307,6 +340,19 @@
               result))))
       {id-key new-id}
       attributes)))
+
+(defn route-target-ready
+  "Same as dynamic routing target-ready, but works in UISM via env."
+  [{::uism/keys [state-map] :as env} target]
+  (let [router-id (dr/router-for-pending-target state-map target)]
+    (if router-id
+      (do
+        (log/debug "Router" router-id "notified that pending route is ready.")
+        (uism/trigger env router-id :ready!))
+      (do
+        (log/error "dr/target-ready! was called but there was no router waiting for the target listed: " target
+          "This could mean you sent one ident, and indicated ready on another.")
+        env))))
 
 (defn mark-filled-fields-complete* [state-map {:keys [entity-ident initialized-keys]}]
   (let [mark-complete* (fn [entity {::fs/keys [fields complete?] :as form-config}]
@@ -325,6 +371,7 @@
       (uism/apply-action merge/merge-component FormClass entity-to-merge)
       (uism/apply-action mark-filled-fields-complete* {:entity-ident     form-ident
                                                        :initialized-keys initialized-keys})
+      (route-target-ready form-ident)
       (uism/activate :state/editing))))
 
 (defn confirm-exit? [env]
@@ -358,18 +405,7 @@
     (log/info (with-out-str (pprint delta)))
     {::delta delta}))
 
-(defn route-target-ready
-  "Same as dynamic routing target-ready, but works in UISM via env."
-  [{::uism/keys [state-map] :as env} target]
-  (let [router-id (dr/router-for-pending-target state-map target)]
-    (if router-id
-      (do
-        (log/debug "Router" router-id "notified that pending route is ready.")
-        (uism/trigger env router-id :ready!))
-      (do
-        (log/error "dr/target-ready! was called but there was no router waiting for the target listed: " target
-          "This could mean you sent one ident, and indicated ready on another.")
-        env))))
+
 
 (def global-events
   {:event/exit
@@ -398,7 +434,7 @@
                             {::keys [create?]} event-data]
                         (cond-> env
                           create? (start-create event-data)
-                          :else (start-edit event-data))))}
+                          (not create?) (start-edit event-data))))}
 
     :state/loading
     {::uism/events

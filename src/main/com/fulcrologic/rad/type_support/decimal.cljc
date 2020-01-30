@@ -5,7 +5,7 @@
 
   You MUST include big.js as a js dependency for this to compile in CLJS."
   (:refer-clojure :exclude [name + - * = < > <= >= max min])
-  #?(:cljs (:require-macros [ucv.lib.math]))
+  #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.decimal]))
   (:require
     #?@(:cljs [["big.js" :as Big]
                [goog.object :as obj]
