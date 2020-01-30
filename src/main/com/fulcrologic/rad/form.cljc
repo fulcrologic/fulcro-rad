@@ -6,11 +6,12 @@
     [clojure.pprint :refer [pprint]]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
-    [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.fulcro.mutations :as m]
+    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad :as rad]
@@ -660,3 +661,47 @@
   [app controls]
   (let [{::app/keys [runtime-atom]} app]
     (swap! runtime-atom assoc :com.fulcrologic.rad/controls controls)))
+
+(defmutation transform-options
+  "INTERNAL MUTATION. Do not use."
+  [{:keys       [ref]
+                                 ::keys [pick-one]}]
+  (action [{:keys [state] :as env}]
+    (let [result    (get-in @state (conj ref :ui/query-result))
+          transform (get pick-one :options/transform)
+          options   (if transform
+                      (mapv transform result)
+                      result)]
+      (swap! state assoc-in (conj ref :ui/options) options))))
+
+(defn- load-options!
+  "Internal implementation detail of entity picker. Loads the options."
+  [this]
+  (let [{::keys [pick-one] :as picker-options} (comp/get-computed this)
+        {:options/keys [query-key subquery]} pick-one
+        fake-component (comp/configure-component! (fn []) ::fake {:query (fn [] subquery)
+                                                                  ;; not sure these should be normalized...but could be
+                                                                  ;;:ident (fn [this props] [id-key (get props id-key)])
+                                                                  })
+        target-path    (conj (comp/get-ident this) :ui/query-result)]
+    (when (or (not query-key) (not subquery))
+      (log/error "Options for picker are missing query-key or subquery"))
+    (when query-key
+      (df/load! this query-key fake-component {:target               target-path
+                                               :post-mutation        `transform-options
+                                               :post-mutation-params (merge picker-options
+                                                                       {:ref (comp/get-ident this)})}))))
+
+(defsc ToOneEntityPicker [this _]
+  {:query             [:picker/id
+                       :ui/options
+                       :ui/query-result]
+   :initial-state     (fn [{:keys [id]}] {:picker/id  id
+                                          :ui/options []})
+   :componentDidMount (fn [this] (load-options! this))
+   :ident             :picker/id}
+  (let [{::app/keys [runtime-atom]} (comp/any->app this)
+        control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)
+        control     (get-in control-map [:entity-picker :default])]
+    (when control
+      (control {::form-instance this} {}))))

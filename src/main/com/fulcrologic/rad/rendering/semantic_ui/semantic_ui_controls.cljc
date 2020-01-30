@@ -22,7 +22,8 @@
                                                              :int     {:default int-field/render-field}
                                                              :money   {:default money-field/render-field}
                                                              :boolean {:default boolean-field/render-field}
-                                                             :instant {:default instant/render-field}}
+                                                             :instant {:default instant/render-field}
+                                                             :entity-picker {:default sui-form/ui-render-entity-picker}}
 
    ;; Report-related controls
    :com.fulcrologic.rad.report/style->layout                {:default sui-report/ui-render-layout}
