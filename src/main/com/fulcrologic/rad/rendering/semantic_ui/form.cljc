@@ -43,8 +43,8 @@
             (dom/i :.plus.icon)))))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
-  (let [{::form/keys [ui can-delete-row? options-query label] :as subform-options} (get subforms k)
-        picker?    (boolean options-query)
+  (let [{::form/keys [ui can-delete-row? pick-one label] :as subform-options} (get subforms k)
+        picker?    (boolean pick-one)
         parent     (comp/props form-instance)
         form-props (comp/props form-instance)
         props      (get form-props k)
@@ -62,7 +62,7 @@
       (let [selected-option props
             picker-key      (form/picker-join-key k)
             picker-props    (get form-props picker-key)]
-        (dom/div :.field
+        (dom/div :.field {:key (str k)}
           (dom/label (str (or label (some-> k name str/capitalize))))
           (ui-factory picker-props
             (merge std-props subform-options {:currently-selected-value selected-option

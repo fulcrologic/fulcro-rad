@@ -112,7 +112,7 @@
                                                     " is a reference type. The ::form/subforms map")
                                          subforms qualified-key #(contains? % ::ui))
                                        (let [subform (get-in subforms [qualified-key ::ui])
-                                             picker? (boolean (get-in subforms [qualified-key ::options-query]))]
+                                             picker? (boolean (get-in subforms [qualified-key ::pick-one]))]
                                          (if picker?
                                            (let [picker-key (picker-join-key qualified-key)]
                                              [qualified-key {picker-key (comp/get-query subform)}])
@@ -284,7 +284,7 @@
         {::attr/keys [qualified-key default-value]} attribute
         default-value (get default qualified-key default-value)
         SubClass      (get-in subforms [qualified-key ::ui])
-        picker?       (boolean (get-in subforms [qualified-key ::options-query]))
+        picker?       (boolean (get-in subforms [qualified-key ::pick-one]))
         new-id        (tempid/tempid)
         id-key        (comp/component-options SubClass ::id)]
     (cond
@@ -324,7 +324,7 @@
     (reduce
       (fn [result {::attr/keys [qualified-key type default-value] :as attr}]
         (let [default-value (get default qualified-key default-value)
-              picker?       (some-> subforms (get-in [qualified-key ::options-query]) (boolean))
+              picker?       (some-> subforms (get-in [qualified-key ::pick-one]) (boolean))
               picker-state  (some-> subforms (get-in [qualified-key ::ui]) (comp/get-initial-state {:id (new-uuid)}))]
           (cond
             (and (= :ref type) (attr/to-many? qualified-key))
@@ -521,7 +521,7 @@
                                 id-key      (some-> child-class comp/component-options ::id ::attr/qualified-key)
                                 target-path (conj (comp/get-ident parent) parent-relation)
                                 ;; TODO: initialize all fields...use get-initial-state perhaps?
-                                new-child   {id-key (tempid/tempid)}
+                                new-child   (default-state child-class (tempid/tempid))
                                 child-ident (comp/get-ident child-class new-child)]
                             (uism/apply-action env
                               (fn [s]
