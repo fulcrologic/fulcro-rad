@@ -46,7 +46,6 @@
   (let [{::form/keys [ui can-delete-row? options-query label] :as subform-options} (get subforms k)
         picker?    (boolean options-query)
         parent     (comp/props form-instance)
-        _          (log/spy :info k)
         form-props (comp/props form-instance)
         props      (get form-props k)
         title      (or (some-> ui (comp/component-options ::form/title)) "")
