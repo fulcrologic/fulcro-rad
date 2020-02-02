@@ -62,12 +62,10 @@ endif::[]
 </style>
 ++++
 
-= About This Book
+= Introduction
 
-This is a guide for developers that wish to use the RAD tools for Fulcro
-full-stack application development. The RAD system is intended to be augmented
-with any number of plugins that can handle anything from back-end database
-management to front-end UI automation.
+This book covers Rapid Application Development (RAD) tools for Fulcro. The RAD system is intended to be augmented
+with any number of plugins that can handle anything from back-end database management to front-end UI automation.
 
 The core system has the following general ideals:
 
@@ -85,7 +83,9 @@ of that data model, including to-one and to-many relations.
 * Reasonable defaults for common reporting needs, especially when tabular.
 * An opt-in extensible authentication mechanism.
 
-= Attributes
+RAD is currently of pre-alpha quality, and should be used with caution.
+
+== Attributes
 
 Fulcro encourages the use of a graph-based data model that is agnostic
 to the underlying representation of your data. This turns out to be a quite
@@ -93,81 +93,122 @@ powerful abstraction, as it frees you from the general limitations and
 restrictions of a rigid class/table-based schema while
 still giving you adequate structure for your data model.
 
-== Extensibility
+The central artifact that you write when building with RAD is an *attribute*, which is an RDF-style concept where
+you define everything of interest about a particular fact in the world in a common map. The only two require things
+that you must say about an attribute are to give it a distinct name, and a distinct type.  The *name* must be a
+fully-qualified keyword. The namespace should be distinct enough to co-exist in the data realm of your application
+(i.e. if you are working on the internet level you should consider using domain-style naming). The *type* must be
+a data type that is supported by your database back-end.  The type system of RAD is extensible, and you must refer
+to the documentation of your selected database adapter and rendering layer to find out if the data type is already
+supported. It is generally easy to extend the data type support of RAD.
 
-Attributes are represented as open maps. There are a core set of keys that
+A minimal attribute will look something like this:
+
+[source, clojure]
+======
+(ns com.example.model.item
+  (:require
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
+
+(defattr id :item/id :uuid
+  {::attr/identity?                                      true
+   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+======
+
+The `defattr` macro really just assigns a plain map to the provided symbol (`id` in this case), but it also ensures
+that you've provided a name for the attribute (`:item/id` in this case), and a type.  It is exactly equivalent to:
+
+[source, clojure]
+======
+(def id
+ {::attr/qualified-key :item/id
+  ::attr/type :uuid
+  ::attr/identity?                                      true
+  :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+======
+
+The various plugins and facilities of RAD define keys that allow you to describe how your new data attribute
+should behave in the system. In the example above the `identity?` marker indicates that the attribute identifies
+groups of other facts (is a primary key for data), and the datomic-namespaced `schema` is used by the Datomic
+database plugin to indicate the schema that the attribute should be associated with.
+
+=== Extensibility
+
+Attributes are represented as open maps (you can add your own namespaced key/value pairs).
+There are a core set of keys that
 the core library defines for generalized use, but most plugins will use
 keywords namespaced to their library to extend the configuration stored
 on attributes. These keys can define anything, and form the central
 feature of RAD's extensibility.
 
-= Resolving Data
+== Data Modelling, Storage, and API
 
-The core of data interfacing is Pathom, a library for writing EQL parsers on
-clients and servers. Many RAD plugins will auto-generate Pathom resolvers for
-you. For example, the SQL plugin will auto-generate resolvers that can look
-up attributes that have been declared to be stored in an SQL database.
+The attribute definitions are intended to be *usable* by server storage layers to auto-generate artifacts like
+schema, network APIs, documentation, etc.  Of course these things are all optional, but can serve as a great time-saver
+when standing up new applications.
 
-Rad itself has the ability to generate resolvers for arbitrary attributes,
-but in truth this is just a thin wrapper since you will simply declare
-Pathom-specific keys on the attribute to indicate the need for such a resolver.
-This is particularly important in the case of reports, where the data
-generated for the rows is very often derived data that requires more
-complex queries on a back-end database to resolve.
+=== Schema Generation
 
-== Resolving Attributes you Control
+Attributes are intended to be capable of completely describing the data model. Database plugins will often be capable
+of using the attributes to generate server schema. Typical plugins will require library-specific keys that will
+tell you how to get exactly the schema you want.  If you're working with a pre-existing database you will probably not
+bother with this aspect of RAD.
 
-== Resolving Federated Attributes
+=== Resolvers
 
-= RAD UI
+Resolvers are part of the pathom library. Resolvers figure out how to get from a context to data that is needed by
+the client. Attributes describe the data model, so storage plugins can usually generate resolvers and provide a base
+EQL API for your data model. All you have to do is hook it into your server's middleware.
 
-RAD comes with a set of utilities for generating UI based on
-attributes such as forms and reports. This system include basic
-UI routing, HTML5 history support, and automatic authentication
-management.
+=== Security
 
-All of these features are opt-in, and each of them has a number
-of customization hooks that allow you to progressively take more
-control of their functionality as the need arises.
-
-The elements in RAD UI are also meant to be as flexible in
-composition as possible.
-
-== The Main Controller
-
-The main controller is a component that can control a sub-portion of
-your application's UI and routing. You can compose a controller anywhere
-into your application, though controllers are not intended to nest within
-other controllers (it is possible to relax that restriction, but not sure
-what makes sense yet).
-
-The controller has the following jobs:
-
-* Control the routes. All attempts to reach screens managed by the controller
-go through the controller API.
-* Integrate with authentication. Controllers can examine upcoming routes
-to see what authentication is needed, and communicate with the authentication
-system to trigger things like login.
-* Prevent undesirable behaviors, like navigating away from an unsaved form.
-
-== Authentication
-
-RAD comes with a pluggable authentication and authorization system. The
-base system comes with support for local traditional logins, and plugins
-that support things like OAuth or OpenID Connect should be simple
-to integrate.
-
-The primary purpose of the authentication system in RAD is to handle the
-boilerplate logic that is common to almost all applications: ensuring that
-a user is logged in to the appropriate system(s) before sensitive screens
-are accessed.  Thus, the authentication system integrates with the
-controller to prevent routing until such permission can be obtained.
-
-Some kind of authentication system must be configured for the controller
-to work at all, but it is simple enough to configure a no-op authenticator
-that simply ignores the concern.
+Statements about security can also be co-located on attributes, which means that RAD can generate protections around
+your data model.
 
 == Forms
 
+Many features of web applications can be classified as some kind of form. For our purposes a form is a UI for a group of
+attributes that are persisted in a long-term storage. A form could be anything from a simple set of input fields to
+a kanban board. Most applications have the need to generate quite a few simple forms around the base data model in
+order to do customer support and general data administration.  Simple forms are also a common feature in user-facing
+content.
+
+RAD has a pluggable system for generating simple forms, but it can also let you take complete control of the UI
+while RAD still manages the reads, writes, and overall security of the data.
+
+Forms in RAD are a mechanism around reading and writing specific sub-graphs of your data model.
+
 == Reports
+
+Reports are similar to forms, but are not about writing anything in the data model: they are about pulling data
+from your data model. They may include derived data, aggregations, etc.
+
+You typical report will have:
+
+* Input Parameters
+* A query for the results
+* A UI, often tabular.
+
+Most reports are generated by adding additional pathom resolvers to your model, so that you can simply query for the
+various facets that your report needs.
+
+Report plugins should be able to provide just about anything you can imagine in the context of a report, such as:
+
+* Parameter Inputs
+* Linkage to forms for editing
+* Graphs/charts
+* Tabular reports
+
+The RAD system generally makes it easy for you to pull the raw data for a report, and at any moment you can also
+choose to do the specific rendering for the report when no plugin exists that works for your needs.
+
+== Platform Independence
+
+Fulcro works quite well on the web, in React Native, and in Electron. Notice that most of the core RAD stuff is built
+around auto-generation of UI, meaning that many features of RAD will work equally well in a mobile or desktop setting.
+
+= Getting Started
+
+
+
 
