@@ -55,7 +55,7 @@
         control     (or
                       (get-in control-map [type field-style])
                       (do
-                        (log/warn "Custom field style not found: " field-style)
+                        (log/warn "Renderer not found: " type field-style)
                         (get-in control-map [type :default])))]
     control))
 
