@@ -1,9 +1,9 @@
 (ns com.fulcrologic.rad.rendering.semantic-ui.instant-field
   (:require
     #?(:cljs
-       [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
+       [com.fulcrologic.fulcro.dom :refer [div label input]]
        :clj
-       [com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]])
+       [com.fulcrologic.fulcro.dom-server :refer [div label input]])
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.fulcro.components :as comp]
     [clojure.string :as str]
