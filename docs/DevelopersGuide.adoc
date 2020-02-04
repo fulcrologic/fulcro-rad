@@ -199,9 +199,86 @@ to do the specific rendering for the report when no plugin exists that works for
 Fulcro works quite well on the web, in React Native, and in Electron.  Notice that the core of RAD is built around
 auto-generation of UI, meaning that many features of RAD will work equally well in any of these settings.
 
-= Getting Started
-
 = Forms
+
+== Setup
+
+In order to get a basic form working in RAD you need the following:
+
+* Declarations of the attributes that will be part of the form
+* Resolvers that can pull that form's data from the server (usually auto-generated from a db plugin)
+* A save mutation that can save the form (pre-defined, but requires a handler for each database, which is typically
+supplied by a db plugin)
+* (optional) Configuration of the ui rendering to auto-generate the UI (you may also hand-design the UI with
+normal react factories).
+
+The server-side operation of the form is largely handled by a storage plugin and normal Fulcro plumbing, as shown in
+the demo project.
+
+=== The Attributes
+
+The attributes are a global resource defined in CLJC files, as described in the <<Attributes>> section of the book. You
+will typically have one namespace for each cluster of attributes (typically around entities), where each attribute
+defines a minimum of its type and qualified key:
+
+[source]
+----
+(ns project.account
+
+(defattr id :account/id :uuid
+  {})
+
+(defattr name :account/name :string
+  {})
+----
+
+=== The Resolvers
+
+Resolvers are Pathom Resolvers that can pull the data of interest from your database. Typically you'll have one
+resolver for each top-level entity that can pull by ID, and custom resolvers that can satisfy various other
+queries (e.g. all accounts, current user, etc.). Forms need to be able to at least resolve entities by
+their ID.
+
+=== Save Mutation
+
+The form system comes with a built-in save mutation which you should install on your pathom parser (see the demo). This
+save mutation delegates the actual saves to registered database handlers, and typically requires nothing more than
+simple configuration.
+
+== Making a Form
+
+A minimal form that is using the maximal amount of RAD plugins and automation is quite small:
+
+[source]
+----
+(form/defsc-form AccountForm [this props]
+  {::form/id account/id
+   ::form/attributes [account/name]
+   ::form/cancel-route      (dr/path-to LandingPage)
+   ::form/route-prefix      "address"})
+----
+
+The keys shown are required and define:
+
+`::form/id`:: The actual attribute (defattr symbol, not keyword) definition of an identity attribute that acts as
+the unique identifier of the entity in which the form data is stored.
+`::form/attributes`:: The attributes that should be shown in the form.
+`::form/cancel-route`:: A Fulcro dynamic route (absolute) that should be shown if the user cancels out of the form.
+`::form/route-prefix`:: A string that will be used to generate the Fulcro routes for this form. The routes will
+be `prefix/create/new-id` and `prefix/edit/existing-id`.
+
+If you wish to create a new account, you need simple use Fulcro's `change-route` to go to this form:
+`(dr/change-route (dr/path-to AccountForm {:action form/create-action
+                                           :id (random-uuid)}))`
+
+There are pre-written functions in the `form` ns for the common actions:
+
+`(form/create! app-ish FormClass)`:: Create a new instance of an entity using the given form class.
+`(form/edit! app-ish FormClass id)`:: Edit the given entity with `id` using `FormClass`
+`(form/delete! app-ish qualified-id-keyword id)`:: Delete an entity.
+
+Of course you'll also need to configure the overall application and make a root with a top-level router. See the
+demo application for a complete example.
 
 == Authorization and Validation
 
