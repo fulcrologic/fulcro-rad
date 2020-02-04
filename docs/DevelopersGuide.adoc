@@ -280,23 +280,33 @@ Further constraining the value might be something you can say at the general att
 and 130), or may be contextual within a specific form (`from-date` must be before `to-date`).
 
 Validators are functions as described in http://book.fulcrologic.com/#CustomValidators[Fulcro's Form State support]:
-They are functions that return `:valid`, `:invalid`, or `:unknown` (the fields isn't ready to be checked yet).
+They are functions that return `:valid`, `:invalid`, or `:unknown` (the field isn't ready to be checked yet).
 They are easily constructed using the `form-state/make-validator` helper, which takes into account the current completion
 marker on the field itself (which prevents validation messages from showing too early).
 
-Custom validations are defined at the attribute layer with `::attr/validator` and at the form level with the
-`::form/validator`.  If there are validators at both layers then the form one *completely overrides all attribute
-validators*. If you want to compose validators from the attributes then use `attr/make-attribute-validator` on your
-complete model, and use the result in the form validator:
+Attribute-level validation checks are specified with a predicate:
 
 [source]
 ----
-(ns model)
+(defattr name :account/name :string
+  {::attr/valid? (fn [nm] (boolean (seq nm)))})
+----
+
+Custom validations are defined at the form level with the `::form/validator` key.  If there are validators at both
+layers then the form one *completely overrides all attribute validators*. If you want to compose validators from
+the attributes then use `attr/make-attribute-validator` on your complete model, and use the result in the form validator:
+
+[source]
+----
+(ns model ...)
+
+(def all-attributes (concat account/attributes ...)
 (def all-attribute-validator (attr/make-attribute-validator all-attributes))
 
 ...
 
 (ns account)
+
 (def account-validator (fs/make-validator (fn [form field]
                                             (case field
                                               :account/email (str/ends-with? (get form field) "example.com")
@@ -320,3 +330,24 @@ The existence of a message on the form _overrides_ the message declared on the a
                  (str (get form-props k) " is an invalid age."))}
    ...})
 ----
+
+The form-based overrides are useful when you have dependencies between fields, since they can consider all of the
+data in the form at once and incorporate it into the check and validation message. For example you might want to
+require a new email user use their lower-case first name as a prefix for an email address you're going to generate
+in your system. You might use something like this:
+
+[source]
+----
+(def account-validator (fs/make-validator (fn [form field]
+                                            (case field
+                                              :account/email (let [prefix (or
+                                                                            (some-> form
+                                                                              (get :account/name)
+                                                                              (str/split #"\s")
+                                                                              (first)
+                                                                              (str/lower-case))
+                                                                            "")]
+                                                               (str/starts-with? (get form :account/email) prefix))
+                                              (= :valid (model/all-attribute-validator form field))))))
+----
+
