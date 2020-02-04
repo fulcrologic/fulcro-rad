@@ -4,12 +4,9 @@
        [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
        :clj
        [com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]])
-    [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.dom.inputs :as inputs]
-    [com.fulcrologic.rad.attributes :as attr]
     [clojure.string :as str]
-    [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.rendering.semantic-ui.field :refer [render-field-factory]]
     [com.fulcrologic.rad.type-support.decimal :as math]))
 

@@ -2,8 +2,10 @@
   "A common set of date/time functions for CLJC.  Libraries like `tick` are promising, and CLJC time is useful
   (and used by this ns), but cljc-time does not have an interface that is the same between the two languages,
   and tick is alpha (and often annoying)."
-  #?(:cljs (:require-macros [ucv.lib.datetime :refer [compilation-inst]]))
+  #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
+    ;; FIXME: Should document what you should include for minimum size
+    #?(:cljs ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js" :as tzones])
     ;; These two load locale definitions and timezone names
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
@@ -72,7 +74,6 @@
 (defn instant->inst [i] (new-date (instant/to-epoch-milli i)))
 
 (def zone-region? #(= java.time.ZoneRegion (type %)))
-(def date? #(= java.time.LocalDate (type %)))
 (def date-time? #(= java.time.LocalDateTime (type %)))
 (def date? #(= java.time.LocalDate (type %)))
 
@@ -88,7 +89,7 @@
   "Convert a standard HTML5 date input string to a local date"
   [s]
   [string? => date?]
-  (LocalDate/parse s))
+  (ld/parse s))
 
 (>defn local-date->html-date-string
   "Convert a standard HTML5 date input string to a local date"

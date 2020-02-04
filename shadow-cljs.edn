@@ -1,16 +1,7 @@
-{:deps     {:aliases [:dev :test]}
+{:deps     {:aliases [:dev :tests]}
  :nrepl    {:port 9000}
- :dev-http {8080 "resources/public"}
  :jvm-opts ["-Xmx2G"]
- :builds   {:example  {:target     :browser
-                       :output-dir "resources/public/js/example"
-                       :asset-path "/js/eample"
-                       :dev        {:compiler-options {:external-config {:guardrails {}}}}
-                       :modules    {:main {:entries [com.example.client]}}
-                       :devtools   {:preloads   [com.fulcrologic.fulcro.inspect.preload]
-                                    :after-load com.example.client/start}}
-
-            :test     {:target           :browser-test
+ :builds   {:test     {:target           :browser-test
                        :test-dir         "resources/public/js/test"
                        :ns-regexp        "-spec$"
                        :compiler-options {:static-fns      false

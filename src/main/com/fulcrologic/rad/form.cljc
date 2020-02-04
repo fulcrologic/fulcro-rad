@@ -3,7 +3,7 @@
   (:require
     [clojure.spec.alpha :as s]
     [clojure.set :as set]
-    [clojure.pprint :refer [pprint]]
+    [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.data-fetch :as df]
@@ -156,7 +156,9 @@
   (let [{::keys [id attributes route-prefix]} options
         id-key      (::attr/qualified-key id)
         form-field? (fn [{::attr/keys [identity?]}] (not identity?))]
-    (merge options
+    (merge
+      {::validator (attr/make-attribute-validator attributes)}
+      options
       {:query         (fn [this] (form-options->form-query (comp/component-options this)))
        :ident         (fn [_ props] [id-key (get props id-key)])
        :form-fields   (->> attributes
@@ -222,6 +224,8 @@
      (log/info "Save invoked from client with " params)
      (let [idents (keys delta)
            pk     (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
+       ;; TASK: We need to insert some kind of middleware layer to be able to do security and validation, so
+       ;; it is not up to the database adapter.
        (if-let [save-handlers (seq (::save-handlers env))]
          (reduce
            (fn [result handler]
@@ -403,7 +407,6 @@
         Form       (uism/actor-class env :actor/form)
         props      (fns/ui->props state-map Form form-ident)
         delta      (fs/dirty-fields props true)]
-    (log/info (with-out-str (pprint delta)))
     {::delta delta}))
 
 
@@ -664,8 +667,8 @@
 
 (defmutation transform-options
   "INTERNAL MUTATION. Do not use."
-  [{:keys       [ref]
-                                 ::keys [pick-one]}]
+  [{:keys  [ref]
+    ::keys [pick-one]}]
   (action [{:keys [state] :as env}]
     (let [result    (get-in @state (conj ref :ui/query-result))
           transform (get pick-one :options/transform)
@@ -705,3 +708,32 @@
         control     (get-in control-map [:entity-picker :default])]
     (when control
       (control {::form-instance this} {}))))
+
+(defn field-label
+  "Returns a human readable label for a given attribute (which can be declared on the attribute, and overridden on the
+  specific form). Defaults to the capitalized name of the attribute qualified key."
+  [form-env attribute]
+  (let [{::keys [form-instance]} form-env
+        k           (::attr/qualified-key attribute)
+        options     (comp/component-options form-instance)
+        field-label (or
+                      (get-in options [::field-labels k])
+                      (::field-label attribute)
+                      (some-> k name str/capitalize))]
+    field-label))
+
+(defn invalid?
+  "Returns true if the validator on the form in `env` indicates that some form field(s) are invalid."
+  [env]
+  (let [{::keys [form-instance]} env
+        props (comp/props form-instance)
+        {::keys [validator]} (comp/component-options form-instance)]
+    (and validator (= :invalid (validator props)))))
+
+(defn valid?
+  "Returns true if the validator on the form in `env` indicates that all of the form fields are valid."
+  [env]
+  (let [{::keys [form-instance]} env
+        props (comp/props form-instance)
+        {::keys [validator]} (comp/component-options form-instance)]
+    (log/spy :info (and validator (= :valid (validator props))))))

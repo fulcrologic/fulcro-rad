@@ -64,22 +64,20 @@ endif::[]
 
 = Introduction
 
-This book covers Rapid Application Development (RAD) tools for Fulcro. The RAD system is intended to be augmented
-with any number of plugins that can handle anything from back-end database management to front-end UI automation.
+This book covers Rapid Application Development (RAD) tools for Fulcro.  The RAD system is intended to be augmented with
+any number of plugins that can handle anything from back-end database management to front-end UI automation.
 
 The core system has the following general ideals:
 
-* Everything is optional. Applications written using RAD should be
-able to choose which aspects are useful, and easily escape from aspects
-if they don't fit their needs.
+* Everything is optional.  Applications written using RAD should be able to choose which aspects are useful, and easily
+escape from aspects if they don't fit their needs.
 * Reasonable defaults and utilities for common needs.
 
-The common features that are intended to be well-supported in early versions
-of the library include:
+The common features that are intended to be well-supported in early versions of the library include:
 
 * Declarative and extensible data model.
-* Reasonable defaults for CRUD interfaces (form generation) to arbitrary graphs
-of that data model, including to-one and to-many relations.
+* Reasonable defaults for CRUD interfaces (form generation) to arbitrary graphs of that data model, including to-one
+and to-many relations.
 * Reasonable defaults for common reporting needs, especially when tabular.
 * An opt-in extensible authentication mechanism.
 
@@ -87,78 +85,72 @@ RAD is currently of pre-alpha quality, and should be used with caution.
 
 == Attributes
 
-Fulcro encourages the use of a graph-based data model that is agnostic
-to the underlying representation of your data. This turns out to be a quite
-powerful abstraction, as it frees you from the general limitations and
-restrictions of a rigid class/table-based schema while
-still giving you adequate structure for your data model.
+Fulcro encourages the use of a graph-based data model that is agnostic to the underlying representation of your data.
+This turns out to be a quite powerful abstraction, as it frees you from the general limitations and restrictions of a
+rigid class/table-based schema while still giving you adequate structure for your data model.
 
-The central artifact that you write when building with RAD is an *attribute*, which is an RDF-style concept where
-you define everything of interest about a particular fact in the world in a common map. The only two require things
-that you must say about an attribute are to give it a distinct name, and a distinct type.  The *name* must be a
-fully-qualified keyword. The namespace should be distinct enough to co-exist in the data realm of your application
-(i.e. if you are working on the internet level you should consider using domain-style naming). The *type* must be
-a data type that is supported by your database back-end.  The type system of RAD is extensible, and you must refer
-to the documentation of your selected database adapter and rendering layer to find out if the data type is already
-supported. It is generally easy to extend the data type support of RAD.
+The central artifact that you write when building with RAD is an *attribute*, which is an RDF-style concept where you
+define everything of interest about a particular fact in the world in a common map.  The only two require things that
+you must say about an attribute are to give it a distinct name, and a distinct type.  The *name* must be a
+fully-qualified keyword.  The namespace should be distinct enough to co-exist in the data realm of your application
+(i.e. if you are working on the internet level you should consider using domain-style naming).
+The *type* must be a data type that is supported by your database back-end.  The type system of RAD is extensible, and
+you must refer to the documentation of your selected database adapter and rendering layer to find out if the data type
+is already supported.  It is generally easy to extend the data type support of RAD.
 
 A minimal attribute will look something like this:
 
-[source, clojure]
-======
-(ns com.example.model.item
-  (:require
+[source,clojure]
+----
+(ns com.example.model.item (:require
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
 
-(defattr id :item/id :uuid
-  {::attr/identity?                                      true
+(defattr id :item/id :uuid 
+  {::attr/identity? true 
    :com.fulcrologic.rad.database-adapters.datomic/schema :production})
-======
+----
 
-The `defattr` macro really just assigns a plain map to the provided symbol (`id` in this case), but it also ensures
-that you've provided a name for the attribute (`:item/id` in this case), and a type.  It is exactly equivalent to:
+The `defattr` macro really just assigns a plain map to the provided symbol (`id` in this case), but it also ensures that
+you've provided a name for the attribute (`:item/id` in this case), and a type.  It is exactly equivalent to:
 
-[source, clojure]
-======
-(def id
- {::attr/qualified-key :item/id
-  ::attr/type :uuid
-  ::attr/identity?                                      true
-  :com.fulcrologic.rad.database-adapters.datomic/schema :production})
-======
+[source,clojure]
+----
+(def id {::attr/qualified-key :item/id 
+         ::attr/type :uuid 
+         ::attr/identity? true 
+         :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+----
 
-The various plugins and facilities of RAD define keys that allow you to describe how your new data attribute
-should behave in the system. In the example above the `identity?` marker indicates that the attribute identifies
-groups of other facts (is a primary key for data), and the datomic-namespaced `schema` is used by the Datomic
-database plugin to indicate the schema that the attribute should be associated with.
+The various plugins and facilities of RAD define keys that allow you to describe how your new data attribute should
+behave in the system.  In the example above the `identity?` marker indicates that the attribute identifies groups of
+other facts (is a primary key for data), and the datomic-namespaced `schema` is used by the Datomic database plugin to
+indicate the schema that the attribute should be associated with.
 
 === Extensibility
 
-Attributes are represented as open maps (you can add your own namespaced key/value pairs).
-There are a core set of keys that
-the core library defines for generalized use, but most plugins will use
-keywords namespaced to their library to extend the configuration stored
-on attributes. These keys can define anything, and form the central
-feature of RAD's extensibility.
+Attributes are represented as open maps (you can add your own namespaced key/value pairs).  There are a core set of keys
+that the core library defines for generalized use, but most plugins will use keywords namespaced to their library to
+extend the configuration stored on attributes.  These keys can define anything, and form the central feature of RAD's
+extensibility.
 
 == Data Modelling, Storage, and API
 
-The attribute definitions are intended to be *usable* by server storage layers to auto-generate artifacts like
-schema, network APIs, documentation, etc.  Of course these things are all optional, but can serve as a great time-saver
-when standing up new applications.
+The attribute definitions are intended to be *usable* by server storage layers to auto-generate artifacts like schema,
+network APIs, documentation, etc.  Of course these things are all optional, but can serve as a great time-saver when
+standing up new applications.
 
 === Schema Generation
 
-Attributes are intended to be capable of completely describing the data model. Database plugins will often be capable
-of using the attributes to generate server schema. Typical plugins will require library-specific keys that will
-tell you how to get exactly the schema you want.  If you're working with a pre-existing database you will probably not
-bother with this aspect of RAD.
+Attributes are intended to be capable of completely describing the data model.  Database plugins will often be capable
+of using the attributes to generate server schema.  Typical plugins will require library-specific keys that will tell
+you how to get exactly the schema you want.  If you're working with a pre-existing database you will probably not bother
+with this aspect of RAD.
 
 === Resolvers
 
-Resolvers are part of the pathom library. Resolvers figure out how to get from a context to data that is needed by
-the client. Attributes describe the data model, so storage plugins can usually generate resolvers and provide a base
-EQL API for your data model. All you have to do is hook it into your server's middleware.
+Resolvers are part of the pathom library.  Resolvers figure out how to get from a context to data that is needed by the
+client.  Attributes describe the data model, so storage plugins can usually generate resolvers and provide a base EQL
+API for your data model.  All you have to do is hook it into your server's middleware.
 
 === Security
 
@@ -167,21 +159,21 @@ your data model.
 
 == Forms
 
-Many features of web applications can be classified as some kind of form. For our purposes a form is a UI for a group of
-attributes that are persisted in a long-term storage. A form could be anything from a simple set of input fields to
-a kanban board. Most applications have the need to generate quite a few simple forms around the base data model in
+Many features of web applications can be classified as some kind of form.  For our purposes a form is a UI for a group
+of attributes that are persisted in a long-term storage.  A form could be anything from a simple set of input fields to
+a kanban board.  Most applications have the need to generate quite a few simple forms around the base data model in
 order to do customer support and general data administration.  Simple forms are also a common feature in user-facing
 content.
 
-RAD has a pluggable system for generating simple forms, but it can also let you take complete control of the UI
-while RAD still manages the reads, writes, and overall security of the data.
+RAD has a pluggable system for generating simple forms, but it can also let you take complete control of the UI while
+RAD still manages the reads, writes, and overall security of the data.
 
 Forms in RAD are a mechanism around reading and writing specific sub-graphs of your data model.
 
 == Reports
 
-Reports are similar to forms, but are not about writing anything in the data model: they are about pulling data
-from your data model. They may include derived data, aggregations, etc.
+Reports are similar to forms, but are not about writing anything in the data model: they are about pulling data from
+your data model.  They may include derived data, aggregations, etc.
 
 You typical report will have:
 
@@ -199,16 +191,132 @@ Report plugins should be able to provide just about anything you can imagine in 
 * Graphs/charts
 * Tabular reports
 
-The RAD system generally makes it easy for you to pull the raw data for a report, and at any moment you can also
-choose to do the specific rendering for the report when no plugin exists that works for your needs.
+The RAD system generally makes it easy for you to pull the raw data for a report, and at any moment you can also choose
+to do the specific rendering for the report when no plugin exists that works for your needs.
 
-== Platform Independence
+== Platform Targets
 
-Fulcro works quite well on the web, in React Native, and in Electron. Notice that most of the core RAD stuff is built
-around auto-generation of UI, meaning that many features of RAD will work equally well in a mobile or desktop setting.
+Fulcro works quite well on the web, in React Native, and in Electron.  Notice that the core of RAD is built around
+auto-generation of UI, meaning that many features of RAD will work equally well in any of these settings.
 
 = Getting Started
 
+= Forms
 
+== Authorization and Validation
 
+There are several places in form support that you may want to do a security or data validation when working with forms.
 
+First, we could consider the three broadest categories by which we might constrain action:
+
+. Read: Which things in the form should be visible to the given user.
+. Write: Which things in the form the user is allowed to change, along with enforcing valid values.
+. Execution (routing): Is the user even allowed to "run" the form (route to it)?
+
+Of course there are always both the client and server contexts for these concerns.  Going to a form in the server
+context is both a top-level and granular read restriction, whereas displaying a form in the client layer is both a UI
+routing and form field visibility/interaction concern.
+
+Ultimately there is an aspect of _granularity_: an entire route might be constrained, or a single property on a form
+(e.g. a password should only be editable by an admin or the proven owner of the account).
+
+All of these aspects of authorization and validation are meant to be declaratively controlled in RAD, but that control
+is meant to be generally extensible.  Therefore authorization and validation middleware can be augmented and installed
+at the following locations in the RAD stack:
+
+* At the Ring middleware layer (standard Ring security).
+* At the UI routing layer.
+* At the global parser layer.
+* At the individual attribute resolver and mutation layer.
+* In the form save pipeline (both at the complete form and field granularity).
+
+Pre-written plugins for forms give you pre-written functionality, but writing your own plugin for any one of these
+layers allows you to customize these aspects as much as you desire.
+
+We won't be covering Ring middleware in this book, since that is well-documented elsewhere.
+
+=== UI Routing Middleware
+
+WARNING: Not yet implemented
+
+When you define a form using `defsc-form` you end up creating a routing target in Fulcro's dynamic routing system.  The
+`:will-enter` handler is automatically supplied for you, and runs the various operations necessary for starting up a
+state machine on the form and completing the route.
+
+RAD's form system has an optional routing middleware system that can be configured to do client-side authorization tasks
+that can prevent (or redirect) routing.  This middleware has access to the state map, the target form. and the target
+route.  Individual forms can override this middleware on a per-component basis with the `::form/routing-middleware` key.
+
+=== Parser-level Validation and Authorization
+
+You can add middleware to the pathom parser in RAD that analyze the overall query or mutation being processed, and
+modify the outcome in any way.  This is a standard Pathom feature.
+
+=== Resolver and Mutation validation
+
+Auto-generated resolvers and mutations use ...
+
+Of course when you hand-write a resolver or mutation you can leverage attribute definitions, the `env`, and anything
+else to determine the validity of the operation in question.
+
+=== Form Validation/Authorization
+
+WARNING: Not yet implemented
+
+Individual fields are represented by one (or a small group) of attributes.  Those attributes are a great location to
+place things like data specifications, user-facing validation checks, etc.
+
+The form save mechanism in RAD has a standard server-side entry point that splits off an incoming save across any number
+of low-level database adapters.  You can install middleware that sits between these two (the entry point and actual
+save).  Such middleware can redact information, reject invalid requests, verify security, etc.
+
+== UI Validation
+
+The data type and rendering style of an attribute (along with extended parameters defined by input syltes) are the first
+line of UI validation: Saying that something is a decimal number with a US currency style will already ensure that the
+user cannot input "abc" into the field.
+
+Further constraining the value might be something you can say at the general attribute level (`age` must be between 0
+and 130), or may be contextual within a specific form (`from-date` must be before `to-date`).
+
+Validators are functions as described in http://book.fulcrologic.com/#CustomValidators[Fulcro's Form State support]:
+They are functions that return `:valid`, `:invalid`, or `:unknown` (the fields isn't ready to be checked yet).
+They are easily constructed using the `form-state/make-validator` helper, which takes into account the current completion
+marker on the field itself (which prevents validation messages from showing too early).
+
+Custom validations are defined at the attribute layer with `::attr/validator` and at the form level with the
+`::form/validator`.  If there are validators at both layers then the form one *completely overrides all attribute
+validators*. If you want to compose validators from the attributes then use `attr/make-attribute-validator` on your
+complete model, and use the result in the form validator:
+
+[source]
+----
+(ns model)
+(def all-attribute-validator (attr/make-attribute-validator all-attributes))
+
+...
+
+(ns account)
+(def account-validator (fs/make-validator (fn [form field]
+                                            (case field
+                                              :account/email (str/ends-with? (get form field) "example.com")
+                                              (= :valid (model/all-attribute-validator form field))))))
+----
+
+The message shown to the user for an invalid field is also configurable at the form or attribute level.
+The existence of a message on the form _overrides_ the message declared on the attribute.
+
+[source]
+----
+(attr/defattr age :thing/age :int
+  ::attr/validation-message (fn [age]
+                              (str "Age must be between 0 and 130.")))
+
+...
+
+(form/defsc-form ThingForm [this props]
+  {::form/validation-messages
+   {:thing/age (fn [form-props k]
+                 (str (get form-props k) " is an invalid age."))}
+   ...})
+----

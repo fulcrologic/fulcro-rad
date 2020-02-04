@@ -122,9 +122,10 @@
   (let [{::form/keys [can-delete?]} computed-props
         nested? (not= master-form form-instance)
         {::form/keys [attributes layout] :as options} (comp/component-options form-instance)
+        valid?  (form/valid? env)
         dirty?  (or (:ui/new? props) (fs/dirty? props))]
     (if nested?
-      (dom/div :.ui.form
+      (dom/div :.ui.form {:classes [(when-not valid? "error")]}
         (dom/div :.ui.segment
           (when can-delete?
             (dom/button :.ui.icon.primary.right.floated.button {:disabled (not (can-delete? props))
@@ -136,7 +137,7 @@
             (mapv
               (fn [attr] (render-attribute env attr options))
               attributes))))
-      (dom/div :.ui.form
+      (dom/div :.ui.form {:classes [(when-not valid? "error")]}
         (dom/div :.ui.top.attached.segment
           (dom/h3 :.ui.header (or (some-> form-instance comp/component-options ::form/title i18n/tr-unsafe) (tr "Edit"))))
         (dom/div :.ui.attached.segment
@@ -149,7 +150,7 @@
           (dom/button :.ui.secondary.button {:disabled (not dirty?)
                                              :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
           (dom/button :.ui.secondary.button {:onClick (fn [] (form/cancel! env))} (tr "Cancel"))
-          (dom/button :.ui.primary.button {:disabled (not dirty?)
+          (dom/button :.ui.primary.button {:disabled (or (not valid?) (not dirty?))
                                            :onClick  (fn [] (form/save! env))} (tr "Save")))))))
 
 

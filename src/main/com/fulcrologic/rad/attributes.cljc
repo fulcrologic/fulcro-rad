@@ -5,6 +5,7 @@
     [clojure.walk :as walk]
     [taoensso.timbre :as log]
     [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
+    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.rad.ids :refer [new-uuid]])
   #?(:clj
      (:import (clojure.lang IFn)
@@ -178,3 +179,18 @@
       (if (attribute? ele)
         (::qualified-key ele)
         ele)) attr-query))
+
+(defn make-attribute-validator
+  "Creates a function that can be used as a form validator for any form that contains the given `attributes`.  If the
+  form asks for validation on an attribute that isn't listed or has no `::attr/valid?` function then it will consider
+  that attribute valid."
+  [attributes]
+  (let [attribute-map (into {}
+                        (map (fn [{::keys [qualified-key] :as a}]
+                               [qualified-key a])
+                          attributes))]
+    (fs/make-validator
+      (fn [form k]
+        (if-let [valid? (get-in attribute-map [k ::valid?])]
+          (valid? (get form k))
+          true)))))

@@ -1,24 +1,19 @@
 (ns com.fulcrologic.rad.rendering.semantic-ui.instant-field
   (:require
-    #?(:cljs
-       [com.fulcrologic.fulcro.dom :refer [div label input]]
-       :clj
-       [com.fulcrologic.fulcro.dom-server :refer [div label input]])
-    [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.fulcro.components :as comp]
     [clojure.string :as str]
+    [com.fulcrologic.fulcro.components :as comp]
+    #?(:cljs [com.fulcrologic.fulcro.dom :refer [div label input]]
+       :clj  [com.fulcrologic.fulcro.dom-server :refer [div label input]])
+    [com.fulcrologic.fulcro.dom.inputs :as inputs]
+    [com.fulcrologic.rad.type-support.date-time :as datetime]
+    [com.fulcrologic.rad.rendering.semantic-ui.field :refer [render-field-factory]]
+    [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.form :as form]))
 
-(defn render-field [{::form/keys [form-instance] :as env} attribute]
-  (let [k          (::attr/qualified-key attribute)
-        props      (comp/props form-instance)
-        {::form/keys [field-label]} attribute
-        read-only? (form/read-only? form-instance attribute)
-        value      (or (and attribute (get props k)) "")]
-    (div :.ui.field {:key (str k)}
-      (label (or field-label (some-> k name str/capitalize)))
-      (if read-only?
-        (div (str value))
-        ;; FIXME: date time input handling, which needs coercion logic and probably comp-local-state buffering
-        (div (str value))))))
+(def ui-datetime-input
+  (comp/factory (inputs/StringBufferedInput ::DateTimeInput
+                  {:model->string (fn [tm] (datetime/inst->html-datetime-string "America/Los_Angeles" tm))
+                   :string->model (fn [s] (datetime/html-datetime-string->inst "America/Los_Angeles" s))})))
+
+(def render-field (render-field-factory ui-datetime-input))
 
