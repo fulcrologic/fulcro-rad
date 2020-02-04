@@ -736,4 +736,4 @@
   (let [{::keys [form-instance]} env
         props (comp/props form-instance)
         {::keys [validator]} (comp/component-options form-instance)]
-    (log/spy :info (and validator (= :valid (validator props))))))
+    (and validator (= :valid (validator props)))))

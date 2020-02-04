@@ -90,8 +90,8 @@ This turns out to be a quite powerful abstraction, as it frees you from the gene
 rigid class/table-based schema while still giving you adequate structure for your data model.
 
 The central artifact that you write when building with RAD is an *attribute*, which is an RDF-style concept where you
-define everything of interest about a particular fact in the world in a common map.  The only two require things that
-you must say about an attribute are to give it a distinct name, and a distinct type.  The *name* must be a
+define everything of interest about a particular fact in the world in a common map.  The only two required things that
+you must say about an attribute are a distinct name and a distinct type.  The *name* must be a
 fully-qualified keyword.  The namespace should be distinct enough to co-exist in the data realm of your application
 (i.e. if you are working on the internet level you should consider using domain-style naming).
 The *type* must be a data type that is supported by your database back-end.  The type system of RAD is extensible, and
@@ -235,7 +235,7 @@ defines a minimum of its type and qualified key:
 === The Resolvers
 
 Resolvers are Pathom Resolvers that can pull the data of interest from your database. Typically you'll have one
-resolver for each top-level entity that can pull by ID, and custom resolvers that can satisfy various other
+resolver for each top-level entity that can be pulled by ID, and custom resolvers that can satisfy various other
 queries (e.g. all accounts, current user, etc.). Forms need to be able to at least resolve entities by
 their ID.
 
@@ -252,8 +252,8 @@ A minimal form that is using the maximal amount of RAD plugins and automation is
 [source]
 ----
 (form/defsc-form AccountForm [this props]
-  {::form/id account/id
-   ::form/attributes [account/name]
+  {::form/id                account/id
+   ::form/attributes        [account/name]
    ::form/cancel-route      (dr/path-to LandingPage)
    ::form/route-prefix      "address"})
 ----
@@ -428,3 +428,71 @@ in your system. You might use something like this:
                                               (= :valid (model/all-attribute-validator form field))))))
 ----
 
+== Composing Forms
+
+It is quite common for a form to cover more than one entity (row or document) in a database. An account might have
+one or more addresses. An invoice has a customer, line items, and references to inventory. In RAD, combining related
+data requires a form definition for each uniquely identifiable entity/row/document. These can have to-one or to-many
+relationships.
+
+A given entity and its related data can be joined together into a single form interaction by making one of the forms
+the master. This must be a form that resolves to a single entity, and whose subforms are reachable by resolvers through
+the attributes of that master (or descendants).
+
+Any form can automatically serve as a master. The master is simply selected by routing to it, since that will start
+that form's state machine which in turn will end up controlling the entire interaction.  The subforms themselves can
+act as standalone forms, but will not be running their own state machine unless you route directly to them. Interestingly
+this means that forms can have both a sibling and parent-child relationship in your application's UI graph.
+
+All forms are typically added to a top-level router so that each kind of entity can be worked with in isolation. However,
+some forms may also make sense to use a subforms within the context of others. An example might be an `AddressForm`. While
+it might make sense to allow someone to edit an address in isolation, the address itself probably belongs to some other
+entity that may wish to allow editing of that sub-entity in its context.
+
+A simple example of this would look as follows:
+
+[source]
+-----
+(form/defsc-form AddressForm [this props]
+  {::form/id                address/id
+   ::form/attributes        [address/street address/city address/state address/zip]
+   ::form/cancel-route      ["landing-page"]
+   ::form/route-prefix      "address"
+   ::form/title             "Edit Address"})
+
+(form/defsc-form AccountForm [this props]
+  {::form/id                  acct/id
+   ::form/attributes          [acct/name acct/email acct/active? acct/addresses]
+   ::form/cancel-route        ["landing-page"]
+   ::form/route-prefix        "account"
+   ::form/title               "Edit Account"
+   ::form/subforms            {:account/addresses {::form/ui              AddressForm}}})
+
+(defrouter MainRouter [this props]
+  {:router-targets [AccountForm AddressForm]})
+-----
+
+In the above example the `AddressForm` is completely usable to edit an address (if you have an ID) or create one
+(if it makes sense to your application to create one in isolation). But it is also used as a subform through the
+`:account/addresses` attribute where the `::form/subforms` map is used to configure which form should be used for
+the items of the to-many relationship. Additional keys in the `subforms` map entries allow for specific behavioral
+support.
+
+=== Relationship Lifecycle
+
+One of the core questions in any relation is: does the referring entity/table/document "own" the target?  In other words
+does it create and destroy it?  When there is a graph of such relations this question is also recursive (and is handled by things
+like cascade definitions in SQL and isComponent markers in Datomic).
+
+When there is not an ownership relation one still needs to know if the referring entity is allowed to create new ones
+(destroying them is usually ruled out, since others could be using it).
+
+In the cases where the is not an ownership relation we usually model that as some kind of "picker" in a form, allowing
+the user to simply select "which" of the existing targets are desired. When there is an owership relation the form
+will usually model the items as editable sub-forms, with optional controls that allow the addition and removal of the
+elements in the relation.
+
+=== To-One Relationships
+
+
+=== To-Many Relationships
