@@ -487,10 +487,10 @@ like cascade definitions in SQL and isComponent markers in Datomic).
 When there is not an ownership relation one still needs to know if the referring entity is allowed to create new ones
 (destroying them is usually ruled out, since others could be using it).
 
-In the cases where the is not an ownership relation we usually model that as some kind of "picker" in a form, allowing
-the user to simply select "which" of the existing targets are desired. When there is an owership relation the form
-will usually model the items as editable sub-forms, with optional controls that allow the addition and removal of the
-elements in the relation.
+In the cases where there is not an ownership relation we usually model it as some kind of "picker" in a form, allowing
+the user to simply select (or search for) "which" of the existing targets are desired. When there is an ownership
+relation the form will usually model the items as editable sub-forms, with optional controls that allow the
+addition and removal of the elements in the relation.
 
 === To-One Relationships
 
