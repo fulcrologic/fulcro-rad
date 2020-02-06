@@ -3,7 +3,7 @@
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [cljc.java-time.instant]
     [cljc.java-time.local-date :as ld]
-    [fulcro-spec.core :refer [assertions specification]]
+    [fulcro-spec.core :refer [assertions specification behavior]]
     #?@(:clj  []
         :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
                [goog.date.duration :as g-duration]])
@@ -60,5 +60,12 @@
       (dt/inst->local-datetime "America/Los_Angeles" tm) => expected-LA
       (dt/inst->local-datetime "America/New_York" tm) => expected-NY)))
 
-
-
+(specification "set-timezone!"
+  (datetime/set-timezone! "America/New_York")
+  (assertions
+    "allows the root binding to be modified to a new time zone"
+    (str datetime/*current-timezone*) => "America/New_York")
+  (binding [datetime/*current-timezone* "America/Los_Angeles"]
+    (assertions
+      "and can be overridden with binding"
+      (str datetime/*current-timezone*) => "America/Los_Angeles")))

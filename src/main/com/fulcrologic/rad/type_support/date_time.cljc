@@ -4,8 +4,8 @@
   and tick is alpha (and often annoying)."
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
-    ;; FIXME: Should document what you should include for minimum size
-    #?(:cljs ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js" :as tzones])
+    ;; FIXME: Should document what you should include in order for it to work, and to get the minimum size
+    #?(:cljs ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"])
     ;; These two load locale definitions and timezone names
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
@@ -53,6 +53,22 @@
                       java-time.day-of-week/friday
                       java-time.day-of-week/saturday})
 
+(def ^:dynamic *current-timezone*
+  "The current time zone for all date time operations. Defaults to nil. Should be set using
+  `set-timezone!` in cljs, and should be thread-bound to a processing request using `binding` in CLJ.
+  The value of this var is a java.time.ZoneId, which can be obtained from a string with cljc.time.zone-id/of."
+  nil)
+
+(>defn set-timezone!
+  "Set the root binding of timezone, a dynamic var. In CLJS there is a lot of async behavior, but the overall
+  time zone is typically fixed for a user. In CLJ the timezone usually needs to be bound to the local processing
+  thread for a request. Therefore, the typical CLJS code will call this function on start, and the typical
+  CLJ code will do a `(binding [*current-timezone* (z/of user-zone)] ...)`. "
+  [zone-name]
+  [::zone-name => any?]
+  #?(:cljs    (set! *current-timezone* (zone-id/of zone-name))
+     :default (alter-var-root (var *current-timezone*) (constantly (zone-id/of zone-name)))))
+
 (>defn new-date
   "Create a Date object from milliseconds (defaults to now)."
   ([]
@@ -98,7 +114,11 @@
   (str d))
 
 (>defn local-datetime->inst
-  "Returns a UTC Clojure inst based on the date/time given as time in the named (ISO) zone (e.g. America/Los_Angeles)."
+  "Returns a UTC Clojure inst based on the date/time given as time in the named (ISO) zone (e.g. America/Los_Angeles).
+  If no zone name (or nil) is given, then the `*current-timezone*` will be used."
+  ([local-dt]
+   [::local-date-time => inst?]
+   (local-datetime->inst *current-timezone* local-dt))
   ([zone-name local-dt]
    [::zone-name ::local-date-time => inst?]
    (let [z      (zone-id/of zone-name)
@@ -115,27 +135,37 @@
 
 (>defn inst->local-datetime
   "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) LocalDateTime."
-  [zone-name inst]
-  [::zone-name (s/or :inst inst?
-                 :instant ::instant) => ::local-date-time]
-  (let [z   (zone-id/of zone-name)
-        i   (instant/of-epoch-milli (inst-ms inst))
-        ldt (ldt/of-instant i z)]
-    ldt))
+  ([inst]
+   [(s/or :inst inst?
+      :instant ::instant) => ::local-date-time]
+   (inst->local-datetime *current-timezone* inst))
+  ([zone-name inst]
+   [::zone-name (s/or :inst inst?
+                  :instant ::instant) => ::local-date-time]
+   (let [z   (zone-id/of zone-name)
+         i   (instant/of-epoch-milli (inst-ms inst))
+         ldt (ldt/of-instant i z)]
+     ldt)))
 
 (>defn html-datetime-string->inst
-  [zone-name date-time-string]
-  [::zone-name string? => inst?]
-  (let [z   (zone-id/of zone-name)
-        dt  (ldt/parse date-time-string)
-        zdt (ldt/at-zone dt z)
-        i   (zdt/to-instant zdt)]
-    (new-date (instant/to-epoch-milli i))))
+  ([date-time-string]
+   [string? => inst?]
+   (html-datetime-string->inst *current-timezone* date-time-string))
+  ([zone-name date-time-string]
+   [::zone-name string? => inst?]
+   (let [z   (zone-id/of zone-name)
+         dt  (ldt/parse date-time-string)
+         zdt (ldt/at-zone dt z)
+         i   (zdt/to-instant zdt)]
+     (new-date (instant/to-epoch-milli i)))))
 
 (>defn inst->html-datetime-string
-  [zone-name inst]
-  [::zone-name inst? => string?]
-  (let [z         (zone-id/of zone-name)
-        ldt       (ldt/of-instant (inst->instant inst) z)
-        formatter cljc.java-time.format.date-time-formatter/iso-local-date-time]
-    (ldt/format ldt formatter)))
+  ([inst]
+   [inst? => string?]
+   (inst->html-datetime-string *current-timezone* inst))
+  ([zone-name inst]
+   [::zone-name inst? => string?]
+   (let [z         (zone-id/of zone-name)
+         ldt       (ldt/of-instant (inst->instant inst) z)
+         formatter cljc.java-time.format.date-time-formatter/iso-local-date-time]
+     (ldt/format ldt formatter))))
