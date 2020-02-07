@@ -53,11 +53,14 @@
                       java-time.day-of-week/friday
                       java-time.day-of-week/saturday})
 
-(def ^:dynamic *current-timezone*
-  "The current time zone for all date time operations. Defaults to nil. Should be set using
-  `set-timezone!` in cljs, and should be thread-bound to a processing request using `binding` in CLJ.
-  The value of this var is a java.time.ZoneId, which can be obtained from a string with cljc.time.zone-id/of."
-  nil)
+#?(:clj
+   (def ^:dynamic *current-timezone*
+     "The current time zone for all date time operations. Defaults to nil. Should be set using
+     `set-timezone!` in cljs, and should be thread-bound to a processing request using `binding` in CLJ.
+     The value of this var is a java.time.ZoneId, which can be obtained from a string with cljc.time.zone-id/of."
+     nil)
+   :cljs
+   (defonce ^:dynamic *current-timezone* nil))
 
 (>defn set-timezone!
   "Set the root binding of timezone, a dynamic var. In CLJS there is a lot of async behavior, but the overall
@@ -101,6 +104,13 @@
                     java-time.day-of-week/saturday
                     java-time.day-of-week/sunday])
 
+(defn get-zone-id
+  "Returns the ZoneID of zone-name, or *current-timezone* if zone-name is nil."
+  [zone-name]
+  (if (string? zone-name)
+    (zone-id/of zone-name)
+    *current-timezone*))
+
 (>defn html-date-string->local-date
   "Convert a standard HTML5 date input string to a local date"
   [s]
@@ -118,10 +128,10 @@
   If no zone name (or nil) is given, then the `*current-timezone*` will be used."
   ([local-dt]
    [::local-date-time => inst?]
-   (local-datetime->inst *current-timezone* local-dt))
+   (local-datetime->inst nil local-dt))
   ([zone-name local-dt]
    [::zone-name ::local-date-time => inst?]
-   (let [z      (zone-id/of zone-name)
+   (let [z      (get-zone-id zone-name)
          zdt    (ldt/at-zone local-dt z)
          millis (instant/to-epoch-milli (zdt/to-instant zdt))]
      (new-date millis)))
@@ -138,11 +148,11 @@
   ([inst]
    [(s/or :inst inst?
       :instant ::instant) => ::local-date-time]
-   (inst->local-datetime *current-timezone* inst))
+   (inst->local-datetime nil inst))
   ([zone-name inst]
    [::zone-name (s/or :inst inst?
                   :instant ::instant) => ::local-date-time]
-   (let [z   (zone-id/of zone-name)
+   (let [z   (get-zone-id zone-name)
          i   (instant/of-epoch-milli (inst-ms inst))
          ldt (ldt/of-instant i z)]
      ldt)))
@@ -150,10 +160,10 @@
 (>defn html-datetime-string->inst
   ([date-time-string]
    [string? => inst?]
-   (html-datetime-string->inst *current-timezone* date-time-string))
+   (html-datetime-string->inst nil date-time-string))
   ([zone-name date-time-string]
    [::zone-name string? => inst?]
-   (let [z   (zone-id/of zone-name)
+   (let [z   (get-zone-id zone-name)
          dt  (ldt/parse date-time-string)
          zdt (ldt/at-zone dt z)
          i   (zdt/to-instant zdt)]
@@ -162,10 +172,10 @@
 (>defn inst->html-datetime-string
   ([inst]
    [inst? => string?]
-   (inst->html-datetime-string *current-timezone* inst))
+   (inst->html-datetime-string nil inst))
   ([zone-name inst]
    [::zone-name inst? => string?]
-   (let [z         (zone-id/of zone-name)
+   (let [z         (get-zone-id zone-name)
          ldt       (ldt/of-instant (inst->instant inst) z)
          formatter cljc.java-time.format.date-time-formatter/iso-local-date-time]
      (ldt/format ldt formatter))))

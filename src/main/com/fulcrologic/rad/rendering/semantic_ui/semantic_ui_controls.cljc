@@ -22,7 +22,8 @@
                                                              :int           {:default int-field/render-field}
                                                              :decimal       {:default decimal-field/render-field}
                                                              :boolean       {:default boolean-field/render-field}
-                                                             :instant       {:default instant/render-field}
+                                                             :instant       {:default      instant/render-field
+                                                                             :date-at-noon instant/render-date-at-noon-field}
                                                              :entity-picker {:default sui-form/ui-render-entity-picker}}
 
    ;; Report-related controls

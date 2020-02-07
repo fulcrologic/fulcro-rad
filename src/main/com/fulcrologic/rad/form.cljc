@@ -48,9 +48,13 @@
 
 (def data-type->field-type {:string :text})
 
-(defn attr->renderer [{::keys [form-instance]} {::attr/keys [type qualified-key]}]
+(defn attr->renderer [{::keys [form-instance]} {::attr/keys [type qualified-key]
+                                                ::keys      [field-style]}]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        field-style (or (some-> form-instance comp/component-options ::field-style qualified-key) :default)
+        field-style (or
+                      (some-> form-instance comp/component-options ::field-style qualified-key)
+                      field-style
+                      :default)
         control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)
         control     (or
                       (get-in control-map [type field-style])
@@ -734,7 +738,9 @@
   "Returns true if the validator on the form in `env` indicates that all of the form fields are valid."
   [env]
   (let [{::keys [form-instance]} env
-        props (comp/props form-instance)
-        {::keys [validator]} (comp/component-options form-instance)]
-    (and validator (= :valid (validator props)))))
+        props     (comp/props form-instance)
+        validator (comp/component-options form-instance ::validator)]
+    (or
+      (not validator)
+      (and validator (= :valid (log/spy :info (validator props)))))))
 

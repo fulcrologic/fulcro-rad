@@ -68,7 +68,7 @@
           (dom/label (str (or label (some-> k name str/capitalize))))
           (ui-factory picker-props
             (merge std-props subform-options {:currently-selected-value selected-option
-                                              :onSelect                 (fn [v] (m/set-value! form-instance k v))}))))
+                                              :onSelect                 (fn [v] (form/input-changed! env k v))}))))
 
       props
       (dom/div
@@ -89,13 +89,13 @@
       (render-ref env attr options)
       (form/render-field env attr))))
 
-(def n->str {1 "one"
-             2 "two"
-             3 "three"
-             4 "four"
-             5 "five"
-             6 "six"
-             7 "seven"})
+(def n-fields-string {1 "one field"
+                      2 "two fields"
+                      3 "three fields"
+                      4 "four fields"
+                      5 "five fields"
+                      6 "six fields"
+                      7 "seven fields"})
 
 (def attribute-map (memoize
                      (fn [attributes]
@@ -109,7 +109,7 @@
   (let [k->attribute (attribute-map attributes)]
     (map-indexed
       (fn [idx row]
-        (dom/div {:key idx :className (str (n->str (count row)) " fields")}
+        (dom/div {:key idx :className (n-fields-string (count row))}
           (mapv (fn [col]
                   (enc/if-let [_    k->attribute
                                attr (k->attribute col)]
