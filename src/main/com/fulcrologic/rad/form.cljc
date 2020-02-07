@@ -737,3 +737,4 @@
         props (comp/props form-instance)
         {::keys [validator]} (comp/component-options form-instance)]
     (and validator (= :valid (validator props)))))
+
