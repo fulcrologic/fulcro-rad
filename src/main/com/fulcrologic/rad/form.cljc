@@ -288,7 +288,6 @@
         []))))
 
 (defn- default-to-one [FormClass attribute]
-  (log/info "Getting to-one state for" (comp/component-name FormClass))
   (let [{::keys [subforms default]} (comp/component-options FormClass)
         {::attr/keys [qualified-key default-value]} attribute
         default-value (get default qualified-key default-value)
@@ -634,7 +633,6 @@
    (m/defmutation delete-entity [params]
      (ok-action [{:keys [state]}]
        (let [target-ident (first params)]
-         (log/info "Removing entity" target-ident)
          (swap! state fns/remove-entity target-ident)))
      (remote [_] true)))
 
@@ -742,5 +740,5 @@
         validator (comp/component-options form-instance ::validator)]
     (or
       (not validator)
-      (and validator (= :valid (log/spy :info (validator props)))))))
+      (and validator (= :valid (validator props))))))
 

@@ -58,7 +58,6 @@
                     ::form/can-delete?     (if can-delete-row?
                                              (partial can-delete-row? parent)
                                              false)}]
-    (log/info "Rendering to-one relation for " (comp/component-name ui))
     (cond
       picker?
       (let [selected-option props
