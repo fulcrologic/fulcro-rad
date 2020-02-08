@@ -52,7 +52,7 @@
                                                 ::keys      [field-style]}]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (or
-                      (some-> form-instance comp/component-options ::field-style qualified-key)
+                      (some-> form-instance comp/component-options ::field-styles qualified-key)
                       field-style
                       :default)
         control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)

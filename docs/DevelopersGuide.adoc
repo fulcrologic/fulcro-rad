@@ -935,6 +935,7 @@ The top-level keys for forms are `:com.fulcrologic.rad.form/style->layout` and
 layout controller. This controller will be a simple function that can look in the form's component options for
 additional configuration parameters that tell it how to control the layout.
 
+[[ControlStyles]]
 The second key holds a map that can look up how to render a control for a particular type, using potentially
 customized styles.
 
@@ -973,6 +974,7 @@ and requires for those items into one minimized map you can much more easily con
 from one location. These are the primary reasons we do not use some other mechanism for this like multi-methods, which
 cannot be dead-code eliminated and are hard to navigate in source.
 
+[[ClientInit]]
 Once you have the final map of control you must set it on your Fulcro app.
 
 [source]
@@ -1025,14 +1027,97 @@ There are pre-written functions in the `form` ns for the common actions:
 `(form/edit! app-ish FormClass id)`:: Edit the given entity with `id` using `FormClass`
 `(form/delete! app-ish qualified-id-keyword id)`:: Delete an entity.
 
-Of course you'll also need to configure the overall application and make a root with a top-level router. See the
-demo application for a complete example.
+Of course you'll also need to configure the overall application and make a root with a top-level router.
+
+== A Complete Client
+
+We are now to the point of seeing what a complete Fulcro RAD client looks like. The bar minimal client will have:
+
+* A Root UI component
+* (optional) Some kind of "landing" page (default route)
+* One or more forms/reports.
+* The <<ClientInit, client initialization>> (shown earlier).
+
+[source]
+-----
+(ns com.example.ui
+  (:require
+    [com.example.model.account :as acct]
+    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    #?(:clj  [com.fulcrologic.fulcro.dom-server :as dom :refer [div]]
+       :cljs [com.fulcrologic.fulcro.dom :as dom :refer [div]])
+    [com.fulcrologic.fulcro.routing.dynamic-routing :refer [defrouter]]
+    [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.rad.form :as form]))
+
+(form/defsc-form AccountForm [this props]
+  {::form/id                  acct/id
+   ::form/attributes          [acct/name]
+   ::form/cancel-route        ["landing-page"]
+   ::form/route-prefix        "account"})
+
+(defsc LandingPage [this props]
+  {:query         ['*]
+   :ident         (fn [] [:component/id ::LandingPage])
+   :initial-state {}
+   :route-segment ["landing-page"]}
+  (div
+    (dom/button {:onClick (fn [] (form/create! this AccountForm))}
+      "Create a New Account"))
+
+(defrouter MainRouter [this props]
+  {:router-targets [LandingPage AccountForm]})
+
+(def ui-main-router (comp/factory MainRouter))
+
+(defsc Root [this {::auth/keys [authorization]
+                   :keys       [authenticator router]}]
+  {:query         [{:router (comp/get-query MainRouter)}]
+   :initial-state {:router        {}}}
+  (div :.ui.container.segment
+    (ui-main-router router)))
+-----
+
+The landing page in this example includes a sample button to create a new account, but
+of course you'll also need to add some seed data to your database, wrap things with some authorization, etc.
+
+== Choosing Control Style
+
+Each supported data type will have a `:default` style. This will be the control that appears in generated UI for
+a field of that type, but this is insufficient for many kinds of controls. You may be storing a currency amount
+in a BigDecimal field. You want to constrain that to 2 decimal places of accuracy. The data type isn't enough
+information.
+
+An attribute can declare the style of control it prefers, and the style can also be overridden on the form itself
+(via declaration). Of course, you can also manually code the rendering of the form.
+
+Setting the preferred control style on an *attribute* is done via the `::form/field-style` attribute, which is simply a keyword. That keyword
+must appear in the <<ControlStyles, controls you've configured>> at the style level for the data type of interest.
+
+[source]
+-----
+(defattr name :account/name
+  {::form/field-style :full-human-name
+   ...})
+-----
+
+Overriding the control style at the form level requires you specify a map:
+
+[source]
+-----
+(defsc-form AccountForm [this props]
+  {::form/field-styles {:account/name :full-human-name}
+   ...})
+-----
+
+If the style is not found in the currently-install UI controls then `:default` will be used instead.  If no renderer
+is installed for the *type*, then a console error will be logged and the field will be missing from generated UI.
 
 == UI Validation
 
-The data type and rendering style of an attribute (along with extended parameters defined by input syltes) are the first
-line of UI validation: Saying that something is a decimal number with a US currency style will already ensure that the
-user cannot input "abc" into the field.
+The data type and rendering style of an attribute (along with extended parameters possibly defined by input styles in
+their respective documentation) are the first line of data enforcement: Saying that something is a decimal number with
+a US currency style will already ensure that the user cannot input "abc" into the field.
 
 Further constraining the value might be something you can say at the general attribute level (`age` must be between 0
 and 130), or may be contextual within a specific form (`from-date` must be before `to-date`).
