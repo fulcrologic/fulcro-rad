@@ -64,6 +64,13 @@ endif::[]
 
 = Introduction
 
+WARNING: Fulcro RAD is in early stages of development. The documented features are somewhat stable
+and should not change much over time; however, until RAD reaches a formal release (beyond an alpha)
+we are not committed to maintaining the APIs with backward compatibility since that would slow our initial
+development and could lock us into design decisions that have not been fully vetted. That said, the
+overall central goals are well-known, and this should prevent it from being terribly difficult
+to port an existing RAD app forward to a new version.
+
 This book covers Rapid Application Development (RAD) tools for Fulcro.  The RAD system is intended to be augmented with
 any number of plugins that can handle anything from back-end database management to front-end UI automation.
 
@@ -83,7 +90,7 @@ and to-many relations.
 
 RAD is currently of pre-alpha quality, and should be used with caution.
 
-== Attributes
+== Attribute-Centric
 
 Fulcro encourages the use of a graph-based data model that is agnostic to the underlying representation of your data.
 This turns out to be a quite powerful abstraction, as it frees you from the general limitations and restrictions of a
@@ -199,18 +206,412 @@ to do the specific rendering for the report when no plugin exists that works for
 Fulcro works quite well on the web, in React Native, and in Electron.  Notice that the core of RAD is built around
 auto-generation of UI, meaning that many features of RAD will work equally well in any of these settings.
 
+= Attributes  [[Attributes]]
+
+The recommended setup of attributes is as follows:
+
+* Create a `model` package, such as `com.yourcompany.model`.
+* Organize your attributes around the concepts and entities that use them.
+** Try *not* to think of attributes as _strictly_ belonging to an *entity* or *table* so much as describing a particular fact. For
+example the attribute `:password/hashed-value` might live on a `File` or `Account` entity. Entity-centric attributes
+certainly exist, but you should not constrain your thinking about them.
+* Place attributes in a namespace that most closely represents the concept/entity for that attribute. For example
+`com.yourcompany.model.account`. Use CLJC!
+* At the end of each file include a `def` for `attributes` and `resolvers`. Each should be a vector containing
+all of the attributes and Pathom resolvers defined in that file.
+* Create a central model namespace that has all attributes. I.e. `com/yourcompany/model.cljc` containing
+a `def` for `all-attributes`.
+
+== Model Namespaces
+
+The first thing you'll typically create will be namespaces like this:
+
+[source]
+-----
+(ns com.example.model.account
+  (:require
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
+
+(defattr id :account/id :uuid
+  {::attr/identity? true})
+
+(defattr name :account/name :string
+  {::attr/required? true})
+
+(def attributes [id name])
+(def resolvers [])
+-----
+
+The namespace makes it easy for you to find the attributes when you want to read all of the details
+about them, and the final `def` make it easy to combine the declared attributes into a single
+collection for use in APIs that need to know them all.
+
+== Identity Attributes
+
+Each type of entity/table/document in your database will need a primary key.  Each attribute that you
+define that acts as a primary key will serve as a way to contextually find attributes that indicate
+they can be found via that key.  This is very similar to what you're used to in typical databases where
+a primary key gives you, say, a row.  RAD's data model does not constrain an attribute to live in just
+one place, as you'll see in a moment.
+
+The `::attr/identity?` boolean marker on an attribute marks it as a "primary key" (really that it is
+a key by which a distinct entity/row/document can be found).
+
+[source]
+-----
+(ns com.example.model.account
+  (:require
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]))
+
+(defattr id :account/id :uuid
+  {::attr/identity?                                      true})
+-----
+
+== Scalar Attributes
+
+Many attributes are simple containers for scalar values (strings, numbers, etc.). RAD itself does not
+constrain where an attribute can live in any way, but specific database adapters will have rules
+that match the underlying storage technology.
+
+A RAD attribute to store a string might look like this:
+
+[source]
+-----
+(defattr id :account/name :string
+  {})
+-----
+
+but such an attribute only be usable if you hand-generate resolvers on your server that can obtain
+the value, and can store it based on the ID you give a form.  So, such an attribute isn't useless,
+but it is made much more powerful when you add data for other plugins.
+
+== Attribute Clusters (Entities/Tables/Documents)
+
+RAD itself does not define how attributes cluster together (in tables/documents/entities), since that
+is database-specific. For example, Datomic uses entities that have a single `:db/id` attribute, but
+users often use a domain-specific UUID attribute to obtain certain modelling advantages.
+
+So, plugins like database adapters will have you add data to an attribute that informs it of your intended
+(or existing) database organization. This allows the database adapter to figure out how to do things like
+generate query resolvers, generate save logic for forms, check schema conformance, autogenerate schema, etc.
+
+Here is how the Datomic database adapter would have you define things to cluster "account" attributes
+into an account entity:
+
+[source]
+-----
+(ns com.example.model.account
+  (:refer-clojure :exclude [name])
+  (:require
+    #?@(:clj
+        [[com.wsscode.pathom.connect :as pc :refer [defmutation]]
+         [com.example.model.authorization :as exauth]
+         [com.example.components.database-queries :as queries]]
+        :cljs
+        [[com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]])
+    [clojure.string :as str]
+    [com.wsscode.pathom.connect :as pc]
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.authorization :as auth]
+    [taoensso.timbre :as log]
+    [com.fulcrologic.rad.type-support.date-time :as datetime]))
+
+(defattr id :account/id :uuid
+  {::attr/identity?                                      true})
+
+(defattr name :account/name :string
+  {:com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:account/id}
+   ::attr/required?                                          true})
+-----
+
+In this case the Datomic adapter defines a plugin-namespaced key (`entity-ids`) which takes a set of "primary keys" that
+can be used to find an attribute. This has the effect of "placing" `:account/name` on entities that can be found by
+`:account/id`.  Note that this allows an attribute to exist on any number of entity "types", which is in alignment
+with the flexible nature of Datomic.
+
+A document database like Firebase might do a similar thing, but a more stringent schema-based system like SQL might
+lead you more towards declaring things that map to well-known tables (through RAD can easily adapt such systems
+into a more flexible attribute model).
+
+== Referential Attributes
+
+Data models are typically normalized, and normalization requires that you be able to store a distinct thing once
+and refer to it from other places.  RAD's attribute-centric nature actually gives you quite a bit of ability
+to "flex" the shape of your data model at runtime through custom resolvers (i.e. you can create virtualized
+views of your data that have alternate shapes from the way the data is stored).  Therefore the reference declarations
+in RAD can define a concrete (i.e. represented in storage) or virtual link.
+
+If an attribute represents a concrete link in storage then it will include database adapter-specific entries that
+define that linkage. If an attribute represents a virtual link it will typically include a lambda (resolver) that
+runs the appropriate logic to "invent" that linkage. For example, your customers might have multiple addresses,
+and you might want a virtual reference to the address you've most often shipped items to.  You can easily
+assign that a name like `:customer/most-likely-address`, but you'll most likely need to run a query of order history
+to actually figure out what that is.
+
+References have a cardinality (one/many), and when they are concrete they also typically have some kind of optional
+statement about "ownership". In SQL this is typically modelled with `CASCADE` rules, in document databases it is
+often implied by co-location in the same document, and in Datomic it is handled with the `isComponent` flag.
+
+Again, RAD attributes allow the database adapter to define namespaced keys that can be placed on an attribute
+to indicate how that attribute should behave.
+
+When using references in Forms you'll typically have to include a bit of extra information to the form itself for
+it to know which kind of behavior should be modelled for the user.
+For example an invoice's line item needs to point to something defined in your inventory. An invoice form might show that
+as a dropdown that lets you autocomplete a selection from the inventory items.
+
+== Attribute Types and Details
+
+There are a number of predefined attribute types and information markers that are defined by the central RAD system.
+Each add-on or plugin can define any number of additional namespaced keys that could also be declared on an attribute.
+
+The supported attribute types include:
+
+`:string`:: A variable-length string.
+`:enum `:: An enumerated list of values. Support varies by db adapter.
+`:boolean`:: true/false
+`:int`:: A (typically 32-bit) integer
+`:long`:: A (typically 64-bit) integer
+`:decimal`:: An arbitrary-precision decimal number. Stored precision is up to the db adapter.
+`:instant`:: A binary UTC timestamp.
+`:keyword`:: An EDN keyword
+`:symbol`:: An EDN symbol
+`:ref`:: A reference to another entity/table/document. Indicates traversal of the attribute graph.
+`:uuid`:: A UUID.
+
+The following additional keys can be placed in the attribute map:
+
+`::attr/identity?`:: A boolean. When true it indicates that this attribute can be used as a PK to find
+an entity/document/table row.
+`::attr/required?`:: A boolean. Indicates that the system should constrain interactions such that
+entities/rows/documents that contain this attribute are considered invalid if they do not have it.
+Affects things like schema generation, form interactions, etc.
+`::attr/target`:: A keyword. Required when the type of the attribute is `:ref`. It must be the qualified keyword
+name of the attribute that can be used to look up instances of the target of the ref. For example
+`:account/addresses` might have a target of `:address/id`.
+`::attr/cardinality`:: Required when the type of the attribute is `:ref`.
+Either :one or :many. Defines the expected cardinality of the relation.
+`::attr/enumerated-values`:: Only when type is `:enum`. A set of keywords that represent the legal possible values when the
+   type is `:enum`. Constraints on this may vary based on the db adapter chosen.
+`::attr/enumerated-labels`:: Only when type is `:enum`. A map from enumerated keywords (in `enumerated-values`) to the
+user string that should be shown for that enumerated value. Used in Form UI generation.
+
+== All Attributes
+
+There is a central attribute registry that you must set up for proper overall operation. We are in the
+process of phasing this out.  In the meantime many of the APIs require a list of all of the attributes
+in the system. If you've followed our recommendation of including a `def` of `attributes` at the
+bottom of each model namespace, then you can easily create this like so:
+
+[source]
+-----
+(ns com.example.model
+  (:require
+    [com.example.model.account :as account]
+    [com.example.model.item :as item]
+    [com.example.model.invoice :as invoice]
+    [com.example.model.line-item :as line-item]
+    [com.example.model.address :as address]
+    [com.fulcrologic.rad.attributes :as attr]))
+
+(def all-attributes (vec (concat
+                           account/attributes
+                           address/attributes
+                           item/attributes
+                           invoice/attributes
+                           line-item/attributes)))
+-----
+
+= Database Adapters
+
+Database adapters are an optional part of the RAD system. There are really three main features that
+a given database adapter MAY provide for you (none are required). The may provide the ability to:
+
+. Auto-generate schema for the real database.
+. Generate a network API to read the database for the UI client.
+. Process form saves (which come in a standard diff format).
+
+Additional features, of course, could be supplied such as the ability to:
+
+. Validate the attribute definitions against an existing (i.e. legacy) schema.
+. Shard across multiple database servers.
+. Pool database network connections.
+. Isolate development changes from the real database (i.e. database interaction mocking)
+
+== The Datomic Adapter
+
+The RAD Datomic database adapter has the following features:
+
+. Datomic Schema generation from attributes.
+. Support for multiple database schemas.
+. Form save automation.
+. Automatic generation of a full network API that can pull from the database(s).
+. Database sharding.
+
+=== Configuration
+
+Configuring the Datomic adapter currently requires Datomic on-prem (free or starter). Cloud support
+is planned but not written. The elements to configure are:
+
+. Add your database definitions to your application config.
+. Start the adapter when your server starts, and save the result.
+. Add the auto-generated resolvers into your API parser.
+. Add the normal RAD form handlers (save/delete) into your API parser.
+. Insert the datomic env into your parser env (which adds support for save), which must also resolve
+the correct database connection(s) (shard/schema) for the incoming request using the request details and
+the result from (2).
+
+This sounds like a long list, but each is typically just a line or two of code.
+
+==== Application Configuration for Datomic
+
+The database configuration looks like this:
+
+[source]
+-----
+ :com.fulcrologic.rad.database-adapters.datomic/databases
+                                    {:main {:datomic/schema           :production
+                                            :datomic/driver           :postgresql
+                                            :datomic/database         "example"
+                                            :datomic/prevent-changes? true
+                                            :postgresql/host          "localhost"
+                                            :postgresql/port          5432
+                                            :postgresql/user          "datomic"
+                                            :postgresql/password      "datomic"
+                                            :postgresql/database      "datomic"}}
+-----
+
+The keys of the map are the shard name (in this case there is only one real database and schema). Each
+shard must name which `:datomic/schema` it is intended to provide, which in turn must match a
+`::datomic/schema` entry on attributes:
+
+[source]
+-----
+;; This attribute lives in the production schema
+(defattr id :address/id :uuid
+  {::attr/identity?                                      true
+   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+-----
+
+If you wanted to have multiple databases with the same schema you'd just have multiple shard names
+in the map as keys, and database connection details as the values.
+
+==== Starting the Database Adapter
+
+If you're using `mount`, then starting the database adapter is as simple as:
+
+[source]
+-----
+(ns com.example.components.datomic
+  (:require
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
+    [mount.core :refer [defstate]]
+    [com.example.model :refer [all-attributes]]
+    [com.example.components.config :refer [config]]))
+
+(defstate ^{:on-reload :noop} datomic-connections
+  :start
+  (datomic/start-databases all-attributes config))
+-----
+
+The call needs a flat vector of all attribute definition in the system, and the config (as shown
+in the prior section). It does the following things, according to the configutation:
+
+* Connects to the databases
+* Optionally wraps the connections with a mocked connection so that no changes persist to the real
+database (useful during development).
+* Optionally generates schema for each.
+* Optionally applies schema to each.
+
+It returns a map from database name (i.e. `:main`) to Datomic connections.
+
+==== Add Generated Resolvers
+
+Your application will have a combination of auto-generated resolvers. Some might come from
+pure attribute definitions, and others will come from adapters like this one. Typically
+you'll combine them all in some central stateful place, like this:
+
+[source]
+-----
+(ns com.example.components.auto-resolvers
+  (:require
+    [com.example.model :refer [all-attributes]]
+    [mount.core :refer [defstate]]
+    [com.fulcrologic.rad.resolvers :as res]
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
+    [taoensso.timbre :as log]))
+
+(defstate automatic-resolvers
+  :start
+  (vec
+    (concat
+      (res/generate-resolvers all-attributes)
+      (datomic/generate-resolvers all-attributes :production))))
+-----
+
+Again note the use of the `all-attributes`, which is simply a collection of all of your
+various attribute definitions.
+
+==== Set up The Parser
+
+You will be generating a Pathom parser on your back-end. You must modify it to include
+
+TODO: finish describing
+
+[source]
+-----
+(ns com.example.components.parser
+  (:require
+    [com.example.components.auto-resolvers :refer [automatic-resolvers]]
+    [com.example.components.config :refer [config]]
+    [com.example.components.datomic :refer [datomic-connections]]
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
+    [com.fulcrologic.rad.pathom :as pathom]
+    [mount.core :refer [defstate]]
+    [datomic.api :as d]
+    [com.fulcrologic.rad.form :as form]
+    [com.example.model.account :as account]))
+
+(defstate parser
+  :start
+  (pathom/new-parser config
+    (fn [env]
+      (-> env
+        ;; you must create a map from SCHEMA name to the database that should serve that
+        ;; schema for this request.
+        (datomic/add-datomic-env {:production (:main datomic-connections)})))
+    [automatic-resolvers
+     ;; Standard form hooks, which know how to use database adapter handlers
+     form/save-form
+     form/delete-entity
+     ...]))
+-----
+
 = Forms
+
+Forms are a central element of Fulcro. A form:
+
+* is a route target in Fulcro's dynamic routing system.
+* has automatic state management, and runs a state machine while on screen.
+* Is itself a Fulcro and React component.
+* Uses attribute definitions, local form declarations, and pluggable UI to optionally auto-generate UI.
+* Uses a standard mutation and delta format for saves, so that persistence is trivial across data storage
+technologies.
 
 == Setup
 
 In order to get a basic form working in RAD you need the following:
 
 * Declarations of the attributes that will be part of the form
-* Resolvers that can pull that form's data from the server (usually auto-generated from a db plugin)
+* Resolvers that can pull that form's data from the server (usually auto-generated from a db plugin).
 * A save mutation that can save the form (pre-defined, but requires a handler for each database, which is typically
-supplied by a db plugin)
+supplied by a db plugin).
 * (optional) Configuration of the ui rendering to auto-generate the UI (you may also hand-design the UI with
-normal react factories).
+normal Fulcro/React code).
+* (optional) Code that sets the time zone (usually based on the active user's session) if you will be storing
+date/times in your database.
+* (optional) Transit readers/writers for all extended data types that you wish to use.
 
 The server-side operation of the form is largely handled by a storage plugin and normal Fulcro plumbing, as shown in
 the demo project.
