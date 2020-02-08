@@ -1258,11 +1258,209 @@ the user to simply select (or search for) "which" of the existing targets are de
 relation the form will usually model the items as editable sub-forms, with optional controls that allow the
 addition and removal of the elements in the relation.
 
-=== To-One Relationships
+The form management system uses the concept of "subforms" to models all of the possible relationships, relies on
+database adapters to manage things like cascading deletes, and needs some additional configuration (on a per-form basis)
+from you as to how relations should be rendered and interacted with in the UI.
 
+The following sections cover various relational use-cases that RAD forms support.
 
-=== To-Many Relationships
+=== To-One Relation, Owned by Reference
 
+WARNING: This use-case is not yet implemented. More work needs to be done on initializing the case where the target does
+not yet exist, but the owner does.
+
+In this case the referenced item springs into existence when the parent creates it, and drops from existence when
+it is no longer referenced. Database adapters model this in various ways, but the concept at the form layer is
+simple: If you're creating it then you'll be creating a new thing, an edit will edit the current thing, and if you
+drop the reference you'll depend on the database adapter's save logic to delete it.
+
+The form rendering system can derive that it is a to-one relation from the cardinality declared on the reference
+attribute. The ownership nature is more of a rendering concern than anything: If the new thing is exclusively owned
+then we know we have to generate a subform that can fill out all of the interesting details.
+
+NOTE: This kind of relation can also be modelled by folding the referred items attributes into the owner. For example
+if you have an edge called `:account/primary-address` that is a to-one relation to an address, but you don't plan
+to do real normalization of addresses (which is difficult), then you could also just make `:account/primary-street` and
+such on the account itself and skip the relational nature altogether.
+
+=== To-One Relation to Pre-existing
+
+NOTE: This use-case is partially implemented. It will work well when selecting from a relatively small set of
+targets, but will not currently perform well if the list of potential targets is many thousands or greater.
+
+In this case setting up the relation is nothing more that picking some pre-existing thing in the database. There
+are several sub-aspects to this problem:
+
+. Should you be able to create a new one?
+. When selecting an existing one, how do you manage large lists of potential candidates (search, caching, etc.)?
+. How do you label the items so the user can select them?
+
+At the time of this writing the answers are:
+
+. No. You must use a different interaction to make one.  Setting a to-one relation is always a selection process
+unless you hand-write the UI yourself.
+. This is an option of the UI control used to do the selection. At present all of the potential matches are pre-loaded.
+. This is something you configure.
+
+A demonstration of this case is as follows: Assume we want to generate a form for an invoice. The invoice will
+have line items (to many, owned by the invoice), and each line item will point to an item from our inventory (owned
+by inventory, not the line item).
+
+We can start from the bottom. The inventory item itself might have this model in a Datomic database:
+
+[source]
+-----
+(ns com.example.model.item
+  (:require
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.authorization :as auth]))
+
+(defattr id :item/id :uuid
+  {::attr/identity?                                      true
+   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+
+(defattr item-name :item/name :string
+  {:com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:item/id}
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+
+...
+-----
+
+followed by the line item model:
+
+[source]
+-----
+(ns com.example.model.line-item
+  (:require
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
+
+(defattr id :line-item/id :uuid
+  {::attr/identity?                                      true
+   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+
+(defattr item :line-item/item :ref
+  {::attr/target                                             :item/id
+   ::attr/cardinality                                        :one
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:line-item/id}
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+
+(defattr quantity :line-item/quantity :int
+  {:com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:line-item/id}
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+
+...
+-----
+
+note the `:line-item/item` reference. It is a to-one that targets entities that have an `:item/id`. There is no
+Datomic marker indicating that it is a component, so we've already _inferred_ that the line item doesn't own it. But
+it might also be possible that the line item _could be allowed_ to create new ones. We just don't know for sure
+unless we provide more context.
+
+In RAD we do that at the form layer.
+
+[source]
+-----
+(form/defsc-form LineItemForm [this props]
+  {::form/id           line-item/id
+   ::form/attributes   [line-item/item line-item/quantity]
+   ::form/cancel-route ["landing-page"]
+   ::form/route-prefix "line-item"
+   ::form/layout       [[:line-item/item :line-item/quantity]]
+   ::form/subforms     {:line-item/item {::form/ui       form/ToOneEntityPicker
+                                         ::form/pick-one {:options/query-key :item/all-items
+                                                          :options/subquery  [:item/id :item/name :item/price]
+                                                          :options/transform (fn [{:item/keys [id name price]}]
+                                                                               {:text (str name " - " (math/numeric->currency-str price)) :value [:item/id id]})}}}})
+-----
+
+Here we've generated a normal form. We've included the `line-item/item` attribute, and since that is a ref we must
+also include subform configuration. For this use-case we need two things for the reference field:
+
+* `::form/ui` -  The UI to use for the subform. In this case we use a pre-generated Fulcro component called `form/ToOneEntityPicker`.
+That UI will look for additional configuration options under the `::form/pick-one` key.
+* `::form/pick-one` - A map of configuration options that tell the entity picker how to find the items to choose
+from, and how to format them for the user. These must include:
+** `:options/query-key` - A pathom global resolver output key that can obtain the list of options.
+** `:options/subquery` - The list of sub-attributes that the query should include so that sufficient information
+is available to build the options to choose from.
+** `:options/transform` - A function that can take each result from the options query and turn it into a labelled
+selection. The function must output a map that contains `:text` as the label, and `:value` with the correct ident of
+the entity being selected.
+
+NOTE: More options should soon be available for this configuration. Things like caching, sorting, debounced server
+search and more are coming soon.
+
+At this point you can use the `LineItemForm` and it will allow you to pick from the existing items in your
+database as long as you have a resolver. Something like this on the server would fit the bill:
+
+[source]
+-----
+(defattr all-items :item/all-items :ref
+  {::attr/target    :item/id
+   ::pc/output      [{:item/all-items [:item/id]}]
+   ::pc/resolve     (fn [{:keys [query-params] :as env} _]
+                      #?(:clj
+                         {:item/all-items (queries/get-all-items env query-params)}))})
+-----
+
+The normal item resolvers will be able to resolve the name and price of the item from there.
+
+=== To-Many Relationships, Owned by Parent
+
+The next case we'll consider is the case where a form has a to-many relationship, and the items referred to are
+created (and owned) by that parent form. This case uses a normal form for the to-many items, and is
+pretty simple to configure. Say you have accounts, and each account can have multiple addresses (the addresses
+are not globally normalized but instead just owned by the account, since they are hard to globally normalize).
+
+The addresses attribute looks like you'd expect:
+
+[source]
+-----
+(ns com.example.model.account ...)
+
+(defattr addresses :account/addresses :ref
+  {::attr/target                                             :address/id
+   ::attr/cardinality                                        :many
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:account/id}})
+-----
+
+and the UI for an `AddressForm` might look like this:
+
+[source]
+-----
+(form/defsc-form AddressForm [this props]
+  {::form/id                address/id
+   ::form/attributes        [address/street address/city address/state address/zip]
+   ::form/cancel-route      ["landing-page"]
+   ::form/route-prefix      "address"})
+-----
+
+The `AccountForm` would then simply use that `AddressForm` in a subform definition like so:
+
+[source]
+-----
+(form/defsc-form AccountForm [this props]
+  {::form/id                  acct/id
+   ::form/attributes          [acct/name acct/addresses]
+   ::form/cancel-route        ["landing-page"]
+   ::form/route-prefix        "account"
+   ::form/subforms            {:account/addresses       {::form/ui              AddressForm
+                                                         ::form/can-delete-row? (fn [parent item] (< 1 (count (:account/addresses parent))))
+                                                         ::form/can-add-row?    (fn [parent] (< (count (:account/addresses parent)) 2))}}})
+-----
+
+Here the subform information for the `:account/addresses` field indicates:
+
+* `::form/ui` - The UI component to use for editing the target(s).
+* `::form/can-delete-row?` - A lambda that receives the current parent (account) props and the a referred item. If
+it returns true then that item should show a delete button (depends on UI implementation).
+* `::form/can-add-row?` - A lambda that receives the current parent (account). If
+it returns true then the UI (if able) will include some kind of add control for adding a new row.
+
+=== To-Many, Selected From Pre-existing
+
+NOTE: This use-case is not yet implemented.
 
 = Authorization Middleware
 
