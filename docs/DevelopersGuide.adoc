@@ -1454,9 +1454,12 @@ Here the subform information for the `:account/addresses` field indicates:
 
 * `::form/ui` - The UI component to use for editing the target(s).
 * `::form/can-delete-row?` - A lambda that receives the current parent (account) props and the a referred item. If
-it returns true then that item should show a delete button (depends on UI implementation).
+it returns true then that item should show a delete button.
 * `::form/can-add-row?` - A lambda that receives the current parent (account). If
-it returns true then the UI (if able) will include some kind of add control for adding a new row.
+it returns true then the UI should include some kind of add control for adding a new row (address).
+
+So our form shown above does not allow the user to delete the address if it is the only one, and prevents them from
+adding more than 2.
 
 === To-Many, Selected From Pre-existing
 
