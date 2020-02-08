@@ -21,3 +21,4 @@ target
 .cpcache
 .shadow-cljs
 .clj-kondo/.cache
+DevelopersGuide.html
