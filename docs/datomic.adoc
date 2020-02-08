@@ -1,5 +1,7 @@
 = Datomic Database Plugin
 
+WARNING: These docs are out of date.
+
 The following namespace aliases are used in the content of this document:
 
 [source, clojure]

@@ -1,14 +1,25 @@
 = Authorization
 
-The central concept we want to support in this feature is that there is a singleton authorization state machine that keeps track of what the user is currently authorized to do, and can automatically do UI interactions to obtain the necessary authorizations as an integration with the whole-app routing system (opted in by using a component definition API from this library)
+The central concept we want to support in this feature is that there is a singleton authorization state machine that
+keeps track of what the user is currently authorized to do, and can automatically do UI interactions to obtain the necessary
+authorizations as an integration with the whole-app routing system (opted in by using a component definition API from this library)
+
+Features:
+
+* Pluggable system for doing authentication of users.
+* Ability to detect the need for auth via attribute/mutation keyword/symbol.
+* Can be asked to do explicit login (i.e. the implementation of a Login/Logout set of buttons in the UI)
+* Must tolerate the need to do redirects (e.g. OpenID Connect)
+
+
+WARNING: The remainder of this document is an incomplete and inaccurate picture of the current state of affairs.
+
 
 [ditaa]
 ------
 
 +----------------------+       +----------------------+
-| Application Auth     |       | External auth        |
-|                      |       |                      |
-|                      |       |                      |
+| Auth Provider (OAUTH)|       | Auth Provider (local)|
 +----------------------+       +----------------------+
      ^                              ^
      |            (2)               |
@@ -16,33 +27,35 @@ The central concept we want to support in this feature is that there is a single
      |
      v
 +----+-----------------+
-| Auth UISM            |
-|                      |
-|                      |
+| Auth State Machine   |
 +-----------------+----+
    ^              |
    |              |
-   | (1)          | (3)
-   |              |
+   | (1)          v (3)
++--+-------------------+
+| ROUTING LAYER        |
++-----------------+----+
+   ^              |
    |              v
-+--+-------------------+   +----------------------+
-| Controller UISM      |   | Form's UISM          |
-|                      +<->+                      |   ...
-|                      |   |                      |
-+----------------------+   +----------------------+
++--+-------------------+
+| UI Layer             |
++----------------------+
 
 ------
 
 The core functionality is that some bit of UI that is about to be routed to:
 
-1. Tells the auth UISM that it is about to route something. This event includes
-the ID of the UISM to reply to, along with other important details such as
-the attributes the UI will need to be able to access. The UI containing the controller can
-use its state to show loading bar, etc.
+1. An arbitrary state machine at the UI layer indicates a need to authorize a set of properties or mutations
+by triggering `:event/authorize` on the well-known `::auth/machine` state machine. The event data for that
+event includes the ID of the originating state machine and the set of properties/mutation symbols.
+The auth machine is then responsible for ensuring that the current authorization context satisfies that.
+Once it has made a clear decision it triggers
+`:event/authorized` or `:event/permission-denied` to the original state machine. The *complete* event sent by the
+original state machine is saved and is returned to the original machine on response.
 2. The Auth UISM checks its state. If it does not have sufficient *authentication*
 to even check authorization, then it will control the UI to obtains such
 authentication. Once it has authentication, it could do a number of authorization
-steps as well.  During this sequence it is allowed to save the "current" route
+steps as well.  During this sequence it is allowed to save
 and control the UI in whatever way is necessary to gather credentials, perhaps
 even saving state in browser local storage and doing oauth redirects.
 3. The auth UISM sends an event back to the originating UISM indicating the

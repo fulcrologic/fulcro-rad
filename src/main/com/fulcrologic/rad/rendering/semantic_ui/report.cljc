@@ -11,7 +11,7 @@
        [com.fulcrologic.fulcro.dom-server :as dom])
     [com.fulcrologic.rad.form :as form]))
 
-(defmethod report/render-layout :default [this]
+(defn ui-render-layout [this]
   (let [{::report/keys [source-attribute BodyItem parameters]} (comp/component-options this)
         {::report/keys [columns column-headings edit-form]} (comp/component-options BodyItem)
         id-key (some-> edit-form comp/component-options ::form/id ::attr/qualified-key)

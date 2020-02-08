@@ -5,6 +5,7 @@
     [clojure.walk :as walk]
     [taoensso.timbre :as log]
     [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
+    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.rad.ids :refer [new-uuid]])
   #?(:clj
      (:import (clojure.lang IFn)
@@ -65,6 +66,11 @@
 
 (def attribute-registry (atom {}))
 
+(defn clear-registry!
+  "Remove all attributes from the registry. Useful for tests."
+  []
+  (reset! attribute-registry {}))
+
 (defn register-attributes!
   "Resets the attribute registry to include only the given attributes.
    Should be called early in the startup of the client and server."
@@ -74,13 +80,13 @@
       (reduce
         (fn [reg {::keys [qualified-key] :as a}]
           (assoc reg qualified-key a))
-        {}
+        r
         attributes))))
 
 (>defn key->attribute
   "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
   [k]
-  [::qualified-key => (? ::attribute)]
+  [keyword? => (? ::attribute)]
   (get @attribute-registry k))
 
 (>defn to-many?
@@ -127,7 +133,7 @@
   [::attributes => vector?]
   (reduce
     (fn [outs {::keys [qualified-key type target]}]
-      (if (and target (= :ref type))
+      (if (and target (#{:ref} type))
         (conj outs {qualified-key [target]})
         (conj outs qualified-key)))
     []
@@ -142,7 +148,11 @@
 
 #?(:clj
    (defn ^String encrypt
-     "Encrypt the given password, returning a string."
+     "Returns a cryptographycally-secure hashed password based on the given a plain-text password,
+      a random salt string (see `gen-salt`), and a number of iterations.  You should save the hashed result, salt, and
+      iterations in your database. Checking a password is then taking the password the user supplied, passing it through
+      this function with the original salt and iterations, and seeing if the hashed result is the same as the original.
+     "
      [^String password ^String salt ^Long iterations]
      (let [keyLength           512
            password-characters (.toCharArray password)
@@ -152,7 +162,7 @@
            key                 (.generateSecret skf spec)
            res                 (.getEncoded key)
            hashed-pw           (.encodeToString (Base64/getEncoder) res)]
-       (str salt "|" iterations "|" hashed-pw))))
+       hashed-pw)))
 
 (>defn attribute?
   [v]
@@ -169,3 +179,18 @@
       (if (attribute? ele)
         (::qualified-key ele)
         ele)) attr-query))
+
+(defn make-attribute-validator
+  "Creates a function that can be used as a form validator for any form that contains the given `attributes`.  If the
+  form asks for validation on an attribute that isn't listed or has no `::attr/valid?` function then it will consider
+  that attribute valid."
+  [attributes]
+  (let [attribute-map (into {}
+                        (map (fn [{::keys [qualified-key] :as a}]
+                               [qualified-key a])
+                          attributes))]
+    (fs/make-validator
+      (fn [form k]
+        (if-let [valid? (get-in attribute-map [k ::valid?])]
+          (valid? (get form k))
+          true)))))

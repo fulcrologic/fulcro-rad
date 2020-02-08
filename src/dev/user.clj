@@ -5,7 +5,6 @@
     [clojure.tools.namespace.repl
      :as tools-ns
      :refer [disable-reload! refresh clear set-refresh-dirs]]
-    [com.example.components.middleware]
     [expound.alpha :as expound]
     [taoensso.timbre :as log]))
 

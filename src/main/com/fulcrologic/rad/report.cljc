@@ -1,20 +1,38 @@
 (ns com.fulcrologic.rad.report
   #?(:cljs (:require-macros com.fulcrologic.rad.report))
   (:require
+    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.controller :as controller :refer [io-complete!]]
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defmulti render-layout (fn [this] (-> this comp/component-options ::layout)))
-(defmulti render-parameter-input (fn [this parameter-key]
-                                   (-> this comp/component-options ::parameters (get parameter-key))))
+(defn render-layout [report-instance]
+  (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
+        layout-style (or (some-> report-instance comp/component-options ::layout-style) :default)
+        layout       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
+    (if layout
+      (layout report-instance)
+      (do
+        (log/error "No layout function found for form layout style" layout-style)
+        nil))))
+
+(defn render-parameter-input [this parameter-key]
+  (let [{::app/keys [runtime-atom]} (comp/any->app this)
+        input-type  (some-> this comp/component-options ::parameters (get parameter-key))
+        input-style :default                                ; TODO: Support parameter styles
+        input       (some-> runtime-atom deref ::rad/controls ::parameter-type->style->input (get-in [input-type input-style]))]
+    (if input
+      (input this parameter-key)
+      (do
+        (log/error "No renderer installed to support parameter " parameter-key)
+        nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LOGIC
@@ -32,13 +50,11 @@
 
 (defn exit-report [{::uism/keys [fulcro-app] :as env}]
   (let [Report       (uism/actor-class env :actor/report)
-        id           (uism/retrieve env ::controller/id)
         ;; TODO: Rename cancel-route to common RAD ns
         cancel-route (some-> Report comp/component-options ::cancel-route)]
-    (when-not cancel-route
+    (if cancel-route
+      (dr/change-route fulcro-app (or cancel-route []))
       (log/error "Don't know where to route on cancel. Add ::report/cancel-route to your form."))
-    ;; TODO: probably return to original route instead
-    (controller/route-to! fulcro-app id (or cancel-route []))
     (uism/exit env)))
 
 (defstatemachine report-machine
@@ -51,13 +67,10 @@
    ::uism/states
    {:initial
     {::uism/handler (fn [env]
-                      (let [{::uism/keys [fulcro-app event-data]} env
-                            {::controller/keys [id]
-                             ::keys            [action]} event-data
-                            Report (uism/actor-class env :actor/report)]
+                      (let [{::uism/keys [event-data]} env
+                            {::keys [action]} event-data]
                         (-> env
                           (uism/store ::action action)
-                          (uism/store ::controller/id id)
                           (uism/activate :state/gathering-parameters))))}
 
     :state/gathering-parameters
@@ -85,17 +98,6 @@
                                                      (load-report! fulcro-app Report current-params)
                                                      env))}}})}})
 
-(defmethod controller/-start-io! ::rad/report
-  [{::uism/keys [fulcro-app] :as env} TargetClass {::rad/keys [target-route] :as options}]
-  (log/info "Starting Report " (comp/component-name TargetClass))
-  (let [report-machine-id (comp/ident TargetClass {})
-        event-data        (assoc options
-                            ::id report-machine-id)]
-    (uism/begin! fulcro-app report-machine report-machine-id
-      {:actor/report (uism/with-actor-class report-machine-id TargetClass)}
-      event-data)
-    (controller/activate-route env target-route)))
-
 (defn run-report!
   "Run a report with the current parameters"
   [this]
@@ -113,6 +115,13 @@
   [sym options k pred?]
   (when-not (pred? (get options k))
     (throw (ex-info (str "defsc-report " sym " has an invalid option " k) {}))))
+
+(defn report-will-enter [app route-params report-class]
+  (let [report-ident (comp/get-ident report-class {})]
+    (uism/begin! app report-machine report-ident {:actor/report report-class})
+    (dr/route-immediate (comp/get-ident report-class {}))))
+
+(defn report-will-leave [_ _] true)
 
 #?(:clj
    (defmacro defsc-report
@@ -141,9 +150,9 @@
            query    (into [{source-attribute subquery}]
                       (keys parameters))
            options  (assoc options
-                      ::rad/io? true
                       :route-segment [route]
-                      ::rad/type ::rad/report
+                      :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
+                      :will-leave `report-will-leave
                       :query query
                       :ident (list 'fn [] [:component/id (keyword sym)]))
            body     (if (seq (rest args))
