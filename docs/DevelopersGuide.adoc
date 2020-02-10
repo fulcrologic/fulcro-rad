@@ -1268,6 +1268,28 @@ In the above example the `AddressForm` is completely usable to edit an address (
 the items of the to-many relationship. Additional keys in the `subforms` map entries allow for specific behavioral
 support.
 
+== Default Values During Creation
+
+This section assumes you know a bit about Fulcro's Form State support. The validation system used in RAD
+is just that, with some automation stacked on top. It is important to understand that validation does not
+start taking effect on a field until it is "marked complete", and a form is never considered "valid"
+until everything it is considered "complete". RAD will automatically mark things complete as users
+interact with form fields (often on blur), but creation needs you to indicate what (pre-filled) fields
+should be considered "already complete".
+
+TODO: Needs review/documentation.
+
+- The ID must be a Fulcro tempid, but usually you let this auto-generate.
+- You can indicate which items should be pre-marked as complete.
+- Nested support: to-one, to-many, auto-create, manual create, etc.
+
+The attributes of interest for setting defaults when things are created are:
+
+`::attr/default-value`:: Can be placed on an attribute to indicate a default value for this attribute.
+
+`::form/default`:: A map from attribute name (as a keyword) to a default value. Subform data can be placed in this
+tree.
+
 === Relationship Lifecycle
 
 One of the core questions in any relation is: does the referring entity/table/document "own" the target?  In other words
