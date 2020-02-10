@@ -19,7 +19,12 @@
                    (java.text NumberFormat)
                    (java.util Locale))))
 
-(declare * div + - < > <= >= max min bigdecimal)
+(declare * div + - < > <= >= max min bigdecimal numeric numeric?)
+
+(s/def ::numeric
+  (s/with-gen numeric? #(s/gen #{(numeric "11.35")
+                                 (numeric "5.00")
+                                 (numeric "42.11")})))
 
 (def ^:dynamic *primitive* false)
 
@@ -49,13 +54,6 @@
   (if *primitive*
     (number? v)
     (bigdecimal? v)))
-
-(declare numeric)
-
-(s/def ::numeric
-  (s/with-gen numeric? #(s/gen #{(numeric "11.35")
-                                 (numeric "5.00")
-                                 (numeric "42.11")})))
 
 (>defn numeric->str
   "Convert a math number to a string."

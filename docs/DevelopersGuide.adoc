@@ -1638,22 +1638,25 @@ with:
 
 [source]
 -----
-(time (math/with-primitive-ops (reduce math/+ 0 (range 0 1000))))
-"Elapsed time: 3.105000 msecs"
-=> 499500
-(time (reduce math/+ 0 (range 0 1000)))
-"Elapsed time: 216.255000 msecs"
-=> #bigdec"499500"
+(time (reduce math/+ 0 (range 0 10000)))
+"Elapsed time: 251.240947 msecs"
+=> 49995000M
+(time (math/with-primitive-ops (reduce math/+ 0 (range 0 10000))))
+"Elapsed time: 1.9688 msecs"
+=> 49995000
 -----
 
 which will run *much* faster, but you are responsible for knowing when that is safe. This allows
 you to compose functions that were written for accuracy into new routines where the accuracy isn't necessary.
 
-NOTE: `with-primitive-ops` does not affect JVM performance or accuracy since the behavior of `with-primitive-ops` is to
-call Clojure's pre-defined `+`, etc. In CLJ, these will continue to provide accuracy at a higher runtime cost.  This
-primarily exists for cases where you're doing something in a UI that must render quickly, but that uses data in
-this numeric format. For example a dynamically-adjusting report where you know the standard math to be accurate
-enough for transient purposes.
+NOTE: `with-primitive-ops` coerces the value down to a `js/Number` (or JVM `double`), and then
+calls Clojure's pre-defined `+`, etc.  This primarily exists for cases where you're doing something in a UI that
+must render quickly, but that uses data in this numeric format. For example a dynamically-adjusting report where
+you know the standard math to be accurate enough for transient purposes.
+
+WARNING: `with-primitive-ops` returns the value of the last statement in the body. If that is a numeric value then
+it will be a *primitive* numeric value (since you're using primitives). You must coerce it back using `math/numeric`
+if you need the arbitrary precision data type for storage.
 
 = Authorization Middleware
 
