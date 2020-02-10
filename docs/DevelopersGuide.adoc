@@ -1517,6 +1517,25 @@ select a time-zone for the context of your processing. The concept of `LocalDate
 but for now the style of the UI control determines what the user interaction looks like. This means that when you
 ask the user for a date, it will be stored as a specific time on a specific date in a specific time zone.
 
+For example, an Invoice might require a date (which could be in the context of the receiver or the shipper). The
+"ideal" solution is to do time zone offset calculations, but a reasonable approximation might be to just
+store the date relative to noon (or midnight, etc.) in the time zone of the user. This can be supported with a
+simple UI control style:
+
+[source]
+-----
+(defattr date :invoice/date :instant
+  {::form/field-style                                        :date-at-noon
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:invoice/id}
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+-----
+
+Of course you can provide your own style definitions for controls, and you can also choose to store
+things like "Local Dates" as simple strings (or a LocalDate type if your storage engine has one)
+in your database if you wish to completely avoid the time zone complication.  At that point you could
+also add Transit support for local dates to your network layer, and keep those items in the correct type
+in a full-stack manner.
+
 ==== Setting the Time Zone
 
 NOTE: At the time of this writing the date-time namespace requires the 10-year time zone range from Joda Timezone. This
