@@ -190,21 +190,27 @@
             (Big. "1")
             numbers))))))
 
+(def ^:dynamic *precision* 20)
+
 (defn div
   "Divide the given two numbers, using bigdecimal math, with 20 digits
   of precision. In primitive mode just uses regular `/`."
-  [n d]
-  (assert (not= 0 d))
-  (if *primitive*
-    (/ n d)
-    (let [n (n->big n)
-          d (n->big d)]
-      #?(:clj
-         (with-precision 20
-           (/ n d))
-         :cljs
-         (big->bigdec
-           (.div n d))))))
+  ([n d]
+   (div n d *precision*))
+  ([n d precision]
+   (assert (not= 0 d))
+   (if *primitive*
+     (/ n d)
+     (let [n (n->big n)
+           d (n->big d)]
+       #?(:clj
+          (with-precision precision
+            (/ n d))
+          :cljs
+          (do
+            (set! Big/DP precision)
+            (big->bigdec
+              (.div n d))))))))
 
 #?(:cljs
    (do
@@ -312,4 +318,3 @@
   [n]
   (let [v (str/replace (numeric->str (numeric n)) #"[.].*" "")]
     (numeric v)))
-

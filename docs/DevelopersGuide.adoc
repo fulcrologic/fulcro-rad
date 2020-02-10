@@ -113,6 +113,30 @@ and to-many relations.
 
 RAD is currently of pre-alpha quality, and should be used with caution.
 
+== Required Dependencies
+
+Your database adapter may require that you add additional dependencies to your project. RAD is tuned to work
+best with the `shadow-cljs` build tool. It requires that you add the following js dependencies to your
+`package.json` when working with `shadow-cljs`:
+
+[source, json]
+----
+{
+  "dependencies": {
+    "big.js": "5.2.2",
+    "js-joda": "1.11.0",
+    "js-joda-timezone": "2.1.1",
+    "@js-joda/locale_en-us": "2.0.1",
+    "react": "^16.12.0",
+    "react-dom": "^16.12.0",
+    "semantic-ui-react": "^0.88.2",
+    "shadow-cljs": "2.8.83"
+  }
+}
+----
+
+None of these should impact your build size unless you use the features the provide.
+
 == Attribute-Centric
 
 Fulcro encourages the use of a graph-based data model that is agnostic to the underlying representation of your data.
@@ -1464,6 +1488,172 @@ adding more than 2.
 === To-Many, Selected From Pre-existing
 
 NOTE: This use-case is not yet implemented.
+
+== Extended Data Type Support
+
+NOTE: The goals of RAD are stated in this section, but only some of the type support is fully-implemented and
+stable.
+
+Fulcro uses EDN for its data representation, and supports all of the data types that transit supports
+out of the box, at least at the storage/transmission layer. Some of these type, however, have further complications. The
+two most pressing are time and precise representation of numbers, but others certainly exist.
+
+RAD includes support for helping deal with these problems.
+
+=== Dates and Time
+
+The standard way to represent time is as an offset from the epoch in milliseconds. This is the de-facto representation
+in the JVM, JS VM, transit, and many storage systems.  As such, it is the standard for the `instant` type in RAD. User
+interfaces also need to localize the date and time to either the user or context of the form/report in question.
+
+There are standard implementations of localization for js and the JVM, but since we're using CLJC already it makes the
+most since to us to just use `cljc.java-time`, which is a library that unifies the API of the standard JVM Time API.
+This makes it much simple to write localized support for dates and times in CLJC files. To date we are avoiding the
+`tick` library because it is not yet as mature, and is overkill for RAD itself (though you can certainly use it
+in your applications).
+
+At the time of this writing RAD supports only the storage of instants (Java/js Date objects), and requires that you
+select a time-zone for the context of your processing. The concept of `LocalDate` and `LocalTime` can easily be added,
+but for now the style of the UI control determines what the user interaction looks like. This means that when you
+ask the user for a date, it will be stored as a specific time on a specific date in a specific time zone.
+
+==== Setting the Time Zone
+
+NOTE: At the time of this writing the date-time namespace requires the 10-year time zone range from Joda Timezone. This
+will most likely be removed from RAD and changed to a requirement for your application, since you can then select
+the time zone file that best meets your application's size and functionality requirements.
+
+In order to use date/time support in RAD you *must* set the time zone so that RAD knows how to adjust local date and
+times into proper UTC offsets.  Setting the time zone can be done in a couple of ways, depending on the
+desired usage context.
+
+It is important to note that the *server* (CLJ) side will typically only deal with already-adjusted UTC offsets. Thus,
+the code on the server mostly just read/saves the values without having to do anything else. A UTC offset is unambiguous,
+just not human friendly. The user interface is where RAD does this human interfacing.
+
+In CLJS you are commonly dealing with a lot of (potentially behind-the-scenes) asynchronous logic. Fulcro makes most
+of the model appear synchronous, but the reality is quite different in implementation.  Fortunately, most UI contexts
+are aimed at the user, and that user usually has a particular time zone that is of interest to them. Thus, the
+time zone on the client side can usually be set to some reasonable default on client startup (perhaps based on the
+browser's known locale) and further refined when a user logs in (via a preference that you allow them to set).
+
+Thus, CLJS code will typically call `(datetime/set-timezone! "America/Los_Angeles")`, where the string argument
+is one of the standard time zone names. The are available from `(cljc.java-time.zone-id/get-available-zone-ids)`.
+
+[source]
+----
+;; Typical client initialization
+(defn init []
+  (log/info "Starting App")
+  ;; set some kind of default tz until they log in
+  (datetime/set-timezone! "America/Los_Angeles")
+  (form/install-ui-controls! app sui/all-controls)
+  (attr/register-attributes! model/all-attributes)
+  (app/mount! app Root "app"))
+----
+
+NOTE: The above action is all that is needed to get most of RAD working. The remainder of the date/time support is
+used internally, and can also be convenient for your own logic as your requirements grow.
+
+It is also possible that you may wish to temporarily override the currently-selected time zone for some context. This
+is true for CLJS (though you will have to be careful to manage async behavior there), and is central to CLJ operation.
+
+In CLJ your normal reads and mutations will be dealing with UTC offsets that have already been properly adjusted in the
+client. There are times when you'll want to deal with timezone-centric data (in reports and calculations, for example,
+you might need to choose a range from the user's perspective).
+
+Most of the functions in the `date-time` namespace allow you to pass the zone name (string version of zone id) as
+an optional parameter, but the default value comes from the dynamic var `datetime/*current-timezone*` *as a ZoneID
+instance*, not a string.
+
+So, you can get a thread-local binding for this with the standard Clojure:
+
+[source]
+-----
+(binding [datetime/*current-timezone* (zone-id/of "America/New_York")]
+   ...)
+-----
+
+The macro `with-timezone` makes this a less noisy:
+
+[source]
+-----
+(with-timezone "America/New_York"
+   ...)
+-----
+
+See the doc strings on the functions in `com.fulcrologic.rad.type-support.date-time` namespace for more details on
+what support currently exists. This namespace will grow as needs arise, but many of the things you might need
+are easily doable using https://github.com/henryw374/cljc.java-time[`cljc.java-time`] (already included)
+and https://github.com/juxt/tick[tick] (an easy add-on dependency) as long as you center your logic around
+the `*current-timezone` when appropriate.
+
+=== Arbitrary Precision Math and Storage
+
+EDN and Transit already support the concept of representing and transmitting arbitrary precision numbers. CLJ uses the
+built-in `BigDecimal` and `BigInteger` JVM support for runtime implementation and seamless math operation. Unfortunately,
+CLJS accepts the *notation* for these, but uses only JS numbers as the actual runtime representation. This means that
+logic written in CLJC cannot be trusted to do math.
+
+In RAD we desire the representation on the client to be closer to what you'd have on the server. Most applications
+have large amounts of their logic on the client these days, so it makes no sense, in our opinion, to simply pass numbers
+around as unmarked strings and expect things to work well.
+
+Therefore RAD has full-stack support for BigDecimal (BigInteger may be added, as needed). Not just in type, but in
+*operation*.  The `com.fulcrologic.rad.type-support.decimal` namespace includes constructors that work the same
+in CLJ and CLJS (you would avoid using suffixes like `M`, since the CLJS code would map that to Number), and many
+of the common mathematical operations you'd need to implement your calculations in CLJS (PRs encouraged for adding
+ones you find missing).
+
+Working with these looks like the following:
+
+[source]
+-----
+(ns example
+  (:require
+    [com.fulcrologic.rad.type-support.decimal :as math]))
+
+;; Works the same in CLJ and CLJS.
+(-> (math/numeric 41)
+  (math/div 3) ; division defaults to 20 digits of precision, can be set
+  (math/+ 35))
+-----
+
+TODO: Need `math/with-precision` instead of just an arg to `div`.
+
+Of course you can use clojure exclusions and refer to get rid of the `math` prefix,
+but since it is common to need normal math for other UI operations we do not
+recommend it.
+
+Fields that are declared to be arbitrary precision numerics will automatically
+live in your Fulcro database as this `math/numeric` type (which is CLJ is BigDecimal,
+and in CLJS is a transit-tagged BigDecimal (a wrapped string)).
+
+The JS implementation is currently provided by `big.js` (which you must add to your package.json). Most of the functions
+will auto-coerce values, and you can also ask for a particular calculation to be done with
+primitive math (which will run much faster but incur inaccuracies).
+
+You can ask for imprecise (but fast) math operation (only really affects CLJS)
+with:
+
+[source]
+-----
+(time (math/with-primitive-ops (reduce math/+ 0 (range 0 1000))))
+"Elapsed time: 3.105000 msecs"
+=> 499500
+(time (reduce math/+ 0 (range 0 1000)))
+"Elapsed time: 216.255000 msecs"
+=> #bigdec"499500"
+-----
+
+which will run *much* faster, but you are responsible for knowing when that is safe. This allows
+you to compose functions that were written for accuracy into new routines where the accuracy isn't necessary.
+
+NOTE: `with-primitive-ops` does not affect JVM performance or accuracy since the behavior of `with-primitive-ops` is to
+call Clojure's pre-defined `+`, etc. In CLJ, these will continue to provide accuracy at a higher runtime cost.  This
+primarily exists for cases where you're doing something in a UI that must render quickly, but that uses data in
+this numeric format. For example a dynamically-adjusting report where you know the standard math to be accurate
+enough for transient purposes.
 
 = Authorization Middleware
 

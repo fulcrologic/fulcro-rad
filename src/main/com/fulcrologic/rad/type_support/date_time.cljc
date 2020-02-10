@@ -62,6 +62,14 @@
    :cljs
    (defonce ^:dynamic *current-timezone* nil))
 
+#?(:clj
+   (defmacro with-timezone
+     "Set the (thread-local) \"current time zone\"to the given `zone-name` (a string zone id) for the duration of the rest of the
+     `body`. Simply a short-hand for `(binding [*current-timezone* (zone-id/of zone-name)] ...)`."
+     [zone-name & body]
+     `(binding [*current-timezone* (zone-id/of ~zone-name)]
+        ~@body)))
+
 (>defn set-timezone!
   "Set the root binding of timezone, a dynamic var. In CLJS there is a lot of async behavior, but the overall
   time zone is typically fixed for a user. In CLJ the timezone usually needs to be bound to the local processing
