@@ -947,6 +947,45 @@ This will look like this in your server code (assuming you're using `defstate` f
      ...]))
 -----
 
+==== Save Middleware
+
+You can also install middleware that can pre-process an incoming save so that it is fully compatible with the
+built-in save that comes with your database adapter. Fulcro RAD will always send a form save in the following
+format: (see Fulcro Form State docs)
+
+[source]
+-----
+TODO: example
+-----
+
+Your middleware is a `(fn [env save-data] save-data)` that will receive the full server parsing `env` along with
+the data that is to be saved. Your middleware should return the updated `save-data`.
+
+You should install your middleware in the parser env under the `::form/middleware` key. If you are
+using the RAD pathom parser, then this will look something like:
+
+[source]
+-----
+(defn my-save-middleware [env params] ...)
+
+(defstate parser
+  :start
+  (pathom/new-parser config
+    (fn [env] (assoc env ::form/middleware my-save-middleware))
+    [...
+     form/save-form
+     form/delete-entity
+     ...]))
+-----
+
+This could be used for pretty much anything, but common examples include:
+
+* Adding default required fields that should not appear on the form (i.e. ownership info).
+* Aborting the save (by throwing an exception)
+* Creating or updating derived fields (e.g. Datomic tuple values) from other form data.
+
+
+
 === Configuring the Client
 
 One of the advantages of RAD is that you can quickly build forms and reports without having to write any state management
