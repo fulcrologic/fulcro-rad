@@ -19,14 +19,28 @@
                    (java.text NumberFormat)
                    (java.util Locale))))
 
-(declare * div + - < > <= >= max min bigdecimal numeric numeric?)
+(def ^:dynamic *primitive* false)
+
+(declare * div + - < > <= >= max min bigdecimal numeric)
+
+(defn bigdecimal? [v]
+  #?(:clj  (decimal? v)
+     :cljs (ct/bigdec? v)))
+
+(>defn numeric?
+  "Predicate for clj(s) dynamic number (n or bigdecimal). Returns true if the given value is a numeric
+  in the current computing context (primitive or BigDecimal)."
+  [v]
+  [any? => boolean?]
+  (if *primitive*
+    (number? v)
+    (bigdecimal? v)))
 
 (s/def ::numeric
   (s/with-gen numeric? #(s/gen #{(numeric "11.35")
                                  (numeric "5.00")
                                  (numeric "42.11")})))
 
-(def ^:dynamic *primitive* false)
 
 #?(:clj
    (defmacro with-primitive-ops
@@ -41,19 +55,6 @@
      :cljs (-> s
              (str/replace #"^0+([1-9].*)$" "$1")
              (str/replace #"^0*([.].*)$" "0$1"))))
-
-(defn bigdecimal? [v]
-  #?(:clj  (decimal? v)
-     :cljs (ct/bigdec? v)))
-
-(>defn numeric?
-  "Predicate for clj(s) dynamic number (n or bigdecimal). Returns true if the given value is a numeric
-  in the current computing context (primitive or BigDecimal)."
-  [v]
-  [any? => boolean?]
-  (if *primitive*
-    (number? v)
-    (bigdecimal? v)))
 
 (>defn numeric->str
   "Convert a math number to a string."

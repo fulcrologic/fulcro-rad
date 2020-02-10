@@ -1293,8 +1293,8 @@ tree.
 === Relationship Lifecycle
 
 One of the core questions in any relation is: does the referring entity/table/document "own" the target?  In other words
-does it create and destroy it?  When there is a graph of such relations this question is also recursive (and is handled by things
-like cascade definitions in SQL and isComponent markers in Datomic).
+does it create and destroy it?  When there is a graph of such relations this question is also recursive (and is handled
+by things like `CASCADE` in SQL and `isComponent` markers in Datomic).
 
 When there is not an ownership relation one still needs to know if the referring entity is allowed to create new ones
 (destroying them is usually ruled out, since others could be using it).
@@ -1698,6 +1698,15 @@ you know the standard math to be accurate enough for transient purposes.
 WARNING: `with-primitive-ops` returns the value of the last statement in the body. If that is a numeric value then
 it will be a *primitive* numeric value (since you're using primitives). You must coerce it back using `math/numeric`
 if you need the arbitrary precision data type for storage.
+
+== File Upload/Download
+
+NOTE: Not yet implemented. Fulcro has all of the necessary network-layer implementation, so it should not be much of
+a stretch to get this working.
+
+RAD Forms can support file uploads, along with download/preview of previously-uploaded files. This support requires
+the configuration of a file store that can be used to save the file itself, along with proper configuration to
+associate a URL with the file's content so that the result can be seen later by RAD.
 
 = Authorization Middleware
 
