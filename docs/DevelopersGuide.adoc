@@ -971,7 +971,7 @@ using the RAD pathom parser, then this will look something like:
 (defstate parser
   :start
   (pathom/new-parser config
-    (fn [env] (assoc env ::form/middleware my-save-middleware))
+    (fn [env] (assoc env ::form/save-middleware my-save-middleware))
     [...
      form/save-form
      form/delete-entity

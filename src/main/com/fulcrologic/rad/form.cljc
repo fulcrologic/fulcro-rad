@@ -226,11 +226,11 @@
    (pc/defmutation save-form [env params]
      {::pc/params #{::master-pk ::diff ::delta}}
      (log/info "Save invoked from client with " params)
-     (let [middleware (::middleware env)
-           params     (if middleware (middleware env params) params)
+     (let [save-middleware (::save-middleware env)
+           params          (if save-middleware (save-middleware env params) params)
            {::keys [master-pk delta]} params
-           idents     (keys delta)
-           pk         (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
+           idents          (keys delta)
+           pk              (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
        (if-let [save-handlers (seq (::save-handlers env))]
          (reduce
            (fn [result handler]
