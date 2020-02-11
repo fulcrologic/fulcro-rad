@@ -68,7 +68,13 @@
                                              (userOnChange value)))
                                          (catch :default e
                                            (log/error "Unable to read dropdown value " e (when v (.-value v))))))})]
-       (ui-dropdown props))))
+       (ui-dropdown props))
+     :clj
+     (dom/div :.ui.selection.dropdown
+       (dom/input {:type "hidden"})
+       (dom/i :.dropdown.icon)
+       (dom/div :.default.text "")
+       (dom/div :.menu))))
 
 (def ui-wrapped-dropdown
   "Draw a SUI dropdown with the given props.  The arguments are identical to sui/ui-dropdown, but options and onChange
