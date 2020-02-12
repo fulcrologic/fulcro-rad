@@ -19,23 +19,9 @@
                    (java.text NumberFormat)
                    (java.util Locale))))
 
-(declare * div + - < > <= >= max min bigdecimal)
-
 (def ^:dynamic *primitive* false)
 
-#?(:clj
-   (defmacro with-primitive-ops
-     "Creates a thread-safe dynamic context where the math operations from this namespace
-     use primitives instead of BigDecimal for speed."
-     [& body]
-     `(binding [*primitive* true]
-        ~@body)))
-
-(defn strip-zeroes [s]
-  #?(:clj  s
-     :cljs (-> s
-             (str/replace #"^0+([1-9].*)$" "$1")
-             (str/replace #"^0*([.].*)$" "0$1"))))
+(declare * div + - < > <= >= max min bigdecimal numeric)
 
 (defn bigdecimal? [v]
   #?(:clj  (decimal? v)
@@ -50,12 +36,25 @@
     (number? v)
     (bigdecimal? v)))
 
-(declare numeric)
-
 (s/def ::numeric
   (s/with-gen numeric? #(s/gen #{(numeric "11.35")
                                  (numeric "5.00")
                                  (numeric "42.11")})))
+
+
+#?(:clj
+   (defmacro with-primitive-ops
+     "Creates a thread-safe dynamic context where the math operations from this namespace
+     use primitives instead of BigDecimal for speed."
+     [& body]
+     `(binding [*primitive* true]
+        ~@body)))
+
+(defn strip-zeroes [s]
+  #?(:clj  s
+     :cljs (-> s
+             (str/replace #"^0+([1-9].*)$" "$1")
+             (str/replace #"^0*([.].*)$" "0$1"))))
 
 (>defn numeric->str
   "Convert a math number to a string."
@@ -190,21 +189,27 @@
             (Big. "1")
             numbers))))))
 
+(def ^:dynamic *precision* 20)
+
 (defn div
   "Divide the given two numbers, using bigdecimal math, with 20 digits
   of precision. In primitive mode just uses regular `/`."
-  [n d]
-  (assert (not= 0 d))
-  (if *primitive*
-    (/ n d)
-    (let [n (n->big n)
-          d (n->big d)]
-      #?(:clj
-         (with-precision 20
-           (/ n d))
-         :cljs
-         (big->bigdec
-           (.div n d))))))
+  ([n d]
+   (div n d *precision*))
+  ([n d precision]
+   (assert (not= 0 d))
+   (if *primitive*
+     (/ n d)
+     (let [n (n->big n)
+           d (n->big d)]
+       #?(:clj
+          (with-precision precision
+            (/ n d))
+          :cljs
+          (do
+            (set! Big/DP precision)
+            (big->bigdec
+              (.div n d))))))))
 
 #?(:cljs
    (do
@@ -312,4 +317,3 @@
   [n]
   (let [v (str/replace (numeric->str (numeric n)) #"[.].*" "")]
     (numeric v)))
-

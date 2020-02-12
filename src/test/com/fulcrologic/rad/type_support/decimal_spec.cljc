@@ -298,7 +298,7 @@
         "gives a currency-string version of a number"
         (math/numeric->percent-str (math/numeric "0.334")) => "33.4%"))))
 
-(specification "numeric?"
+(specification "numeric?" :focus
   #?(:clj
      (assertions
        "Detects clj big decimal constants"
@@ -309,8 +309,6 @@
       (-> (math/numeric "1.334") math/numeric?)) => true
     "Indicates when a number is numeric"
     (-> (math/numeric "1.334") math/numeric?) => true))
-
-
 
 #?(:cljs
    (specification "strip-zeroes"

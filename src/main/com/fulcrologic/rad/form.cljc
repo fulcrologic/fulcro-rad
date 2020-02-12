@@ -223,13 +223,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 #?(:clj
-   (pc/defmutation save-form [env {::keys [master-pk delta] :as params}]
+   (pc/defmutation save-form [env params]
      {::pc/params #{::master-pk ::diff ::delta}}
      (log/info "Save invoked from client with " params)
-     (let [idents (keys delta)
-           pk     (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
-       ;; TASK: We need to insert some kind of middleware layer to be able to do security and validation, so
-       ;; it is not up to the database adapter.
+     (let [save-middleware (::save-middleware env)
+           params          (if save-middleware (save-middleware env params) params)
+           {::keys [master-pk delta]} params
+           idents          (keys delta)
+           pk              (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
        (if-let [save-handlers (seq (::save-handlers env))]
          (reduce
            (fn [result handler]
@@ -237,7 +238,9 @@
            {master-pk pk
             :tempids  {}}
            save-handlers)
-         (log/error "No save handlers are in the parser env."))))
+         (do
+           (log/error "No save handlers are in the parser env.")
+           {master-pk pk}))))
    :cljs
    (m/defmutation save-form [_]
      (action [_] :noop)))

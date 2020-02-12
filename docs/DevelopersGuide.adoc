@@ -113,6 +113,30 @@ and to-many relations.
 
 RAD is currently of pre-alpha quality, and should be used with caution.
 
+== Required Dependencies
+
+Your database adapter may require that you add additional dependencies to your project. RAD is tuned to work
+best with the `shadow-cljs` build tool. It requires that you add the following js dependencies to your
+`package.json` when working with `shadow-cljs`:
+
+[source, json]
+----
+{
+  "dependencies": {
+    "big.js": "5.2.2",
+    "js-joda": "1.11.0",
+    "js-joda-timezone": "2.1.1",
+    "@js-joda/locale_en-us": "2.0.1",
+    "react": "^16.12.0",
+    "react-dom": "^16.12.0",
+    "semantic-ui-react": "^0.88.2",
+    "shadow-cljs": "2.8.83"
+  }
+}
+----
+
+None of these should impact your build size unless you use the features the provide.
+
 == Attribute-Centric
 
 Fulcro encourages the use of a graph-based data model that is agnostic to the underlying representation of your data.
@@ -923,6 +947,45 @@ This will look like this in your server code (assuming you're using `defstate` f
      ...]))
 -----
 
+==== Save Middleware
+
+You can also install middleware that can pre-process an incoming save so that it is fully compatible with the
+built-in save that comes with your database adapter. Fulcro RAD will always send a form save in the following
+format: (see Fulcro Form State docs)
+
+[source]
+-----
+TODO: example
+-----
+
+Your middleware is a `(fn [env save-data] save-data)` that will receive the full server parsing `env` along with
+the data that is to be saved. Your middleware should return the updated `save-data`.
+
+You should install your middleware in the parser env under the `::form/middleware` key. If you are
+using the RAD pathom parser, then this will look something like:
+
+[source]
+-----
+(defn my-save-middleware [env params] ...)
+
+(defstate parser
+  :start
+  (pathom/new-parser config
+    (fn [env] (assoc env ::form/save-middleware my-save-middleware))
+    [...
+     form/save-form
+     form/delete-entity
+     ...]))
+-----
+
+This could be used for pretty much anything, but common examples include:
+
+* Adding default required fields that should not appear on the form (i.e. ownership info).
+* Aborting the save (by throwing an exception)
+* Creating or updating derived fields (e.g. Datomic tuple values) from other form data.
+
+
+
 === Configuring the Client
 
 One of the advantages of RAD is that you can quickly build forms and reports without having to write any state management
@@ -1244,11 +1307,33 @@ In the above example the `AddressForm` is completely usable to edit an address (
 the items of the to-many relationship. Additional keys in the `subforms` map entries allow for specific behavioral
 support.
 
+== Default Values During Creation
+
+This section assumes you know a bit about Fulcro's Form State support. The validation system used in RAD
+is just that, with some automation stacked on top. It is important to understand that validation does not
+start taking effect on a field until it is "marked complete", and a form is never considered "valid"
+until everything it is considered "complete". RAD will automatically mark things complete as users
+interact with form fields (often on blur), but creation needs you to indicate what (pre-filled) fields
+should be considered "already complete".
+
+TODO: Needs review/documentation.
+
+- The ID must be a Fulcro tempid, but usually you let this auto-generate.
+- You can indicate which items should be pre-marked as complete.
+- Nested support: to-one, to-many, auto-create, manual create, etc.
+
+The attributes of interest for setting defaults when things are created are:
+
+`::attr/default-value`:: Can be placed on an attribute to indicate a default value for this attribute.
+
+`::form/default`:: A map from attribute name (as a keyword) to a default value. Subform data can be placed in this
+tree.
+
 === Relationship Lifecycle
 
 One of the core questions in any relation is: does the referring entity/table/document "own" the target?  In other words
-does it create and destroy it?  When there is a graph of such relations this question is also recursive (and is handled by things
-like cascade definitions in SQL and isComponent markers in Datomic).
+does it create and destroy it?  When there is a graph of such relations this question is also recursive (and is handled
+by things like `CASCADE` in SQL and `isComponent` markers in Datomic).
 
 When there is not an ownership relation one still needs to know if the referring entity is allowed to create new ones
 (destroying them is usually ruled out, since others could be using it).
@@ -1258,11 +1343,409 @@ the user to simply select (or search for) "which" of the existing targets are de
 relation the form will usually model the items as editable sub-forms, with optional controls that allow the
 addition and removal of the elements in the relation.
 
-=== To-One Relationships
+The form management system uses the concept of "subforms" to models all of the possible relationships, relies on
+database adapters to manage things like cascading deletes, and needs some additional configuration (on a per-form basis)
+from you as to how relations should be rendered and interacted with in the UI.
 
+The following sections cover various relational use-cases that RAD forms support.
 
-=== To-Many Relationships
+=== To-One Relation, Owned by Reference
 
+WARNING: This use-case is not yet implemented. More work needs to be done on initializing the case where the target does
+not yet exist, but the owner does.
+
+In this case the referenced item springs into existence when the parent creates it, and drops from existence when
+it is no longer referenced. Database adapters model this in various ways, but the concept at the form layer is
+simple: If you're creating it then you'll be creating a new thing, an edit will edit the current thing, and if you
+drop the reference you'll depend on the database adapter's save logic to delete it.
+
+The form rendering system can derive that it is a to-one relation from the cardinality declared on the reference
+attribute. The ownership nature is more of a rendering concern than anything: If the new thing is exclusively owned
+then we know we have to generate a subform that can fill out all of the interesting details.
+
+NOTE: This kind of relation can also be modelled by folding the referred items attributes into the owner. For example
+if you have an edge called `:account/primary-address` that is a to-one relation to an address, but you don't plan
+to do real normalization of addresses (which is difficult), then you could also just make `:account/primary-street` and
+such on the account itself and skip the relational nature altogether.
+
+=== To-One Relation to Pre-existing
+
+NOTE: This use-case is partially implemented. It will work well when selecting from a relatively small set of
+targets, but will not currently perform well if the list of potential targets is many thousands or greater.
+
+In this case setting up the relation is nothing more that picking some pre-existing thing in the database. There
+are several sub-aspects to this problem:
+
+. Should you be able to create a new one?
+. When selecting an existing one, how do you manage large lists of potential candidates (search, caching, etc.)?
+. How do you label the items so the user can select them?
+
+At the time of this writing the answers are:
+
+. No. You must use a different interaction to make one.  Setting a to-one relation is always a selection process
+unless you hand-write the UI yourself.
+. This is an option of the UI control used to do the selection. At present all of the potential matches are pre-loaded.
+. This is something you configure.
+
+A demonstration of this case is as follows: Assume we want to generate a form for an invoice. The invoice will
+have line items (to many, owned by the invoice), and each line item will point to an item from our inventory (owned
+by inventory, not the line item).
+
+We can start from the bottom. The inventory item itself might have this model in a Datomic database:
+
+[source]
+-----
+(ns com.example.model.item
+  (:require
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.authorization :as auth]))
+
+(defattr id :item/id :uuid
+  {::attr/identity?                                      true
+   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+
+(defattr item-name :item/name :string
+  {:com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:item/id}
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+
+...
+-----
+
+followed by the line item model:
+
+[source]
+-----
+(ns com.example.model.line-item
+  (:require
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
+
+(defattr id :line-item/id :uuid
+  {::attr/identity?                                      true
+   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+
+(defattr item :line-item/item :ref
+  {::attr/target                                             :item/id
+   ::attr/cardinality                                        :one
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:line-item/id}
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+
+(defattr quantity :line-item/quantity :int
+  {:com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:line-item/id}
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+
+...
+-----
+
+note the `:line-item/item` reference. It is a to-one that targets entities that have an `:item/id`. There is no
+Datomic marker indicating that it is a component, so we've already _inferred_ that the line item doesn't own it. But
+it might also be possible that the line item _could be allowed_ to create new ones. We just don't know for sure
+unless we provide more context.
+
+In RAD we do that at the form layer.
+
+[source]
+-----
+(form/defsc-form LineItemForm [this props]
+  {::form/id           line-item/id
+   ::form/attributes   [line-item/item line-item/quantity]
+   ::form/cancel-route ["landing-page"]
+   ::form/route-prefix "line-item"
+   ::form/layout       [[:line-item/item :line-item/quantity]]
+   ::form/subforms     {:line-item/item {::form/ui       form/ToOneEntityPicker
+                                         ::form/pick-one {:options/query-key :item/all-items
+                                                          :options/subquery  [:item/id :item/name :item/price]
+                                                          :options/transform (fn [{:item/keys [id name price]}]
+                                                                               {:text (str name " - " (math/numeric->currency-str price)) :value [:item/id id]})}}}})
+-----
+
+Here we've generated a normal form. We've included the `line-item/item` attribute, and since that is a ref we must
+also include subform configuration. For this use-case we need two things for the reference field:
+
+* `::form/ui` -  The UI to use for the subform. In this case we use a pre-generated Fulcro component called `form/ToOneEntityPicker`.
+That UI will look for additional configuration options under the `::form/pick-one` key.
+* `::form/pick-one` - A map of configuration options that tell the entity picker how to find the items to choose
+from, and how to format them for the user. These must include:
+** `:options/query-key` - A pathom global resolver output key that can obtain the list of options.
+** `:options/subquery` - The list of sub-attributes that the query should include so that sufficient information
+is available to build the options to choose from.
+** `:options/transform` - A function that can take each result from the options query and turn it into a labelled
+selection. The function must output a map that contains `:text` as the label, and `:value` with the correct ident of
+the entity being selected.
+
+NOTE: More options should soon be available for this configuration. Things like caching, sorting, debounced server
+search and more are coming soon.
+
+At this point you can use the `LineItemForm` and it will allow you to pick from the existing items in your
+database as long as you have a resolver. Something like this on the server would fit the bill:
+
+[source]
+-----
+(defattr all-items :item/all-items :ref
+  {::attr/target    :item/id
+   ::pc/output      [{:item/all-items [:item/id]}]
+   ::pc/resolve     (fn [{:keys [query-params] :as env} _]
+                      #?(:clj
+                         {:item/all-items (queries/get-all-items env query-params)}))})
+-----
+
+The normal item resolvers will be able to resolve the name and price of the item from there.
+
+=== To-Many Relationships, Owned by Parent
+
+The next case we'll consider is the case where a form has a to-many relationship, and the items referred to are
+created (and owned) by that parent form. This case uses a normal form for the to-many items, and is
+pretty simple to configure. Say you have accounts, and each account can have multiple addresses (the addresses
+are not globally normalized but instead just owned by the account, since they are hard to globally normalize).
+
+The addresses attribute looks like you'd expect:
+
+[source]
+-----
+(ns com.example.model.account ...)
+
+(defattr addresses :account/addresses :ref
+  {::attr/target                                             :address/id
+   ::attr/cardinality                                        :many
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:account/id}})
+-----
+
+and the UI for an `AddressForm` might look like this:
+
+[source]
+-----
+(form/defsc-form AddressForm [this props]
+  {::form/id                address/id
+   ::form/attributes        [address/street address/city address/state address/zip]
+   ::form/cancel-route      ["landing-page"]
+   ::form/route-prefix      "address"})
+-----
+
+The `AccountForm` would then simply use that `AddressForm` in a subform definition like so:
+
+[source]
+-----
+(form/defsc-form AccountForm [this props]
+  {::form/id                  acct/id
+   ::form/attributes          [acct/name acct/addresses]
+   ::form/cancel-route        ["landing-page"]
+   ::form/route-prefix        "account"
+   ::form/subforms            {:account/addresses       {::form/ui              AddressForm
+                                                         ::form/can-delete-row? (fn [parent item] (< 1 (count (:account/addresses parent))))
+                                                         ::form/can-add-row?    (fn [parent] (< (count (:account/addresses parent)) 2))}}})
+-----
+
+Here the subform information for the `:account/addresses` field indicates:
+
+* `::form/ui` - The UI component to use for editing the target(s).
+* `::form/can-delete-row?` - A lambda that receives the current parent (account) props and the a referred item. If
+it returns true then that item should show a delete button.
+* `::form/can-add-row?` - A lambda that receives the current parent (account). If
+it returns true then the UI should include some kind of add control for adding a new row (address).
+
+So our form shown above does not allow the user to delete the address if it is the only one, and prevents them from
+adding more than 2.
+
+=== To-Many, Selected From Pre-existing
+
+NOTE: This use-case is not yet implemented.
+
+== Extended Data Type Support
+
+NOTE: The goals of RAD are stated in this section, but only some of the type support is fully-implemented and
+stable.
+
+Fulcro uses EDN for its data representation, and supports all of the data types that transit supports
+out of the box, at least at the storage/transmission layer. Some of these type, however, have further complications. The
+two most pressing are time and precise representation of numbers, but others certainly exist.
+
+RAD includes support for helping deal with these problems.
+
+=== Dates and Time
+
+The standard way to represent time is as an offset from the epoch in milliseconds. This is the de-facto representation
+in the JVM, JS VM, transit, and many storage systems.  As such, it is the standard for the `instant` type in RAD. User
+interfaces also need to localize the date and time to either the user or context of the form/report in question.
+
+There are standard implementations of localization for js and the JVM, but since we're using CLJC already it makes the
+most since to us to just use `cljc.java-time`, which is a library that unifies the API of the standard JVM Time API.
+This makes it much simple to write localized support for dates and times in CLJC files. To date we are avoiding the
+`tick` library because it is not yet as mature, and is overkill for RAD itself (though you can certainly use it
+in your applications).
+
+At the time of this writing RAD supports only the storage of instants (Java/js Date objects), and requires that you
+select a time-zone for the context of your processing. The concept of `LocalDate` and `LocalTime` can easily be added,
+but for now the style of the UI control determines what the user interaction looks like. This means that when you
+ask the user for a date, it will be stored as a specific time on a specific date in a specific time zone.
+
+For example, an Invoice might require a date (which could be in the context of the receiver or the shipper). The
+"ideal" solution is to do time zone offset calculations, but a reasonable approximation might be to just
+store the date relative to noon (or midnight, etc.) in the time zone of the user. This can be supported with a
+simple UI control style:
+
+[source]
+-----
+(defattr date :invoice/date :instant
+  {::form/field-style                                        :date-at-noon
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:invoice/id}
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+-----
+
+Of course you can provide your own style definitions for controls, and you can also choose to store
+things like "Local Dates" as simple strings (or a LocalDate type if your storage engine has one)
+in your database if you wish to completely avoid the time zone complication.  At that point you could
+also add Transit support for local dates to your network layer, and keep those items in the correct type
+in a full-stack manner.
+
+==== Setting the Time Zone
+
+NOTE: At the time of this writing the date-time namespace requires the 10-year time zone range from Joda Timezone. This
+will most likely be removed from RAD and changed to a requirement for your application, since you can then select
+the time zone file that best meets your application's size and functionality requirements.
+
+In order to use date/time support in RAD you *must* set the time zone so that RAD knows how to adjust local date and
+times into proper UTC offsets.  Setting the time zone can be done in a couple of ways, depending on the
+desired usage context.
+
+It is important to note that the *server* (CLJ) side will typically only deal with already-adjusted UTC offsets. Thus,
+the code on the server mostly just read/saves the values without having to do anything else. A UTC offset is unambiguous,
+just not human friendly. The user interface is where RAD does this human interfacing.
+
+In CLJS you are commonly dealing with a lot of (potentially behind-the-scenes) asynchronous logic. Fulcro makes most
+of the model appear synchronous, but the reality is quite different in implementation.  Fortunately, most UI contexts
+are aimed at the user, and that user usually has a particular time zone that is of interest to them. Thus, the
+time zone on the client side can usually be set to some reasonable default on client startup (perhaps based on the
+browser's known locale) and further refined when a user logs in (via a preference that you allow them to set).
+
+Thus, CLJS code will typically call `(datetime/set-timezone! "America/Los_Angeles")`, where the string argument
+is one of the standard time zone names. The are available from `(cljc.java-time.zone-id/get-available-zone-ids)`.
+
+[source]
+----
+;; Typical client initialization
+(defn init []
+  (log/info "Starting App")
+  ;; set some kind of default tz until they log in
+  (datetime/set-timezone! "America/Los_Angeles")
+  (form/install-ui-controls! app sui/all-controls)
+  (attr/register-attributes! model/all-attributes)
+  (app/mount! app Root "app"))
+----
+
+NOTE: The above action is all that is needed to get most of RAD working. The remainder of the date/time support is
+used internally, and can also be convenient for your own logic as your requirements grow.
+
+It is also possible that you may wish to temporarily override the currently-selected time zone for some context. This
+is true for CLJS (though you will have to be careful to manage async behavior there), and is central to CLJ operation.
+
+In CLJ your normal reads and mutations will be dealing with UTC offsets that have already been properly adjusted in the
+client. There are times when you'll want to deal with timezone-centric data (in reports and calculations, for example,
+you might need to choose a range from the user's perspective).
+
+Most of the functions in the `date-time` namespace allow you to pass the zone name (string version of zone id) as
+an optional parameter, but the default value comes from the dynamic var `datetime/*current-timezone*` *as a ZoneID
+instance*, not a string.
+
+So, you can get a thread-local binding for this with the standard Clojure:
+
+[source]
+-----
+(binding [datetime/*current-timezone* (zone-id/of "America/New_York")]
+   ...)
+-----
+
+The macro `with-timezone` makes this a less noisy:
+
+[source]
+-----
+(with-timezone "America/New_York"
+   ...)
+-----
+
+See the doc strings on the functions in `com.fulcrologic.rad.type-support.date-time` namespace for more details on
+what support currently exists. This namespace will grow as needs arise, but many of the things you might need
+are easily doable using https://github.com/henryw374/cljc.java-time[`cljc.java-time`] (already included)
+and https://github.com/juxt/tick[tick] (an easy add-on dependency) as long as you center your logic around
+the `*current-timezone` when appropriate.
+
+=== Arbitrary Precision Math and Storage
+
+EDN and Transit already support the concept of representing and transmitting arbitrary precision numbers. CLJ uses the
+built-in `BigDecimal` and `BigInteger` JVM support for runtime implementation and seamless math operation. Unfortunately,
+CLJS accepts the *notation* for these, but uses only JS numbers as the actual runtime representation. This means that
+logic written in CLJC cannot be trusted to do math.
+
+In RAD we desire the representation on the client to be closer to what you'd have on the server. Most applications
+have large amounts of their logic on the client these days, so it makes no sense, in our opinion, to simply pass numbers
+around as unmarked strings and expect things to work well.
+
+Therefore RAD has full-stack support for BigDecimal (BigInteger may be added, as needed). Not just in type, but in
+*operation*.  The `com.fulcrologic.rad.type-support.decimal` namespace includes constructors that work the same
+in CLJ and CLJS (you would avoid using suffixes like `M`, since the CLJS code would map that to Number), and many
+of the common mathematical operations you'd need to implement your calculations in CLJS (PRs encouraged for adding
+ones you find missing).
+
+Working with these looks like the following:
+
+[source]
+-----
+(ns example
+  (:require
+    [com.fulcrologic.rad.type-support.decimal :as math]))
+
+;; Works the same in CLJ and CLJS.
+(-> (math/numeric 41)
+  (math/div 3) ; division defaults to 20 digits of precision, can be set
+  (math/+ 35))
+-----
+
+TODO: Need `math/with-precision` instead of just an arg to `div`.
+
+Of course you can use clojure exclusions and refer to get rid of the `math` prefix,
+but since it is common to need normal math for other UI operations we do not
+recommend it.
+
+Fields that are declared to be arbitrary precision numerics will automatically
+live in your Fulcro database as this `math/numeric` type (which is CLJ is BigDecimal,
+and in CLJS is a transit-tagged BigDecimal (a wrapped string)).
+
+The JS implementation is currently provided by `big.js` (which you must add to your package.json). Most of the functions
+will auto-coerce values, and you can also ask for a particular calculation to be done with
+primitive math (which will run much faster but incur inaccuracies).
+
+You can ask for imprecise (but fast) math operation (only really affects CLJS)
+with:
+
+[source]
+-----
+(time (reduce math/+ 0 (range 0 10000)))
+"Elapsed time: 251.240947 msecs"
+=> 49995000M
+(time (math/with-primitive-ops (reduce math/+ 0 (range 0 10000))))
+"Elapsed time: 1.9688 msecs"
+=> 49995000
+-----
+
+which will run *much* faster, but you are responsible for knowing when that is safe. This allows
+you to compose functions that were written for accuracy into new routines where the accuracy isn't necessary.
+
+NOTE: `with-primitive-ops` coerces the value down to a `js/Number` (or JVM `double`), and then
+calls Clojure's pre-defined `+`, etc.  This primarily exists for cases where you're doing something in a UI that
+must render quickly, but that uses data in this numeric format. For example a dynamically-adjusting report where
+you know the standard math to be accurate enough for transient purposes.
+
+WARNING: `with-primitive-ops` returns the value of the last statement in the body. If that is a numeric value then
+it will be a *primitive* numeric value (since you're using primitives). You must coerce it back using `math/numeric`
+if you need the arbitrary precision data type for storage.
+
+== File Upload/Download
+
+NOTE: Not yet implemented. Fulcro has all of the necessary network-layer implementation, so it should not be much of
+a stretch to get this working.
+
+RAD Forms can support file uploads, along with download/preview of previously-uploaded files. This support requires
+the configuration of a file store that can be used to save the file itself, along with proper configuration to
+associate a URL with the file's content so that the result can be seen later by RAD.
 
 = Authorization Middleware
 

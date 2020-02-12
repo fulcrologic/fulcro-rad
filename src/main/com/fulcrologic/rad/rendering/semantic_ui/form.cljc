@@ -75,7 +75,12 @@
         (ui-factory props (merge env std-props)))
 
       :else
-      (dom/div "Nothing Selected."))))
+      (dom/div
+        (dom/h3 :.ui.header title)
+        (dom/button {:onClick (fn [] (form/add-child! (assoc env
+                                                        ::form/parent-relation k
+                                                        ::form/parent form-instance
+                                                        ::form/child-class ui)))} "Create")))))
 
 (defn render-ref [env {::attr/keys [cardinality] :as attr} options]
   (if (= :many cardinality)
