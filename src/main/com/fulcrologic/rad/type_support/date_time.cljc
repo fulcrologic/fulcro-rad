@@ -180,7 +180,7 @@
 (>defn inst->html-datetime-string
   ([inst]
    [inst? => string?]
-   (inst->html-datetime-string nil inst))
+   (inst->html-datetime-string *current-timezone* inst))
   ([zone-name inst]
    [::zone-name inst? => string?]
    (let [z         (get-zone-id zone-name)

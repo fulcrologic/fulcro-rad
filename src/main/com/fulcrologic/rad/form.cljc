@@ -415,8 +415,6 @@
         delta      (fs/dirty-fields props true)]
     {::delta delta}))
 
-
-
 (def global-events
   {:event/exit
    {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
@@ -429,6 +427,42 @@
    {::uism/handler (fn [env]
                      #?(:cljs (js/alert "Editing in progress"))
                      env)}})
+
+(defn auto-create-to-one
+  "Create any to-one referenced entities that did not load, but which are marked as auto-create."
+  [{::uism/keys [state-map] :as env}]
+  ;; TODO: Make recursive, not just one level deep
+  (let [FormClass       (uism/actor-class env :actor/form)
+        form-ident      (uism/actor->ident env :actor/form)
+        form-value      (get-in state-map form-ident)
+        {::keys [subforms attributes]} (comp/component-options FormClass)
+        possible-keys   (set (keys subforms))
+        attrs-to-create (into []
+                          (filter (fn [{::attr/keys [qualified-key type cardinality]}]
+                                    (and
+                                      (true? (get-in subforms [qualified-key ::autocreate-on-load?]))
+                                      (nil? (get form-value qualified-key))
+                                      (contains? possible-keys qualified-key)
+                                      (= :ref type)
+                                      (or (= :one) (nil? cardinality)))))
+                          attributes)]
+    (log/spy :info (mapv ::attr/qualified-key attrs-to-create))
+    (reduce
+      (fn [env {::attr/keys [qualified-key target] :as attr}]
+        (let [{::keys [ui]} (get subforms qualified-key)
+              id         (tempid/tempid)
+              {::keys [default-value]} (some-> ui (comp/component-options))
+              new-entity (merge {target id} default-value)
+              new-ident  [target id]]
+          (when-not ui (log/error "::form/ui missing in subforms for autocreate target" qualified-key))
+          (when-not target (log/error "Reference attribute is missing ::attr/target" qualified-key))
+
+
+          (-> env
+            (uism/apply-action assoc-in (conj form-ident qualified-key) new-ident)
+            (uism/apply-action assoc-in new-ident new-entity))))
+      env
+      attrs-to-create)))
 
 (defstatemachine form-machine
   {::uism/actors
@@ -456,6 +490,7 @@
            (let [FormClass  (uism/actor-class env :actor/form)
                  form-ident (uism/actor->ident env :actor/form)]
              (-> env
+               (auto-create-to-one)
                (uism/apply-action fs/add-form-config* FormClass form-ident)
                (uism/apply-action fs/mark-complete* form-ident)
                (route-target-ready form-ident)
