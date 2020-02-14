@@ -52,20 +52,20 @@ At the moment I recommend checking out the source of fulcro-rad-demo, fulcro-rad
 adding the following to your global (i.e. `~/clojure`) `deps.edn` file:
 
 [source, clojure]
-=====
-{:aliases {:rad-dev    {:override-deps {com.fulcrologic/fulcro-rad {:local/root "/path/to/fulcro-rad" }
-                                        com.fulcrologic/fulcro-rad-sql {:local/root "/path/to/fulcro-rad-sql"}
-                                        com.fulcrologic/fulcro-rad-datomic {:local/root "/path/to/fulcro-rad-datomic"}}}}}
-=====
+-----------------
+{:aliases {:rad-dev {:override-deps {com.fulcrologic/fulcro-rad {:local/root "/path/to/fulcro-rad" }
+                                     com.fulcrologic/fulcro-rad-sql {:local/root "/path/to/fulcro-rad-sql"}
+                                     com.fulcrologic/fulcro-rad-datomic {:local/root "/path/to/fulcro-rad-datomic"}}}}}
+-----------------
 
 so that you can work on all of the libraries at once.
 
 Starting the CLJS build is then:
 
 [source, bash]
-=====
+-----------------
 npx shadow-cljs -A:rad-dev:dev server
-=====
+-----------------
 
 and then add the above projects as modules (if using Cursive).
 
