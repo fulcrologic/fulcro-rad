@@ -62,6 +62,11 @@ endif::[]
 </style>
 ++++
 
+TODO: ::form/field-style-config(s): :input/props, :sorted-set -> :sorted-set/valid-values
+TODO: Form validator is always used from MASTER form
+TODO: Form validation messages use merge of MASTER overrides FORM overrides ATTRIBUTE
+TODO: Importance of defaults on attributes, which can be values or fns
+
 = Introduction
 
 WARNING: Fulcro RAD is in early stages of development. The documented features are somewhat stable
