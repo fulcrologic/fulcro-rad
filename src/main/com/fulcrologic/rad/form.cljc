@@ -77,18 +77,21 @@
         (log/error "No renderer installed to support attribute" attr)
         nil))))
 
+(defn rendering-env [form-instance props]
+  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
+        cprops (comp/get-computed props)]
+    (merge cprops
+      {::master-form    (master-form form-instance)
+       ::form-instance  form-instance
+       ::props          props
+       ::computed-props cprops})))
+
 (defn render-layout [form-instance props]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        cprops        (comp/get-computed props)
-        rendering-env cprops
-        layout-style  (or (some-> form-instance comp/component-options ::layout-style) :default)
-        layout        (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
+        layout-style (or (some-> form-instance comp/component-options ::layout-style) :default)
+        layout       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
     (if layout
-      (layout (merge rendering-env
-                {::master-form    (master-form form-instance)
-                 ::form-instance  form-instance
-                 ::props          props
-                 ::computed-props cprops}))
+      (layout (rendering-env form-instance props))
       (do
         (log/error "No layout function found for form layout style" layout-style)
         nil))))
@@ -169,21 +172,26 @@
   [get-class location options]
   (required! location options ::attributes vector?)
   (required! location options ::id attr/attribute?)
-  (let [{::keys [id attributes route-prefix]} options
-        id-key      (::attr/qualified-key id)
-        form-field? (fn [{::attr/keys [identity?]}] (not identity?))]
-    (merge
-      {::validator (attr/make-attribute-validator attributes)}
-      options
-      {:query         (fn [this] (form-options->form-query (comp/component-options this)))
-       :ident         (fn [_ props] [id-key (get props id-key)])
-       :form-fields   (->> attributes
-                        (filter form-field?)
-                        (map ::attr/qualified-key)
-                        (into #{}))
-       :route-segment [route-prefix :action :id]
-       :will-leave    form-will-leave
-       :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
+  (let [{::keys [id attributes route-prefix query-inclusion]} options
+        id-key       (::attr/qualified-key id)
+        form-field?  (fn [{::attr/keys [identity?]}] (not identity?))
+        base-options (merge
+                       {::validator (attr/make-attribute-validator attributes)}
+                       options
+                       (cond->
+                         {:ident       (fn [_ props] [id-key (get props id-key)])
+                          :form-fields (->> attributes
+                                         (filter form-field?)
+                                         (map ::attr/qualified-key)
+                                         (into #{}))}
+                         route-prefix (merge {:route-segment [route-prefix :action :id]
+                                              :will-leave    form-will-leave
+                                              :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
+        query        (cond-> (form-options->form-query base-options)
+                       (vector? query-inclusion) (into query-inclusion))]
+    (when (and #?(:cljs goog.DEBUG :clj true) (not (string? route-prefix)))
+      (log/info "NOTE: " location " does not have a route prefix and will only be usable as a sub-form."))
+    (assoc base-options :query (fn [_] query))))
 
 #?(:clj
    (defn form-body [argslist body]
@@ -195,17 +203,18 @@
    (defn defsc-form*
      [env args]
      (let [{:keys [sym doc arglist options body]} (s/conform ::defsc-form-args args)
-           nspc        (if (comp/cljs? env) (-> env :ns :name str) (name (ns-name *ns*)))
-           fqkw        (keyword (str nspc) (name sym))
-           body        (form-body arglist body)
+           nspc         (if (comp/cljs? env) (-> env :ns :name str) (name (ns-name *ns*)))
+           fqkw         (keyword (str nspc) (name sym))
+           body         (form-body arglist body)
            [thissym propsym computedsym extra-args] arglist
-           location    (str nspc "." sym)
-           render-form (#'comp/build-render sym thissym propsym computedsym extra-args body)]
+           location     (str nspc "." sym)
+           render-form  (#'comp/build-render sym thissym propsym computedsym extra-args body)
+           options-expr `(let [get-class# (fn [] ~sym)]
+                           (assoc (convert-options get-class# ~location ~options) :render ~render-form))]
        (if (comp/cljs? env)
          `(do
             (declare ~sym)
-            (let [get-class# (fn [] ~sym)
-                  options#   (assoc (convert-options get-class# ~location ~options) :render ~render-form)]
+            (let [options# ~options-expr]
               (defonce ~(vary-meta sym assoc :doc doc :jsdoc ["@constructor"])
                 (fn [props#]
                   (cljs.core/this-as this#
@@ -216,8 +225,7 @@
               (com.fulcrologic.fulcro.components/configure-component! ~sym ~fqkw options#)))
          `(do
             (declare ~sym)
-            (let [get-class# (fn [] ~sym)
-                  options#   (assoc (convert-options get-class# ~location ~options) :render ~render-form)]
+            (let [options# ~options-expr]
               (def ~(vary-meta sym assoc :doc doc :once true)
                 (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~fqkw options#))))))))
 
@@ -284,7 +292,7 @@
 (defn- default-to-many [FormClass attribute]
   (let [{::keys [subforms default]} (comp/component-options FormClass)
         {::attr/keys [qualified-key default-value]} attribute
-        default-value (get default qualified-key (?! default-value))]
+        default-value (get default qualified-key default-value)]
     (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])
                  id-key   (some-> SubClass comp/component-options ::id ::attr/qualified-key)]
       (do
@@ -294,17 +302,18 @@
         (when-not (keyword? id-key)
           (log/error "Subform class" (comp/component-name SubClass)
             "must include a ::form/id that is an attr/attribute"))
-        (if (or (nil? default-value) (vector? default-value))
-          (mapv (fn [v]
-                  (let [id (tempid/tempid)]
-                    (merge
-                      (default-state SubClass id)
-                      v
-                      {id-key id})))
-            default-value)
-          (do
-            (log/error "Default value for" qualified-key "MUST be a vector.")
-            [])))
+        (cond (or (nil? default-value) (vector? default-value))
+              (mapv (fn [v]
+                      (let [id (tempid/tempid)]
+                        (merge
+                          (default-state SubClass id)
+                          (?! v)
+                          {id-key id})))
+                default-value)
+              (fn? default-value) (default-value)
+              :else (do
+                      (log/error "Default value for" qualified-key "MUST be a vector.")
+                      [])))
       (do
         (log/error "Subform not declared (or is missing ::form/id) for" qualified-key "on" (comp/component-name FormClass))
         []))))
@@ -312,7 +321,7 @@
 (defn- default-to-one [FormClass attribute]
   (let [{::keys [subforms default]} (comp/component-options FormClass)
         {::attr/keys [qualified-key default-value]} attribute
-        default-value (get default qualified-key (?! default-value))
+        default-value (?! (get default qualified-key default-value))
         SubClass      (get-in subforms [qualified-key ::ui])
         picker?       (boolean (get-in subforms [qualified-key ::pick-one]))
         new-id        (tempid/tempid)
@@ -358,7 +367,7 @@
         {id-key ::attr/qualified-key} id]
     (reduce
       (fn [result {::attr/keys [qualified-key type default-value] :as attr}]
-        (let [default-value (get default qualified-key (?! default-value))
+        (let [default-value (?! (get default qualified-key default-value))
               picker?       (some-> subforms (get-in [qualified-key ::pick-one]) (boolean))
               picker-state  (some-> subforms (get-in [qualified-key ::ui]) (comp/get-initial-state {:id (new-uuid)}))]
           (cond
@@ -370,7 +379,7 @@
               picker? (assoc (picker-join-key qualified-key) picker-state))
 
             :otherwise
-            (if-let [default-value (get default qualified-key default-value)]
+            (if default-value
               (assoc result qualified-key default-value)
               result))))
       {id-key new-id}

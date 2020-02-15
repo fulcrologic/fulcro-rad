@@ -9,22 +9,34 @@
     [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
     [com.fulcrologic.fulcro.mutations :as m]
     #?(:cljs
-       [com.fulcrologic.fulcro.dom :refer [div h3 label button i]]
+       [com.fulcrologic.fulcro.dom :refer [div h3 label button i span]]
        :clj
-       [com.fulcrologic.fulcro.dom-server :refer [div h3 label button i]])
+       [com.fulcrologic.fulcro.dom-server :refer [div h3 label button i span]])
+    [com.fulcrologic.fulcro.dom.html-entities :as ent]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 (defn render-to-many [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
-  (let [{::form/keys [ui can-delete-row? can-add-row?]} (get subforms k)
+  (let [{:semantic-ui/keys [add-position]
+         ::form/keys       [ui can-delete-row? can-add-row? sort-children]} (get subforms k)
         parent      (comp/props form-instance)
         can-delete? (fn [item] (can-delete-row? parent item))
-        items       (-> form-instance comp/props k)
+        items       (-> form-instance comp/props k
+                      (cond->
+                        sort-children sort-children))
         title       (or (some-> ui (comp/component-options ::form/title)) "")
+        add         (when (and can-add-row? (can-add-row? parent))
+                      (button :.ui.tiny.icon.button
+                        {:onClick (fn [_]
+                                    (form/add-child! (assoc env
+                                                       ::form/parent-relation k
+                                                       ::form/parent form-instance
+                                                       ::form/child-class ui)))}
+                        (i :.plus.icon)))
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
-      (h3 title)
+      (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
       (mapv
         (fn [props]
           (ui-factory props
@@ -34,15 +46,7 @@
                ::form/parent-relation k
                ::form/can-delete?     (if can-delete-row? can-delete? false)})))
         items)
-      (when (and can-add-row? (can-add-row? parent))
-        (div :.ui.basic.segment
-          (button :.ui.icon.button
-            {:onClick (fn [_]
-                        (form/add-child! (assoc env
-                                           ::form/parent-relation k
-                                           ::form/parent form-instance
-                                           ::form/child-class ui)))}
-            (i :.plus.icon)))))))
+      (when (= :bottom add-position) add))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
   (let [{::form/keys [ui can-delete-row? pick-one label] :as subform-options} (get subforms k)
@@ -157,9 +161,9 @@
           (button :.ui.secondary.button {:disabled (not dirty?)
                                          :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
           (button :.ui.secondary.button {:onClick (fn [] (form/cancel! env))} (tr "Cancel"))
-          (when #?(:cljs goog.DEBUG :clj) true
-                                          (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
-                                          (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
+          (when #?(:cljs goog.DEBUG :clj true)
+            (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
+            (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
           (button :.ui.primary.button {:disabled (not dirty?)
                                        :onClick  (fn [] (form/save! env))} (tr "Save")))))))
 
