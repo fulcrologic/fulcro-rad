@@ -13,17 +13,20 @@
 (defn render-field [{::form/keys [form-instance] :as env} attribute]
   (let [k           (::attr/qualified-key attribute)
         props       (comp/props form-instance)
+        user-props  (form/field-style-config env attribute :input/props)
         field-label (form/field-label env attribute)
         read-only?  (form/read-only? form-instance attribute)
         value       (get props k false)]
     (div :.ui.field {:key (str k)}
       (div :.ui.checkbox
-        (input {:checked  value
-                :type     "checkbox"
-                :disabled (boolean read-only?)
-                :onChange (fn [evt]
-                            (let [v (not value)]
-                              (form/input-blur! env k v)
-                              (form/input-changed! env k v)))})
+        (input (merge
+                 {:checked  value
+                  :type     "checkbox"
+                  :disabled (boolean read-only?)
+                  :onChange (fn [evt]
+                              (let [v (not value)]
+                                (form/input-blur! env k v)
+                                (form/input-changed! env k v)))}
+                 user-props))
         (label field-label)))))
 

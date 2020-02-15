@@ -2,6 +2,7 @@
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     [clojure.spec.alpha :as s]
+    [clojure.string :as str]
     [clojure.walk :as walk]
     [taoensso.timbre :as log]
     [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
@@ -180,6 +181,19 @@
         (::qualified-key ele)
         ele)) attr-query))
 
+(defn valid-value?
+  "Checks if the value looks to be a valid value based on the ::attr/required? and ::attr/valid? options of the
+  given attribute."
+  [{::keys [required? valid?] :as attribute} value]
+  (let [non-empty-value? (and
+                           (not (nil? value))
+                           (or
+                             (not (string? value))
+                             (not= 0 (count (str/trim value)))))]
+    (if valid?
+      (valid? value)
+      (or (not required?) non-empty-value?))))
+
 (defn make-attribute-validator
   "Creates a function that can be used as a form validator for any form that contains the given `attributes`.  If the
   form asks for validation on an attribute that isn't listed or has no `::attr/valid?` function then it will consider
@@ -191,6 +205,4 @@
                           attributes))]
     (fs/make-validator
       (fn [form k]
-        (if-let [valid? (get-in attribute-map [k ::valid?])]
-          (valid? (get form k))
-          true)))))
+        (valid-value? (get attribute-map k) (get form k))))))
