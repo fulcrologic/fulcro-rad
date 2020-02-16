@@ -1,6 +1,7 @@
 (ns com.fulcrologic.rad.options-util
   "Utilities for interpreting and coping with form/report options."
   (:require
+    [clojure.string]
     #?(:cljs [goog.functions :as gf])))
 
 (defn ?!
@@ -15,5 +16,5 @@
 (defn debounce
   "Debounce calls to f to at-most every tm ms. Trailing edge wins."
   [f tm]
-  #?(:clj  (f)
+  #?(:clj  f
      :cljs (gf/debounce f tm)))

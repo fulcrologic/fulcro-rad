@@ -175,11 +175,7 @@
        (req! sym options ::BodyItem)
        (req! sym options ::source-attribute keyword?)
        (req! sym options ::route string?)
-       (opt! sym options ::parameters
-         (fn [p] (and (map? p)
-                   (every? #(and
-                              (keyword? %)
-                              (= "ui" (namespace %))) (keys p)))))
+       (opt! sym options ::parameters (fn [p] (and (map? p) (every? keyword? (keys p)))))
        `(comp/defsc ~sym ~arglist ~options ~@body))))
 
 (def reload!
@@ -192,6 +188,6 @@
   "Set the given parameter on the report, possibly triggering an auto-refresh."
   [report-instance parameter-name new-value]
   (let [reload? (comp/component-options report-instance ::run-on-parameter-change?)]
-    (comp/transact! report-instance [(m/set-props {parameter-name new-value})])
+    (comp/transact! report-instance `[(m/set-props ~{parameter-name new-value})])
     (when reload?
       (reload! report-instance))))

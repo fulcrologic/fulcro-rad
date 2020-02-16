@@ -14,12 +14,12 @@
 
 (def all-controls
   {;; Form-related UI
-   :com.fulcrologic.rad.form/style->layout                  {:default sui-form/ui-render-layout}
-   :com.fulcrologic.rad.form/type->style->control           {:layout        {:default sui-form/ui-render-layout}
+   :com.fulcrologic.rad.form/style->layout                  {:default sui-form/layout-renderer}
+   :com.fulcrologic.rad.form/type->style->control           {:layout        {:default sui-form/layout-renderer}
                                                              :text          {:default text-field/render-field}
                                                              :enum          {:default enumerated-field/render-field}
-                                                             :string        {:default text-field/render-field
-                                                                             :sorted-set text-field/render-dropdown }
+                                                             :string        {:default    text-field/render-field
+                                                                             :sorted-set text-field/render-dropdown}
                                                              :int           {:default int-field/render-field}
                                                              :decimal       {:default decimal-field/render-field}
                                                              :boolean       {:default boolean-field/render-field}
