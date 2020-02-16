@@ -26,6 +26,7 @@
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
     #?(:cljs [goog.object])
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
 
 (def create-action "create")
@@ -33,8 +34,6 @@
 (declare form-machine valid? invalid?)
 
 (>def ::form-env map?)
-
-(defn ?! [v & args] (if (fn? v) (apply v args) v))
 
 (>defn picker-join-key
   "Returns a :ui/picker keyword customized to the qualified keyword"
@@ -135,18 +134,19 @@
     full-query))
 
 (defn- valid-uuid-string? [s]
-  (boolean (re-matches #"^........-....-....-....-............$" s)))
+  (boolean (and
+             (string? s)
+             (re-matches #"^........-....-....-....-............$" s))))
 
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter."
   [app {:keys [action id]} form-class]
-  ;; FIXME: Only UUIDs supported for the moment
   (let [new?       (= create-action action)
-        id         (if new?
+        uuid       (if new?
                      (tempid/tempid (new-uuid id))
                      (new-uuid id))
         id-prop    (comp/component-options form-class ::id ::attr/qualified-key)
-        form-ident [id-prop id]]
+        form-ident [id-prop uuid]]
     (when-not (keyword? id-prop)
       (log/error "Form " (comp/component-name form-class) " does not have a ::form/id that is an attr/attribute."))
     (when (and new? (not (valid-uuid-string? id)))
@@ -698,12 +698,12 @@
    -- `:router` The router that contains the form, if not root."
   ([app-ish form-class]
    (dr/change-route app-ish (dr/path-to form-class {:action create-action
-                                                    :id     (new-uuid)})))
+                                                    :id     (str (new-uuid))})))
   ([app-ish form-class {:keys [router] :as options}]
    (if router
      (dr/change-route-relative app-ish router
        (dr/path-to form-class {:action create-action
-                               :id     (new-uuid)}))
+                               :id     (str (new-uuid))}))
      (create! app-ish form-class))))
 
 ;; TASK: Probably should move the server implementations to a diff ns, so that this is all consistent with
