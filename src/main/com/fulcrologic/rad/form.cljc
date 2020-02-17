@@ -673,9 +673,14 @@
     (uism/trigger! master-form asm-id :event/delete-row env)))
 
 (>defn read-only?
-  [this attr]
+  [form-instance {::attr/keys [qualified-key identity? read-only?] :as attr}]
   [comp/component? ::attr/attribute => boolean?]
-  (boolean (or (::attr/identity? attr) (::pc/resolve attr))))
+  (let [read-only-fields (comp/component-options form-instance ::read-only-fields)]
+    (boolean
+      (or
+        identity?
+        read-only?
+        (and (set? read-only-fields) (contains? read-only-fields qualified-key))))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
