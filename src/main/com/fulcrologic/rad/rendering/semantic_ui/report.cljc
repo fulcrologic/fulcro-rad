@@ -9,20 +9,23 @@
        [com.fulcrologic.fulcro.dom :as dom]
        :clj
        [com.fulcrologic.fulcro.dom-server :as dom])
+    [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.rad.form :as form]))
 
 (defn ui-render-layout [this]
   (let [{::report/keys [source-attribute BodyItem parameters]} (comp/component-options this)
         {::report/keys [columns column-headings edit-form]} (comp/component-options BodyItem)
-        id-key (some-> edit-form comp/component-options ::form/id ::attr/qualified-key)
-        props  (comp/props this)
-        rows   (get props source-attribute [])]
-    (log/info "Rendering report layout")
+        id-key   (some-> edit-form comp/component-options ::form/id ::attr/qualified-key)
+        props    (comp/props this)
+        rows     (get props source-attribute [])
+        loading? (df/loading? (get-in props [df/marker-table (comp/get-ident this)]))]
     (dom/div
       (dom/div :.ui.top.attached.segment
         (dom/h3 :.ui.header
           (or (some-> this comp/component-options ::report/title) "Report")
-          (dom/button :.ui.tiny.right.floated.primary.button {:onClick (fn [] (report/run-report! this))} "Run!"))
+          (dom/button :.ui.tiny.right.floated.primary.button
+            {:classes [(when loading? "loading")]
+             :onClick (fn [] (report/run-report! this))} "Run!"))
         (dom/div :.ui.form
           (map-indexed
             (fn [idx k]

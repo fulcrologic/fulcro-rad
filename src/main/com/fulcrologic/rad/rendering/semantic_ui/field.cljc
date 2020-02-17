@@ -27,13 +27,12 @@
                         :classes [(when invalid? "error")]}
          (label (str (or field-label (some-> qualified-key name str/capitalize))
                   (when validation-message (str ent/nbsp "(" validation-message ")"))))
-         (if read-only?
-           (div (str value))
-           (input-factory (merge addl-props
-                            {:value    value
-                             :onBlur   (fn [v] (form/input-blur! env qualified-key v))
-                             :onChange (fn [v] (form/input-changed! env qualified-key v))}
-                            user-props)))
+         (input-factory (merge addl-props
+                          {:value    value
+                           :disabled (boolean read-only?)
+                           :onBlur   (fn [v] (form/input-blur! env qualified-key v))
+                           :onChange (fn [v] (form/input-changed! env qualified-key v))}
+                          user-props))
          #_(when validation-message
              (div :.ui.error.message
                (str validation-message))))))))

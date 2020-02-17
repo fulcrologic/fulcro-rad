@@ -1,5 +1,6 @@
 (ns com.fulcrologic.rad.ui-validation
   (:require
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr tr-unsafe]]
     [com.fulcrologic.fulcro.components :as comp]
@@ -31,8 +32,8 @@
         local-message  (comp/component-options form-instance ::form/validation-messages qualified-key)
         message        (tr-unsafe
                          (or
-                           (form/?! master-message props qualified-key)
-                           (form/?! local-message props qualified-key)
-                           (form/?! validation-message value)
+                           (?! master-message props qualified-key)
+                           (?! local-message props qualified-key)
+                           (?! validation-message value)
                            (tr "Invalid value")))]
     message))

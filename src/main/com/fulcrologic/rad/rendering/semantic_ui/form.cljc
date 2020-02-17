@@ -133,6 +133,9 @@
         valid?   (form/valid? env)
         invalid? (form/invalid? env)
         dirty?   (or (:ui/new? props) (fs/dirty? props))]
+    (when #?(:cljs goog.DEBUG :clj true)
+      (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
+      (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
     (if nested?
       (div :.ui.form {:classes [(when invalid? "error")]}
         (div :.ui.segment
@@ -146,26 +149,30 @@
             (mapv
               (fn [attr] (render-attribute env attr options))
               attributes))))
-      (div :.ui.form {:classes [(when invalid? "error")]}
-        (div :.ui.top.attached.segment
-          (h3 :.ui.header (or (some-> form-instance comp/component-options ::form/title i18n/tr-unsafe) (tr "Edit"))))
-        (div :.ui.attached.segment
-          (if layout
-            (render-layout env (merge options computed-props {::form/nested? true}))
-            (mapv
-              (fn [attr] (render-attribute env attr options))
-              attributes)))
-        (div :.ui.bottom.attached.segment
-          (div :.ui.error.message
-            (tr "The form has errors and cannot be saved."))
-          (button :.ui.secondary.button {:disabled (not dirty?)
-                                         :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
-          (button :.ui.secondary.button {:onClick (fn [] (form/cancel! env))} (tr "Cancel"))
-          (when #?(:cljs goog.DEBUG :clj true)
-            (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
-            (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
-          (button :.ui.primary.button {:disabled (not dirty?)
-                                       :onClick  (fn [] (form/save! env))} (tr "Save")))))))
+      (div :.ui.container
+        (div :.ui.form {:classes [(when invalid? "error")]}
+          (div :.ui.top.menu
+            (div :.header.item
+              (or (some-> form-instance comp/component-options ::form/title i18n/tr-unsafe) (tr "Edit")))
+            (div :.right.item
+              (div :.ui.basic.buttons
+                (button :.ui.basic.button {:classes [(if dirty? "negative" "positive")]
+                                           :onClick (fn [] (form/cancel! env))}
+                  (if dirty? (tr "Cancel") (tr "Done")))
+                (button :.ui.positive.basic.button {:disabled (not dirty?)
+                                                    :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
+                (button :.ui.positive.basic.button {:disabled (not dirty?)
+                                                    :onClick  (fn [] (form/save! env))} (tr "Save")))))
+          (div :.ui.error.message (tr "The form has errors and cannot be saved."))
+          (div :.ui.attached.segment
+            (if layout
+              (render-layout env (merge options computed-props {::form/nested? true}))
+              (mapv
+                (fn [attr] (render-attribute env attr options))
+                attributes))))))))
+
+(defn layout-renderer [env]
+  (ui-render-layout env))
 
 
 (defn ui-render-entity-picker [{::form/keys [form-instance] :as env} attribute]

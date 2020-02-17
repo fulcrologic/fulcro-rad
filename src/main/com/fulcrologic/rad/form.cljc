@@ -26,6 +26,7 @@
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
     #?(:cljs [goog.object])
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
 
 (def create-action "create")
@@ -33,8 +34,6 @@
 (declare form-machine valid? invalid?)
 
 (>def ::form-env map?)
-
-(defn ?! [v & args] (if (fn? v) (apply v args) v))
 
 (>defn picker-join-key
   "Returns a :ui/picker keyword customized to the qualified keyword"
@@ -135,18 +134,19 @@
     full-query))
 
 (defn- valid-uuid-string? [s]
-  (boolean (re-matches #"^........-....-....-....-............$" s)))
+  (boolean (and
+             (string? s)
+             (re-matches #"^........-....-....-....-............$" s))))
 
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter."
   [app {:keys [action id]} form-class]
-  ;; FIXME: Only UUIDs supported for the moment
   (let [new?       (= create-action action)
-        id         (if new?
+        uuid       (if new?
                      (tempid/tempid (new-uuid id))
                      (new-uuid id))
         id-prop    (comp/component-options form-class ::id ::attr/qualified-key)
-        form-ident [id-prop id]]
+        form-ident [id-prop uuid]]
     (when-not (keyword? id-prop)
       (log/error "Form " (comp/component-name form-class) " does not have a ::form/id that is an attr/attribute."))
     (when (and new? (not (valid-uuid-string? id)))
@@ -245,7 +245,7 @@
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::master-pk ::diff ::delta}}
-     (log/info "Save invoked from client with " params)
+     (log/debug "Save invoked from client with " params)
      (let [save-middleware (::save-middleware env)
            params          (if save-middleware (save-middleware env params) params)
            {::keys [master-pk delta]} params
@@ -281,7 +281,7 @@
 (defn- start-edit [env _]
   (let [FormClass  (uism/actor-class env :actor/form)
         form-ident (uism/actor->ident env :actor/form)]
-    (log/info "Issuing load of pre-existing form entity" form-ident)
+    (log/debug "Issuing load of pre-existing form entity" form-ident)
     (-> env
       (uism/load form-ident FormClass {::uism/ok-event    :event/loaded
                                        ::uism/error-event :event/failed})
@@ -673,9 +673,14 @@
     (uism/trigger! master-form asm-id :event/delete-row env)))
 
 (>defn read-only?
-  [this attr]
+  [form-instance {::attr/keys [qualified-key identity? read-only?] :as attr}]
   [comp/component? ::attr/attribute => boolean?]
-  (boolean (or (::attr/identity? attr) (::pc/resolve attr))))
+  (let [read-only-fields (comp/component-options form-instance ::read-only-fields)]
+    (boolean
+      (or
+        identity?
+        read-only?
+        (and (set? read-only-fields) (contains? read-only-fields qualified-key))))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
@@ -698,12 +703,12 @@
    -- `:router` The router that contains the form, if not root."
   ([app-ish form-class]
    (dr/change-route app-ish (dr/path-to form-class {:action create-action
-                                                    :id     (new-uuid)})))
+                                                    :id     (str (new-uuid))})))
   ([app-ish form-class {:keys [router] :as options}]
    (if router
      (dr/change-route-relative app-ish router
        (dr/path-to form-class {:action create-action
-                               :id     (new-uuid)}))
+                               :id     (str (new-uuid))}))
      (create! app-ish form-class))))
 
 ;; TASK: Probably should move the server implementations to a diff ns, so that this is all consistent with

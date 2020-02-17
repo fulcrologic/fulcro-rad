@@ -1755,6 +1755,143 @@ RAD Forms can support file uploads, along with download/preview of previously-up
 the configuration of a file store that can be used to save the file itself, along with proper configuration to
 associate a URL with the file's content so that the result can be seen later by RAD.
 
+= Reports
+
+RAD Reports are based on the generalization that many reports are a query across data that is
+list-based, and most reports have parameters.  RAD's graph API is the source of the things that
+you'll show in reports, and the report system of RAD associates logic with the report for managing
+the general operation.
+
+A sample report might look like this:
+
+[source]
+-----
+(defsc EmployeeListItem [this {:employee/keys [id first-name last-name enabled?] :as props}]
+  {:query [:employee/id :employee/first-name :employee/last-name :employee/enabled?]
+   :ident :employee/id}
+  (div :.item {:onClick #(form/edit! this EmployeeForm id)
+               :classes [clickable-item]}
+    (div :.content
+      (dom/span (str first-name " " last-name (when-not enabled? " (disabled)"))))))
+
+(report/defsc-report EmployeeList [this props]
+  {::report/BodyItem                 EmployeeListItem
+   ::report/create-form              EmployeeForm
+   ::report/layout-style             :default
+   ::report/source-attribute         :employee/all-employees
+   ::report/parameters               {:include-disabled? {:type  :boolean
+                                                          :label "Show Past Employees?"}}
+   ::report/initial-parameters       (fn [report-env] {:include-disabled? false})
+   ::report/run-on-mount?            true
+   ::report/run-on-parameter-change? true
+   :route-segment ["employee-list"]})
+-----
+
+The report component has the following options, and of course this list is extensible:
+
+`:route-segment`:: Dynamic-router parameter. A report is a normal component, and has hooks for
+route enter and exit. Use this option to set the route's target segment.
+`::report/BodyItem`:: The UI component that renders the row of a report. You can use
+`::report/create-form`:: A Form that should be used to create new instances of items in the
+report. Optional. If supplied then the toolbar of the report will have an add
+button.
+`::report/layout-style`:: An alternate style (plugged into the app) for rendering the report.
+`::report/source-attribute`:: The EQL top-level key to query for the report. Combined with the
+`BodyItem` query to generate the full report query.
+`::report/parameters`:: A map from report parameter name to a map of configuration. The type/label
+options are used to generate a query toolbar.
+`::report/initial-parameters`:: A map from report parameter data key to an initial value. May also
+be a lambda to generate the map.
+`::report/run-on-mount?`:: Boolean. If true it causes the report to auto-run when mounted.
+`::report/run-on-parameter-change?`:: Boolean. If true it causes the report to auto-run when a parameter
+is changed. Auto-debounced.
+
+== Handling Report Queries
+
+A report query is nothing more than your normal EQL query, so it can be resolved by a Pathom client
+or server parser.  The query parameters that come from the report will only normally appear in the AST
+at the top-level resolver (for the source-attribute).
+
+There is a `com.fulcrologic.rad.pathom/query-params-to-env-plugin` that can be added to a pathom
+parser which moves the top-level params into the general parsing `env` at key `:query-params`. This
+is where the report parameters will show up.
+
+So, your parser will look something like this:
+
+[source]
+-----
+(def parser
+  (pathom/parser
+    {::p/mutate  pc/mutate
+     ::p/env     {::p/reader               [p/map-reader pc/reader2 pc/index-reader
+                                            pc/open-ident-reader p/env-placeholder-reader]
+                  ::p/placeholder-prefixes #{">"}}
+     ::p/plugins [...
+                  query-params-to-env-plugin
+                  ...]}))
+-----
+
+and from there it's simply a matter of writing resolvers. Assuming you have a
+function that can get all employees:
+
+[source]
+-----
+(defresolver all-employees [{:keys [db query-params] :as env} input]
+  {::pc/output [{::all-employees [:employee/id]}]}
+  (let [employees (get-all-employees db)
+        employees (if (:include-disabled? query-params)
+                    employees
+                    (filterv :employee/enabled? employees))]
+    {::all-employees employees}))
+-----
+
+Remember that Pathom resolvers auto-connect based on inputs and outputs, so any given report
+attribute can be connected from there. For example, perhaps your report generates
+the number of hours an employee has worked this pay period, you'd simple add that
+attribute to the report and a resolver like this:
+
+[source]
+-----
+(defresolver pay-period-hours-resolver [env {:employee/keys [id]}]
+  {::pc/input #{:employee/id}
+   ::pc/output [:employee/hours-this-period]}]}
+  {:employee/hours-this-period (calculate-hours id)})
+-----
+
+== Customizing Report Layouts
+
+You will have to install UI renderers for reports to render at all. Your rendering plugin
+will come with a default layout and perhaps others. You can define your own and the
+component options can easily be used to get what you need to render the data.
+
+[source]
+-----
+(defn custom-report-layout [this]
+  (let [props       (comp/props this)
+        {::report/keys [source-attribute BodyItem parameters create-form]} (comp/component-options this)
+        id-key      (some-> BodyItem (comp/get-ident {}) first)
+        row-factory (comp/factory BodyItem {:keyfn id-key})
+        rows        (get props source-attribute [])
+        loading?    (df/loading? (get-in props [df/marker-table (comp/get-ident this)]))]
+   ...))
+-----
+
+Setting up your layout is just done on app config:
+
+[source]
+-----
+(form/install-ui-controls! app
+    (-> base-controls
+      (assoc-in [::report/style->layout :custom-layout] custom-report-layout)
+-----
+
+and then set the `::report/layout-style :custom-layout` option on the report.
+
+== Report Row Rendering
+
+NOTE: At present you must write the row rendering yourself. The design of the recursive pluggable report rendering
+is still in progress.  You can, of course, place renderers in the global controls map to generalize things.
+
 = Authorization Middleware
 
 WARNING: This element of RAD is still in the design phases.
