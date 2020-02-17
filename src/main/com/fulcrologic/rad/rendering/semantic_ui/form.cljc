@@ -157,12 +157,12 @@
             (div :.ui.error.message (tr "The form has errors and cannot be saved."))
             (div :.ui.basic.buttons
               (button :.ui.button {:disabled (not dirty?)
-                                             :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
+                                   :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
               (button :.ui.button {:disabled (not dirty?)
-                                           :onClick  (fn [] (form/save! env))} (tr "Save"))
+                                   :onClick  (fn [] (form/save! env))} (tr "Save"))
               (button :.ui.button {:onClick (fn [] (form/cancel! env))} (if dirty?
-                                                                                    (tr "Cancel")
-                                                                                    (tr "Done"))))))
+                                                                          (tr "Cancel")
+                                                                          (tr "Done"))))))
         (div :.ui.attached.segment
           (if layout
             (render-layout env (merge options computed-props {::form/nested? true}))
