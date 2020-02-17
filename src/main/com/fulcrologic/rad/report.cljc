@@ -71,7 +71,7 @@
         desired-params (some-> parameters ?! keys set)
         current-params (merge (select-keys (get-in state-map report-ident) desired-params) event-data)
         path           (conj (comp/get-ident Report {}) source-attribute)]
-    (log/info "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
+    (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
     (uism/load env source-attribute BodyItem {:params current-params
                                               :marker report-ident
                                               :target path})))
@@ -87,7 +87,7 @@
    {:initial
     {::uism/handler (fn [env]
                       (let [{::uism/keys [event-data]} env
-                            run-on-mount? (log/spy :info (report-options env ::run-on-mount?))]
+                            run-on-mount? (report-options env ::run-on-mount?)]
                         (-> env
                           (initialize-parameters)
                           (cond-> run-on-mount? (load-report!))

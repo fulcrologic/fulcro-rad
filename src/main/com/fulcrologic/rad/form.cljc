@@ -245,7 +245,7 @@
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::master-pk ::diff ::delta}}
-     (log/info "Save invoked from client with " params)
+     (log/debug "Save invoked from client with " params)
      (let [save-middleware (::save-middleware env)
            params          (if save-middleware (save-middleware env params) params)
            {::keys [master-pk delta]} params
@@ -281,7 +281,7 @@
 (defn- start-edit [env _]
   (let [FormClass  (uism/actor-class env :actor/form)
         form-ident (uism/actor->ident env :actor/form)]
-    (log/info "Issuing load of pre-existing form entity" form-ident)
+    (log/debug "Issuing load of pre-existing form entity" form-ident)
     (-> env
       (uism/load form-ident FormClass {::uism/ok-event    :event/loaded
                                        ::uism/error-event :event/failed})

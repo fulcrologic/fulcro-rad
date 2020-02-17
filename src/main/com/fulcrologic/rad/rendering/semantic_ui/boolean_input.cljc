@@ -10,7 +10,7 @@
 
 (defsc BooleanInput [_ {:keys [this k]}]
   {:shouldComponentUpdate (fn [_ _ _] true)}
-  (let [value (log/spy :info (get (comp/props this) k))
+  (let [value (get (comp/props this) k)
         label (or
                 (comp/component-options this ::report/parameters k :label)
                 (some-> k name str/capitalize))]
