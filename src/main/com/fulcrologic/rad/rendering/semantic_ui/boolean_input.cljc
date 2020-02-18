@@ -14,7 +14,7 @@
         label (or
                 (comp/component-options this ::report/parameters k :label)
                 (some-> k name str/capitalize))]
-    (dom/div :.ui.toggle.checkbox
+    (dom/div :.ui.toggle.checkbox {:key (str k)}
       (dom/input {:type     "checkbox"
                   :onChange #(report/set-parameter! this k (not value))
                   :checked  (boolean value)})

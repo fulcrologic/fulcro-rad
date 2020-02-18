@@ -8,10 +8,8 @@
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
     [com.fulcrologic.fulcro.mutations :as m]
-    #?(:cljs
-       [com.fulcrologic.fulcro.dom :refer [div h3 label button i span]]
-       :clj
-       [com.fulcrologic.fulcro.dom-server :refer [div h3 label button i span]])
+    #?(:cljs [com.fulcrologic.fulcro.dom :as dom :refer [div h3 button i span]]
+       :clj  [com.fulcrologic.fulcro.dom-server :as dom :refer [div h3 button i span]])
     [com.fulcrologic.fulcro.dom.html-entities :as ent]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [taoensso.encore :as enc]
@@ -19,13 +17,15 @@
 
 (defn render-to-many [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
   (let [{:semantic-ui/keys [add-position]
-         ::form/keys       [ui can-delete-row? can-add-row? sort-children]} (get subforms k)
+         ::form/keys       [ui title can-delete-row? can-add-row? sort-children]} (get subforms k)
         parent      (comp/props form-instance)
         can-delete? (fn [item] (can-delete-row? parent item))
         items       (-> form-instance comp/props k
                       (cond->
                         sort-children sort-children))
-        title       (or (some-> ui (comp/component-options ::form/title)) "")
+        title       (or
+                      title
+                      (some-> ui (comp/component-options ::form/title)) "")
         add         (when (and can-add-row? (can-add-row? parent))
                       (button :.ui.tiny.icon.button
                         {:onClick (fn [_]
@@ -49,12 +49,12 @@
       (when (= :bottom add-position) add))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
-  (let [{::form/keys [ui can-delete-row? pick-one label] :as subform-options} (get subforms k)
+  (let [{::form/keys [ui can-delete-row? title pick-one label] :as subform-options} (get subforms k)
         picker?    (boolean pick-one)
         parent     (comp/props form-instance)
         form-props (comp/props form-instance)
         props      (get form-props k)
-        title      (or (some-> ui (comp/component-options ::form/title)) "")
+        title      (or title (some-> ui (comp/component-options ::form/title)) "")
         ui-factory (comp/computed-factory ui)
         std-props  {::form/nested?         true
                     ::form/parent          form-instance
@@ -68,7 +68,7 @@
             picker-key      (form/picker-join-key k)
             picker-props    (get form-props picker-key)]
         (div :.field {:key (str k)}
-          (label (str (or label (some-> k name str/capitalize))))
+          (dom/label (str (or label (some-> k name str/capitalize))))
           (ui-factory picker-props
             (merge std-props subform-options {:currently-selected-value selected-option
                                               :onSelect                 (fn [v] (form/input-changed! env k v))}))))
@@ -174,14 +174,13 @@
 (defn layout-renderer [env]
   (ui-render-layout env))
 
-
 (defn ui-render-entity-picker [{::form/keys [form-instance] :as env} attribute]
   (let [k (::attr/qualified-key attribute)
         {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed form-instance)
         {:ui/keys [options]} (comp/props form-instance)
         {::form/keys [field-label]} attribute]
     (div :.ui.field {:key (str k)}
-      (label (or field-label (some-> k name str/capitalize)))
+      (dom/label (or field-label (some-> k name str/capitalize)))
       (ui-wrapped-dropdown (cond->
                              {:onChange (fn [v] (onSelect v))
                               :value    currently-selected-value
