@@ -19,6 +19,7 @@
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.blob :as blob]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
@@ -115,7 +116,11 @@
         id-key             (::attr/qualified-key id-attr)
         {refs true scalars false} (group-by #(= :ref (::attr/type %)) attr)
         query-with-scalars (into
-                             [id-key :ui/new? :ui/confirmation-message [::uism/asm-id '_] fs/form-config-join]
+                             [id-key
+                              :ui/confirmation-message
+                              [::uism/asm-id '_]
+                              {::blob/blobs (comp/get-query blob/Blob)}
+                              fs/form-config-join]
                              (map ::attr/qualified-key)
                              scalars)
         subforms           (::subforms form-options)
@@ -180,10 +185,11 @@
                        options
                        (cond->
                          {:ident       (fn [_ props] [id-key (get props id-key)])
-                          :form-fields (->> attributes
-                                         (filter form-field?)
-                                         (map ::attr/qualified-key)
-                                         (into #{}))}
+                          :form-fields (into #{::blob/blobs}
+                                         (comp
+                                           (filter form-field?)
+                                           (map ::attr/qualified-key))
+                                         attributes)}
                          route-prefix (merge {:route-segment [route-prefix :action :id]
                                               :will-leave    form-will-leave
                                               :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
@@ -686,11 +692,13 @@
   "Route to the given form for editing the entity with the given ID."
   ([this form-class entity-id]
    (dr/change-route this (dr/path-to form-class {:action edit-action
-                                                 :id     entity-id})))
+                                                 :id     entity-id})
+     {:deferred-timeout 16}))
   ([this form-class entity-id {:keys [router]}]
    (if router
      (dr/change-route-relative this router (dr/path-to form-class {:action edit-action
-                                                                   :id     entity-id}))
+                                                                   :id     entity-id}
+                                             {:deferred-timeout 16}))
      (edit! this form-class entity-id))))
 
 (defn create!

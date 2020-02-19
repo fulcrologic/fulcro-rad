@@ -5,6 +5,7 @@
          [com.fulcrologic.semantic-ui.modules.dropdown.ui-dropdown :refer [ui-dropdown]]]
         :clj
         [[com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]]])
+    [com.fulcrologic.rad.ui-validation :as validation]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
     [com.fulcrologic.rad.attributes :as attr]
@@ -52,11 +53,13 @@
                                                              ::attr/keys [qualified-key] :as attribute}]
   (let [props      (comp/props form-instance)
         read-only? (form/read-only? form-instance attribute)
+        invalid?   (validation/invalid-attribute-value? env attribute)
         user-props (form/field-style-config env attribute :input/props)
         options    (enumerated-options env attribute)
         value      (get props qualified-key)]
-    (div :.ui.field {:key (str qualified-key)}
-      (label (or field-label (some-> qualified-key name str/capitalize)))
+    (div :.ui.field {:key (str qualified-key) :classes [(when invalid? "error")]}
+      (label (str (or field-label (some-> qualified-key name str/capitalize))
+               (when invalid? " (Required)")))
       (ui-wrapped-dropdown (merge
                              {:disabled read-only?
                               :options  options

@@ -2,6 +2,7 @@
   (:require
     [clojure.string :as str]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.ui-validation :as validation]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.fulcro-i18n.i18n :as i18n :refer [tr]]
@@ -175,12 +176,14 @@
   (ui-render-layout env))
 
 (defn ui-render-entity-picker [{::form/keys [form-instance] :as env} attribute]
-  (let [k (::attr/qualified-key attribute)
+  (let [k        (::attr/qualified-key attribute)
         {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed form-instance)
         {:ui/keys [options]} (comp/props form-instance)
+        invalid? (validation/invalid-attribute-value? env attribute)
         {::form/keys [field-label]} attribute]
-    (div :.ui.field {:key (str k)}
-      (dom/label (or field-label (some-> k name str/capitalize)))
+    (div :.ui.field {:key (str k) :classes [(when invalid? "error")]}
+      (dom/label (str (or field-label (some-> k name str/capitalize))
+                   (when invalid? " (Required)")))
       (ui-wrapped-dropdown (cond->
                              {:onChange (fn [v] (onSelect v))
                               :value    currently-selected-value

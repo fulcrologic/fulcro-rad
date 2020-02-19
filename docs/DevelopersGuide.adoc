@@ -1769,6 +1769,12 @@ the save middleware to move the temporary file to a permanent store of your choi
 incoming form data to include the details about the file that will allow your file detail resolver to
 emit a proper URL for getting the file.
 
+=== Setup
+
+* Add the middleware to receive the HTTP posts of the temporary files.
+* Add the save middleware to handle post-processing of files on form save.
+
+
 = Reports
 
 RAD Reports are based on the generalization that many reports are a query across data that is
