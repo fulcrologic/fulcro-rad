@@ -117,38 +117,40 @@
              env          (assoc env :query-params query-params)]
          (parser env tx))))})
 
-(defn parser-args [{::keys [trace? log-requests? log-responses?] :as config} augment-env resolvers]
+(defn parser-args [{::keys [trace? log-requests? log-responses?] :as config} plugins resolvers]
   {::p/mutate  pc/mutate
    ::p/env     {::p/reader               [p/map-reader pc/reader2 pc/index-reader
                                           pc/open-ident-reader p/env-placeholder-reader]
                 ::p/placeholder-prefixes #{">"}}
    ::p/plugins (into []
                  (keep identity
-                   [(pc/connect-plugin {::pc/register resolvers})
-                    (p/env-plugin {::p/process-error process-error})
-                    (when augment-env (p/env-wrap-plugin augment-env))
-                    (when log-requests? (preprocess-parser-plugin log-request!))
-                    (p/post-process-parser-plugin add-empty-vectors)
-                    (p/post-process-parser-plugin p/elide-not-found)
-                    (p/post-process-parser-plugin elide-reader-errors)
-                    (when log-responses? (post-process-parser-plugin-with-env log-response!))
-                    query-params-to-env-plugin
-                    p/error-handler-plugin
-                    (when trace? p/trace-plugin)]))})
+                   (concat
+                     [(pc/connect-plugin {::pc/register resolvers})]
+                     plugins
+                     [(p/env-plugin {::p/process-error process-error})
+                      (when log-requests? (preprocess-parser-plugin log-request!))
+                      (p/post-process-parser-plugin add-empty-vectors)
+                      (p/post-process-parser-plugin p/elide-not-found)
+                      (p/post-process-parser-plugin elide-reader-errors)
+                      (when log-responses? (post-process-parser-plugin-with-env log-response!))
+                      query-params-to-env-plugin
+                      p/error-handler-plugin
+                      (when trace? p/trace-plugin)])))})
 
 (defn new-parser
   "Create a new pathom parser. `config` is a map containing a ::config key with parameters
-  that affect the parser. `augment-env` is a (fn [env] env') that will be placed into the
-  parser and augment the `env` for use in resolvers/mutations. `resolvers` is a vector of all
-  of the resolvers to register with the parser, which can be a nested collection.
+  that affect the parser. `extra-plugins` is a sequence of pathom plugins to add to the parser. The
+  plugins will typically need to include plugins from any storage adapters that are being used,
+  such as the `datomic/pathom-plugin`.
+  `resolvers` is a vector of all of the resolvers to register with the parser, which can be a nested collection.
 
   Supported config options under the ::config key:
 
   - `:trace? true` Enable the return of pathom performance trace data (development only, high overhead)
   - `:log-requests? boolean` Enable logging of incoming queries/mutations.
   - `:log-responses? boolean` Enable logging of parser results."
-  [config augment-env resolvers]
-  (let [real-parser (p/parser (parser-args config augment-env resolvers))
+  [config extra-plugins resolvers]
+  (let [real-parser (p/parser (parser-args config extra-plugins resolvers))
         {:keys [trace?]} (get config ::config {})]
     (fn wrapped-parser [env tx]
       (real-parser env (if trace?

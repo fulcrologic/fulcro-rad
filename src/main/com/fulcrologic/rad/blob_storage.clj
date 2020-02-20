@@ -14,11 +14,11 @@
   (save-blob! [this name file] (swap! sha->file assoc name file))
   (blob-url! [this name] nil)
   (delete-blob! [this name]
-    (.delete ^File (blob-file! this name))
+    (some->> name (blob-file! this) (.delete))
     (swap! sha->file dissoc name))
   (blob-file! [_ name] (get @sha->file name))
   (move-blob! [this name target-storage]
-    (save-blob! target-storage name (blob-file! this name))
+    (some->> (blob-file! this name) (save-blob! target-storage name))
     (delete-blob! this name)))
 
 (defn leaky-blob-store

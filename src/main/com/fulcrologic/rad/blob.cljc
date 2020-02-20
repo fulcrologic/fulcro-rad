@@ -1,5 +1,19 @@
 (ns com.fulcrologic.rad.blob
-  "Support for dealing with binary large objects (e.g. file upload, storage, and retrieval of images, documents, etc.)"
+  "Support for dealing with binary large objects (e.g. file upload, storage, and retrieval of images, documents, etc.)
+
+  To use this support you must:
+
+  - Add wrap-persist-images from this ns to your form save middleware
+  - Install the Fulcro Ring middleware `file-upload/wrap-mutation-file-uploads`.
+  - Configure an HTTP remote on the client with `file-upload/wrap-file-upload` HTTP remote request middleware.
+  - Add the and install the `upload-file` mutation from this ns into your pathom resolver.
+  - Add `::blob/temporary-store` to your Pathom env.
+  - Add a `::blob/stores` map to associate store names to Storage components to your Pathom env.
+  - Configure attributes that will handle files. This support assumes some storage adapter will store the URL
+  of the file uploaded, and the file data will go in some other store (e.g. S3, disk, etc.). So, you configure
+  a to-one string attribute with:
+  ** The form field style to use a renderer that supports file uploads.
+  ** ::blob/store to indicate the identifer of an implementation of blob-storage/Storage. "
   (:require
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
@@ -8,14 +22,19 @@
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
+    [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
+    [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
     [clojure.core.async :as async]
+    [clojure.spec.alpha :as s]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.networking.file-upload :as file-upload]
     #?@(:cljs [[goog.crypt :as crypt]
                [com.fulcrologic.fulcro.networking.http-remote :as net]]
         :clj  [[com.fulcrologic.rad.blob-storage :as storage]
-               [clojure.java.io :as jio]]))
+               [clojure.pprint :refer [pprint]]
+               [clojure.java.io :as jio]])
+    [com.wsscode.pathom.core :as p])
   (:import
     #?(:clj  (org.apache.commons.codec.digest DigestUtils)
        :cljs [goog.crypt Sha256])))
@@ -163,4 +182,66 @@
          :else (storage/save-blob! temporary-storage file-sha file)))
      {:tempids {id file-sha}}))
 
-(def resolvers [upload-file])
+#?(:clj
+   (defn wrap-persist-images
+     "Form save middleware that examines the incoming transaction for Blobs and moves them from temporary storage into
+     a permanent store based on attribute configuration. This middleware requires you've also installed the Fulcro
+     Ring middleware `file-upload/wrap-mutation-file-uploads` and configured an HTTP remote on the client with
+     `file-upload/wrap-file-upload` HTTP remote request middleware. You must also use a form field that supports file uploads
+     and install the `upload-file` mutation from this ns into your pathom resolver list."
+     [handler all-attributes]
+     (let [blob-attributes (into {}
+                             (keep (fn [{::keys      [store]
+                                         ::attr/keys [qualified-key] :as attr}]
+                                     (when store [qualified-key attr])))
+                             all-attributes)
+           blob-keys       (set (keys blob-attributes))]
+       (log/info "Wrapping persist-images with image keys" blob-keys)
+       (fn [save-env]
+         (let [{:com.fulcrologic.rad.form/keys [pathom-env params]} save-env
+               {::keys [temporary-store permanent-stores]} pathom-env
+               handler-result (handler save-env)]
+           (try
+             (log/info "Check for files to persist in " params)
+             (when-not temporary-store
+               (log/error "No temporary storage in pathom env."))
+             (when-not (map? permanent-stores)
+               (log/error "No permanent file storage in pathom env. Cannot save file(s)."))
+             (when-not (seq blob-keys)
+               (log/warn "wrap-persist-images is installed in form middleware, but no attributes are marked to be stored as Blobs."))
+             (pprint params)
+             (let [delta        (:com.fulcrologic.rad.form/delta params)
+                   blob-tempids (sp/select [sp/MAP-KEYS (sp/pred #(= ::id (first %))) sp/LAST tempid/tempid?] delta)
+                   tid->rid     (zipmap blob-tempids (repeatedly #(java.util.UUID/randomUUID)))
+                   pruned-delta (sp/transform [sp/MAP-VALS (sp/pred map?)] #(select-keys % blob-keys) delta)]
+               (doseq [entity (vals pruned-delta)
+                       [k {:keys [before after]}] entity
+                       :let [{::keys [store]} (get blob-attributes k)
+                             permanent-storage (get permanent-stores store)]]
+                 ;; TODO: Not right...may have remapped name...need to extract SHA???
+                 (when (and before (not= before after))
+                   (storage/delete-blob! permanent-storage before))
+                 (when after
+                   (log/info "Moving file to permanent storage" after)
+                   (storage/move-blob! temporary-store after permanent-storage)))
+               (deep-merge {:tempids tid->rid} handler-result))
+             (catch Exception e
+               (log/error e "Failed to process file(s).")
+               handler-result)))))))
+
+#?(:clj
+   (defn pathom-plugin
+     "A pathom plugin to configure blob stores.
+
+     - temporary-store: A Storage object that is used to track temporary files between upload and final form save.
+     - permanent-stores: A map from store name (keyword) to Storage objects that act as the permanent location for the
+     file data."
+     [temporary-store permanent-stores]
+     (p/env-wrap-plugin
+       (fn [env]
+         (assoc env
+           ::temporary-store temporary-store
+           ::permanent-stores permanent-stores)))))
+
+#?(:clj
+   (def resolvers [upload-file]))

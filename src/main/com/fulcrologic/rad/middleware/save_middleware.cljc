@@ -6,27 +6,32 @@
 
 (defmulti rewrite-value
   "
-  [env ident value]
+  [save-env ident save-diff]
 
-  Rewrites the attributes in the incoming diff of a save for a given `ident` so that they represent the correct. Should
-   return the new `value`.  The default for this is to simply return value unmodified."
-  (fn [env ident value] (first ident)))
+  Given the save-env, ident of an entity, and incoming save diff (map from :before to :after for each
+  changed attribute): Return an updated save-diff.  The default method for this simply returns save-diff.
+  Returning nil from this method will have the effect of removing all values for `ident` from the save."
+  (fn [save-env ident value] (first ident)))
 
 (defmethod rewrite-value :default [_ _ v] v)
 
-(defn rewrite-values [pathom-env save-params]
-  (update save-params ::form/delta
+(defn rewrite-values
+  "Rewrite the delta in ::form/params of save-env. Returns the new save-env."
+  [save-env]
+  (update-in save-env [::form/params ::form/delta]
     #(reduce-kv
-       (fn rewrite-value-step* [m [table eid :as ident] new-value]
-         (let [rewritten-value (rewrite-value pathom-env ident new-value)]
-           (assoc m ident rewritten-value)))
+       (fn rewrite-value-step* [m ident new-value]
+         (let [rewritten-value (rewrite-value save-env ident new-value)]
+           (if (nil? rewritten-value)
+             (dissoc m ident)
+             (assoc m ident rewritten-value))))
        {} %)))
 
 (defn wrap-rewrite-values
-  ([handler]
-   (fn [pathom-env params]
-     (let [new-params (rewrite-values pathom-env params)]
-       (handler pathom-env new-params))))
-  ([]
-   (fn [pathom-env params]
-     (rewrite-values pathom-env params))))
+  "Middleware that allows the distribution of incoming save diff rewrite across models. Should be at the bottom
+   (early side) of the middleware if used."
+  [handler]
+  (fn [save-env]
+    (let [new-save-env (rewrite-values save-env)]
+      (handler new-save-env))))
+

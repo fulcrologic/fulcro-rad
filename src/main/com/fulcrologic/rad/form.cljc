@@ -23,6 +23,7 @@
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
+    [com.wsscode.pathom.core :as p]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
@@ -248,25 +249,21 @@
 ;; LOGIC
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; do-saves! params/env => return value
+;; -> params/env -> middleware-in -> do-saves -> middleware-out
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::master-pk ::diff ::delta}}
      (log/debug "Save invoked from client with " params)
      (let [save-middleware (::save-middleware env)
-           params          (if save-middleware (save-middleware env params) params)
+           save-env        {::pathom-env env ::params params}
+           result          (if save-middleware
+                             (save-middleware save-env)
+                             (throw (ex-info "form/pathom-plugin is not installed on the parser." {})))
            {::keys [master-pk delta]} params
            idents          (keys delta)
            pk              (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
-       (if-let [save-handlers (seq (::save-handlers env))]
-         (reduce
-           (fn [result handler]
-             (update result :tempids merge (handler env params)))
-           {master-pk pk
-            :tempids  {}}
-           save-handlers)
-         (do
-           (log/error "No save handlers are in the parser env.")
-           {master-pk pk}))))
+       (merge result {master-pk pk})))
    :cljs
    (m/defmutation save-form [_]
      (action [_] :noop)))
@@ -719,15 +716,13 @@
                                :id     (str (new-uuid))}))
      (create! app-ish form-class))))
 
-;; TASK: Probably should move the server implementations to a diff ns, so that this is all consistent with
-;; running UI headless (or SSR) on back-end.
 #?(:clj
    (pc/defmutation delete-entity [env params]
      {}
-     (let [ident (first params)]
-       (if-let [delete-handlers (seq (::delete-handlers env))]
-         (doseq [handler delete-handlers] (handler env ident))
-         (log/error "No delete handlers are in the parser env."))))
+     (if-let [delete-middleware (::delete-middleware env)]
+       (let [delete-env {::pathom-env env ::params params}]
+         (delete-middleware delete-env))
+       (throw (ex-info "form/pathom-plugin in not installed on Pathom parser." {}))))
    :cljs
    (m/defmutation delete-entity [params]
      (ok-action [{:keys [state]}]
@@ -869,3 +864,15 @@
         autocomplete (if (boolean? autocomplete) (if autocomplete "on" "off") autocomplete)]
     autocomplete))
 
+(defn pathom-plugin
+  "A pathom plugin that installs general form save/delete support on the pathom parser. Requires
+  save and delete middleware, which will accomplish the actual actions.  Calling RAD form save/delete
+  without this plugin and both bits of middleware will result in a runtime error."
+  [save-middleware delete-middleware]
+  (p/env-wrap-plugin
+    (fn [env]
+      (assoc env
+        ::save-middleware save-middleware
+        ::delete-middleware delete-middleware))))
+
+#?(:clj (def resolvers [save-form delete-entity]))
