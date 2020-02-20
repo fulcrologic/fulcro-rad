@@ -68,11 +68,11 @@
       (let [selected-option props
             picker-key      (form/picker-join-key k)
             picker-props    (get form-props picker-key)]
-        (div :.field {:key (str k)}
-          (dom/label (str (or label (some-> k name str/capitalize))))
-          (ui-factory picker-props
-            (merge std-props subform-options {:currently-selected-value selected-option
-                                              :onSelect                 (fn [v] (form/input-changed! env k v))}))))
+        (ui-factory picker-props
+          (merge env std-props subform-options {::form/env env
+                                                ::attr/attribute          attr
+                                                :currently-selected-value selected-option
+                                                :onSelect                 (fn [v] (form/input-changed! env k v))})))
 
       props
       (div {:key (str k)}
@@ -175,10 +175,10 @@
 (defn layout-renderer [env]
   (ui-render-layout env))
 
-(defn ui-render-entity-picker [{::form/keys [form-instance] :as env} attribute]
+(defn ui-render-entity-picker [{::form/keys [picker-instance] :as env} attribute]
   (let [k        (::attr/qualified-key attribute)
-        {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed form-instance)
-        {:ui/keys [options]} (comp/props form-instance)
+        {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed picker-instance)
+        {:ui/keys [options]} (comp/props picker-instance)
         invalid? (validation/invalid-attribute-value? env attribute)
         {::form/keys [field-label]} attribute]
     (div :.ui.field {:key (str k) :classes [(when invalid? "error")]}

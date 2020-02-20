@@ -295,7 +295,7 @@
 (defn- default-to-many [FormClass attribute]
   (let [{::keys [subforms default]} (comp/component-options FormClass)
         {::attr/keys [qualified-key default-value]} attribute
-        default-value (get default qualified-key default-value)]
+        default-value (?! (get default qualified-key default-value))]
     (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])
                  id-key   (some-> SubClass comp/component-options ::id ::attr/qualified-key)]
       (do
@@ -305,21 +305,20 @@
         (when-not (keyword? id-key)
           (log/error "Subform class" (comp/component-name SubClass)
             "must include a ::form/id that is an attr/attribute"))
-        (cond (or (nil? default-value) (vector? default-value))
-              (mapv (fn [v]
-                      (let [id (tempid/tempid)]
-                        (merge
-                          (default-state SubClass id)
-                          (?! v)
-                          {id-key id})))
-                default-value)
-              (fn? default-value) (default-value)
-              :else (do
-                      (log/error "Default value for" qualified-key "MUST be a vector.")
-                      [])))
+        (if (or (nil? default-value) (vector? default-value))
+          (mapv (fn [v]
+                  (let [id (tempid/tempid)]
+                    (merge
+                      (default-state SubClass id)
+                      (?! v)
+                      {id-key id})))
+            default-value)
+          (do
+            (log/error "Default value for" qualified-key "MUST be a vector.")
+            nil)))
       (do
         (log/error "Subform not declared (or is missing ::form/id) for" qualified-key "on" (comp/component-name FormClass))
-        []))))
+        nil))))
 
 (defn- default-to-one [FormClass attribute]
   (let [{::keys [subforms default]} (comp/component-options FormClass)
@@ -332,13 +331,13 @@
     (when-not SubClass
       (log/error "Subforms for class" (comp/component-name FormClass)
         "must include a ::form/ui entry for" qualified-key))
-    (when-not (keyword? id-key)
+    (when-not (or picker? (keyword? id-key))
       (log/error "Subform class" (comp/component-name SubClass)
         "must include a ::form/id that is an attr/attribute"))
     (cond
+      ;; to-one picker can start out pointing at nothing
       (and SubClass picker?)
       nil
-      #_(comp/get-initial-state SubClass {:id (new-uuid)})
 
       picker?
       (do
@@ -403,7 +402,10 @@
 
 (defn mark-filled-fields-complete* [state-map {:keys [entity-ident initialized-keys]}]
   (let [mark-complete* (fn [entity {::fs/keys [fields complete?] :as form-config}]
-                         (let [to-mark (set/union (set complete?) (set/intersection (set fields) (set initialized-keys)))]
+                         (let [to-mark (set/union (set complete?) (set/intersection (set fields) (set initialized-keys)))
+                               to-mark (into #{}
+                                         (filter (fn [k] (not (nil? (get entity k)))))
+                                         to-mark)]
                            [entity (assoc form-config ::fs/complete? to-mark)]))]
     (fs/update-forms state-map mark-complete* entity-ident)))
 
@@ -791,7 +793,8 @@
                                                :post-mutation-params (merge picker-options
                                                                        {:ref (comp/get-ident this)})}))))
 
-(defsc ToOneEntityPicker [this _]
+(defsc ToOneEntityPicker [this _ {::keys      [env]
+                                      ::attr/keys [attribute]}]
   {:query             [:picker/id
                        :ui/options
                        :ui/query-result]
@@ -803,7 +806,7 @@
         control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)
         control     (get-in control-map [:entity-picker :default])]
     (when control
-      (control {::form-instance this} {}))))
+      (control (assoc env ::picker-instance this) attribute))))
 
 (defn field-label
   "Returns a human readable label for a given attribute (which can be declared on the attribute, and overridden on the
