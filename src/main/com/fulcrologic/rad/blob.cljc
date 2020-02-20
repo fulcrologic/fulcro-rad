@@ -202,14 +202,13 @@
                {::keys [temporary-store permanent-stores]} pathom-env
                handler-result (handler save-env)]
            (try
-             (log/info "Check for files to persist in " params)
+             (log/debug "Check for files to persist in " params)
              (when-not temporary-store
                (log/error "No temporary storage in pathom env."))
              (when-not (map? permanent-stores)
                (log/error "No permanent file storage in pathom env. Cannot save file(s)."))
              (when-not (seq blob-keys)
                (log/warn "wrap-persist-images is installed in form middleware, but no attributes are marked to be stored as Blobs."))
-             (pprint params)
              (let [delta        (:com.fulcrologic.rad.form/delta params)
                    blob-tempids (sp/select [sp/MAP-KEYS (sp/pred #(= ::id (first %))) sp/LAST tempid/tempid?] delta)
                    tid->rid     (zipmap blob-tempids (repeatedly #(java.util.UUID/randomUUID)))
