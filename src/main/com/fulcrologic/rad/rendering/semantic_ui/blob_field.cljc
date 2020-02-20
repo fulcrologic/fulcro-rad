@@ -44,7 +44,7 @@
                           :type     "file"}
                    accept-file-types (assoc :allow (?! accept-file-types)))))))
 
-(def ui-file-upload-field (comp/computed-factory FileUploadField))
+(def ui-file-upload-field (comp/computed-factory FileUploadField {:keyfn (fn [props] (some-> props comp/get-computed ::attr/qualified-key))}))
 
 (defn render-file-upload [env attribute]
   (ui-file-upload-field env attribute))
