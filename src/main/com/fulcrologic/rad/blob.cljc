@@ -201,32 +201,28 @@
          (let [{:com.fulcrologic.rad.form/keys [pathom-env params]} save-env
                {::keys [temporary-store permanent-stores]} pathom-env
                handler-result (handler save-env)]
-           (try
-             (log/debug "Check for files to persist in " params)
-             (when-not temporary-store
-               (log/error "No temporary storage in pathom env."))
-             (when-not (map? permanent-stores)
-               (log/error "No permanent file storage in pathom env. Cannot save file(s)."))
-             (when-not (seq blob-keys)
-               (log/warn "wrap-persist-images is installed in form middleware, but no attributes are marked to be stored as Blobs."))
-             (let [delta        (:com.fulcrologic.rad.form/delta params)
-                   blob-tempids (sp/select [sp/MAP-KEYS (sp/pred #(= ::id (first %))) sp/LAST tempid/tempid?] delta)
-                   tid->rid     (zipmap blob-tempids (repeatedly #(java.util.UUID/randomUUID)))
-                   pruned-delta (sp/transform [sp/MAP-VALS (sp/pred map?)] #(select-keys % blob-keys) delta)]
-               (doseq [entity (vals pruned-delta)
-                       [k {:keys [before after]}] entity
-                       :let [{::keys [store]} (get blob-attributes k)
-                             permanent-storage (get permanent-stores store)]]
-                 ;; TODO: Not right...may have remapped name...need to extract SHA???
-                 (when (and before (not= before after))
-                   (storage/delete-blob! permanent-storage before))
-                 (when after
-                   (log/info "Moving file to permanent storage" after)
-                   (storage/move-blob! temporary-store after permanent-storage)))
-               (deep-merge {:tempids tid->rid} handler-result))
-             (catch Exception e
-               (log/error e "Failed to process file(s).")
-               handler-result)))))))
+           (log/debug "Check for files to persist in " params)
+           (when-not temporary-store
+             (log/error "No temporary storage in pathom env."))
+           (when-not (map? permanent-stores)
+             (log/error "No permanent file storage in pathom env. Cannot save file(s)."))
+           (when-not (seq blob-keys)
+             (log/warn "wrap-persist-images is installed in form middleware, but no attributes are marked to be stored as Blobs."))
+           (let [delta        (:com.fulcrologic.rad.form/delta params)
+                 blob-tempids (sp/select [sp/MAP-KEYS (sp/pred #(= ::id (first %))) sp/LAST tempid/tempid?] delta)
+                 tid->rid     (zipmap blob-tempids (repeatedly #(java.util.UUID/randomUUID)))
+                 pruned-delta (sp/transform [sp/MAP-VALS (sp/pred map?)] #(select-keys % blob-keys) delta)]
+             (doseq [entity (vals pruned-delta)
+                     [k {:keys [before after]}] entity
+                     :let [{::keys [store]} (get blob-attributes k)
+                           permanent-storage (get permanent-stores store)]]
+               ;; TODO: Not right...may have remapped name...need to extract SHA???
+               (when (and before (not= before after))
+                 (storage/delete-blob! permanent-storage before))
+               (when after
+                 (log/info "Moving file to permanent storage" after)
+                 (storage/move-blob! temporary-store after permanent-storage)))
+             (deep-merge {:tempids tid->rid} handler-result)))))))
 
 #?(:clj
    (defn pathom-plugin

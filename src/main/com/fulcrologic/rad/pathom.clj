@@ -68,7 +68,7 @@
   [env err]
   (let [msg  (.getMessage err)
         data (or (ex-data err) {})]
-    (log/error "Parser Error:" msg data)
+    (log/error err "Parser Error:" msg data)
     {::errors {:message msg
                :data    data}}))
 
