@@ -45,29 +45,37 @@
            (log/error e "Unable to read dropdown value " (when v (.-value v))))))))
 
 (defsc WrappedDropdown [this {:keys [onChange value multiple] :as props}]
+  {:initLocalState (fn [this]
+                     (let [xform-options (memoize (fn [options]
+                                                    (clj->js (mapv (fn [{:keys [text value]}]
+                                                                     #js {:text text :value (ftransit/transit-clj->str value)})
+                                                               options))))
+                           xform-value   (fn [multiple? value]
+                                           (user-format->sui-format {:multiple multiple?} value))]
+                       {:get-options  (fn [props] (xform-options (:options props)))
+                        :format-value (fn [props value] (xform-value (:multiple props) value))}))}
   #?(:cljs
-     (let [userOnChange onChange
-           options      (mapv (fn [{:keys [text value]}] {:text text :value (ftransit/transit-clj->str value)}) (:options props))
-           value        (user-format->sui-format props value)
-           props        (merge
-                          {:search             true
-                           :selection          true
-                           :closeOnBlur        true
-                           :openOnFocus        true
-                           :selectOnBlur       true
-                           :selectOnNavigation true}
-                          props
-                          {:value    value
-                           :options  options
-                           :onChange (fn [e v]
-                                       (try
-                                         (let [value (if multiple
-                                                       (mapv #(ftransit/transit-str->clj %) (.-value v))
-                                                       (ftransit/transit-str->clj (.-value v)))]
-                                           (when (and (or value (boolean? value)) userOnChange)
-                                             (userOnChange value)))
-                                         (catch :default e
-                                           (log/error "Unable to read dropdown value " e (when v (.-value v))))))})]
+     (let [{:keys [get-options format-value]} (comp/get-state this)
+           userOnChange onChange
+           options      (get-options props)
+           value        (format-value props value)
+           props        #js {:search             true
+                             :selection          true
+                             :closeOnBlur        true
+                             :openOnFocus        true
+                             :selectOnBlur       true
+                             :selectOnNavigation true
+                             :value              value
+                             :options            options
+                             :onChange           (fn [e v]
+                                                   (try
+                                                     (let [value (if multiple
+                                                                   (mapv #(ftransit/transit-str->clj %) (.-value v))
+                                                                   (ftransit/transit-str->clj (.-value v)))]
+                                                       (when (and (or value (boolean? value)) userOnChange)
+                                                         (userOnChange value)))
+                                                     (catch :default e
+                                                       (log/error "Unable to read dropdown value " e (when v (.-value v))))))}]
        (ui-dropdown props))
      :clj
      (dom/div :.ui.selection.dropdown
