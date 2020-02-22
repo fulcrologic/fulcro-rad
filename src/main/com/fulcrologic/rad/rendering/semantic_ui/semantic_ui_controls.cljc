@@ -26,7 +26,7 @@
                     :viewable-password                    text-field/render-viewable-password
                     :password                             text-field/render-password
                     :sorted-set                           text-field/render-dropdown
-                    :com.fulcrologic.rad.blob/file-upload blob-field/render-file-upload}
+                    :com.fulcrologic.rad.blob/file-upload blob-field/render-image-upload}
     :int           {:default int-field/render-field}
     :decimal       {:default decimal-field/render-field}
     :boolean       {:default boolean-field/render-field}

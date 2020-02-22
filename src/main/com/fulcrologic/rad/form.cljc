@@ -629,7 +629,9 @@
                                     (merge params
                                       {::uism/error-event :event/save-failed
                                        ::master-pk        master-pk
-                                       ::m/returning      form-class
+                                       ;; FIXME: This would be nice, but it breaks the form at the moment because the
+                                       ;; merge removes the form config.
+                                       ;;::m/returning      form-class
                                        ::uism/ok-event    :event/saved}))
                                   (uism/activate :state/saving)))
                               (-> env
