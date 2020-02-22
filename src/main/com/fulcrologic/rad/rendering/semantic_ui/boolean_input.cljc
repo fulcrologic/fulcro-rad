@@ -22,4 +22,4 @@
 
 (let [ui-boolean-input (comp/factory BooleanInput)]
   (defn render-input [this k]
-    (ui-boolean-input {:this this :k k})))
+    (ui-boolean-input {:this this :k k :react-key (str k)})))

@@ -629,8 +629,7 @@
                                     (merge params
                                       {::uism/error-event :event/save-failed
                                        ::master-pk        master-pk
-                                       ;; TODO: Make return optional?
-                                       ;::m/returning      form-class
+                                       ::m/returning      form-class
                                        ::uism/ok-event    :event/saved}))
                                   (uism/activate :state/saving)))
                               (-> env

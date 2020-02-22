@@ -46,14 +46,15 @@
 
 (defsc WrappedDropdown [this {:keys [onChange value multiple] :as props}]
   {:initLocalState (fn [this]
-                     (let [xform-options (memoize (fn [options]
-                                                    (clj->js (mapv (fn [{:keys [text value]}]
-                                                                     #js {:text text :value (ftransit/transit-clj->str value)})
-                                                               options))))
-                           xform-value   (fn [multiple? value]
-                                           (user-format->sui-format {:multiple multiple?} value))]
-                       {:get-options  (fn [props] (xform-options (:options props)))
-                        :format-value (fn [props value] (xform-value (:multiple props) value))}))}
+                     #?(:cljs
+                        (let [xform-options (memoize (fn [options]
+                                                       (clj->js (mapv (fn [{:keys [text value]}]
+                                                                        #js {:text text :value (ftransit/transit-clj->str value)})
+                                                                  options))))
+                              xform-value   (fn [multiple? value]
+                                              (user-format->sui-format {:multiple multiple?} value))]
+                          {:get-options  (fn [props] (xform-options (:options props)))
+                           :format-value (fn [props value] (xform-value (:multiple props) value))})))}
   #?(:cljs
      (let [{:keys [get-options format-value]} (comp/get-state this)
            userOnChange onChange

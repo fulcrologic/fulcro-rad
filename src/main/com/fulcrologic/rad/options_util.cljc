@@ -2,6 +2,7 @@
   "Utilities for interpreting and coping with form/report options."
   (:require
     [clojure.string]
+    [com.fulcrologic.guardrails.core :refer [>defn =>]]
     #?(:cljs [goog.functions :as gf])))
 
 (defn ?!
@@ -18,3 +19,20 @@
   [f tm]
   #?(:clj  f
      :cljs (gf/debounce f tm)))
+
+(>defn narrow-keyword
+  "Narrow the meaning of a keyword by turning the full original keyword into a namespace and adding the given
+  `new-name`.
+
+  ```
+  (narrow-keyword :a/b \"c\") => :a.b/c
+  ```
+
+  Requires that the incoming keyword already have a namespace.
+  "
+  [k new-name]
+  [qualified-keyword? string? => qualified-keyword?]
+  (let [old-ns (namespace k)
+        nm     (name k)
+        new-ns (str old-ns "." nm)]
+    (keyword new-ns new-name)))

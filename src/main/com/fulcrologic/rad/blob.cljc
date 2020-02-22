@@ -16,6 +16,7 @@
   ** ::blob/store to indicate the identifer of an implementation of blob-storage/Storage. "
   (:require
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.options-util :refer [narrow-keyword]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
@@ -34,7 +35,8 @@
         :clj  [[com.fulcrologic.rad.blob-storage :as storage]
                [clojure.pprint :refer [pprint]]
                [clojure.java.io :as jio]])
-    [com.wsscode.pathom.core :as p])
+    [com.wsscode.pathom.core :as p]
+    [clojure.string :as str])
   (:import
     #?(:clj  (org.apache.commons.codec.digest DigestUtils)
        :cljs [goog.crypt Sha256])))
@@ -170,7 +172,7 @@
            {:abort-id sha})))))
 
 #?(:clj
-   (pc/defmutation upload-file [{::keys [temporary-storage] :as env}
+   (pc/defmutation upload-file [{::keys [temporary-store] :as env}
                                 {::keys             [file-sha id local-filename]
                                  ::file-upload/keys [files] :as params}]
      {::pc/doc "Server-side handler for an uploaded file in the RAD Blob system"}
@@ -178,8 +180,8 @@
      (let [file (-> files first :tempfile)]
        (cond
          (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
-         (nil? temporary-storage) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
-         :else (storage/save-blob! temporary-storage file-sha file)))
+         (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
+         :else (storage/save-blob! temporary-store file-sha file)))
      {:tempids {id file-sha}}))
 
 #?(:clj
@@ -238,5 +240,44 @@
            ::temporary-store temporary-store
            ::permanent-stores permanent-stores)))))
 
+
 #?(:clj
-   (def resolvers [upload-file]))
+   (defn blob-resolvers
+     "Generates the extended blob resolvers for a given attribute."
+     [{::keys      [store]
+       ::attr/keys [qualified-key] :as attribute}]
+     (let
+       [url-key      (narrow-keyword qualified-key "url")
+        url-resolver (pc/resolver 'url {::pc/input  #{qualified-key}
+                                        ::pc/output [url-key]}
+                       (fn [{::keys [permanent-stores]} input]
+                         (let [sha        (get input qualified-key)
+                               file-store (get permanent-stores store)]
+                           (when-not sha
+                             (log/error "Could not file file URL. No sha." qualified-key))
+                           (when-not file-store
+                             (log/error "Attempt to retrieve a file URL, but there was no store in parsing env: " store))
+                           (when (and sha file-store)
+                             {url-key (storage/blob-url file-store sha)}))))]
+       [url-resolver])))
+
+#?(:clj
+   (defn wrap-blob-service [handler base-path blob-store]
+     (fn [{:keys [uri] :as req}]
+       (if (str/starts-with? uri base-path)
+         (let [sha (last (str/split uri #"/"))]
+           (log/info "Trying to serve file " sha)
+           (if-let [stream (storage/blob-stream blob-store sha)]
+             {:status  200
+              :headers {"content-type" "image/*"}
+              :body    stream}
+             {:status  400
+              :headers {"content-type" "text/plain"}
+              :body    "Not found"}))
+         (handler req)))))
+
+#?(:clj
+   (defn resolvers [all-attributes]
+     (let [blob-attributes (filterv ::store all-attributes)]
+       (into [upload-file]
+         (map blob-resolvers blob-attributes)))))
