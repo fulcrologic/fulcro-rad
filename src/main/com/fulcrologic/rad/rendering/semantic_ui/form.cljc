@@ -114,10 +114,81 @@
     (render-to-many env attr options)
     (render-to-one env attr options)))
 
+(defn render-single-file [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
+  (let [{::form/keys [ui can-delete? title pick-one label] :as subform-options} (get subforms k)
+        parent     (comp/props form-instance)
+        form-props (comp/props form-instance)
+        props      (get form-props k)
+        ui-factory (comp/computed-factory ui)
+        label      (form/field-label env attr)
+        std-props  {::form/nested?         true
+                    ::form/parent          form-instance
+                    ::form/parent-relation k
+                    ::form/can-delete?     (if can-delete?
+                                             (partial can-delete? parent)
+                                             false)}]
+    (if props
+      (div :.field {:key (str k)}
+        (dom/label label)
+        (ui-factory props (merge env std-props)))
+      (div {:key (str k)}
+        (div "Upload??? (TODO)")))))
+
+(defn render-many-files [{::form/keys [form-instance] :as env}
+                         {k ::attr/qualified-key :as attr}
+                         {::form/keys [subforms] :as options}]
+  (let [{:semantic-ui/keys [add-position]
+         ::form/keys       [ui title can-delete? can-add? sort-children]} (get subforms k)
+        parent      (comp/props form-instance)
+        can-delete? (fn [item] (?! can-delete? parent item))
+        items       (-> form-instance comp/props k
+                      (cond->
+                        sort-children sort-children))
+        title       (or
+                      title
+                      (some-> ui (comp/component-options ::form/title)) "")
+        add         (when (or (nil? can-add?) (?! can-add? parent))
+                      (dom/input {:type     "file"
+                                  :onChange (fn [evt]
+                                              (let [new-id     (tempid/tempid)
+                                                    js-file    (-> evt blob/evt->js-files first)
+                                                    attributes (comp/component-options ui ::form/attributes)
+                                                    id-attr    (comp/component-options ui ::form/id)
+                                                    id-key     (::attr/qualified-key id-attr)
+                                                    {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
+                                                                                                        attributes))
+                                                    target     (conj (comp/get-ident form-instance) k)
+                                                    new-entity (fs/add-form-config ui
+                                                                 {id-key        new-id
+                                                                  qualified-key ""})]
+                                                (merge/merge-component! form-instance ui new-entity :append target)
+                                                (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))}))
+        ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
+    (div :.ui.basic.segment {:key (str k)}
+      (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
+      (div :.ui.grid
+        (mapv
+          (fn [props]
+            (div :.four.wide.column
+              (ui-factory props
+                (merge
+                  env
+                  {::form/parent          form-instance
+                   ::form/parent-relation k
+                   ::form/can-delete?     (if can-delete? (?! can-delete?) false)}))))
+          items))
+      (when (= :bottom add-position) add))))
+
+(defn file-ref-container
+  [env {::attr/keys [cardinality] :as attr} options]
+  (if (= :many cardinality)
+    (render-many-files env attr options)
+    (render-single-file env attr options)))
+
 (defn render-attribute [env attr {::form/keys [subforms] :as options}]
   (let [{k ::attr/qualified-key} attr]
     (if (contains? subforms k)
-      (let [render-ref (or (form/ref-container-renderer env) standard-ref-container)]
+      (let [render-ref (or (form/ref-container-renderer env attr) standard-ref-container)]
         (render-ref env attr options))
       (form/render-field env attr))))
 
@@ -211,3 +282,22 @@
       (mapv
         (fn [attr] (render-attribute env attr options))
         attributes))))
+
+(defn- file-icon-renderer* [{::form/keys [form-instance] :as env}]
+  (let [{::form/keys [attributes] :as options} (comp/component-options form-instance)
+        sha-key  (::attr/qualified-key (first (filter ::blob/store attributes)))
+        file-key (blob/filename-key sha-key)
+        url-key  (blob/url-key sha-key)
+        props    (comp/props form-instance)
+        filename (get props file-key "File")
+        url      (get props url-key)]
+    (dom/a {:target  "_blank"
+            :href    (str url "?filename=" filename)
+            :onClick (fn [evt]
+                       (when-not (js/confirm "View/download?")
+                         (evt/stop-propagation! evt)
+                         (evt/prevent-default! evt)))}
+      (dom/i :.large.file.icon)
+      filename)))
+
+(defn file-icon-renderer [env] (file-icon-renderer* env))

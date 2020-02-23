@@ -53,13 +53,13 @@
    `element` must be one of :
 
    ```
-   #{:form-container :form-body-container :element-renderer :ref-container}
+   #{:form-container :form-body-container}
    ```
   "
   [{::keys [form-instance] :as form-env} element]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        style-key    (narrow-keyword ::layout-style element)
-        layout-style (or (some-> form-instance comp/component-options style-key) :default)
+        style-path   [::layout-styles element]
+        layout-style (or (some-> form-instance comp/component-options (get-in style-path)) :default)
         render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
                        (get element) (get layout-style))]
     render-fn))
@@ -72,8 +72,20 @@
    fields in nested forms. This renderer can determine layout of the fields themselves."
   [form-env] (render-fn form-env :form-body-container))
 (defn ref-container-renderer
-  "Renderer that wraps and lays out elements of refs (to-many/to-one)???"
-  [form-env] (render-fn form-env :ref-container))
+  "Renderer that wraps and lays out elements of refs"
+  [{::keys [form-instance] :as form-env} {::attr/keys [qualified-key] :as attr}]
+  (let [{::keys [subforms] :as options} (comp/component-options form-instance)
+        {::keys [ui layout-styles]} (get subforms qualified-key)
+        {target-styles ::layout-styles} (comp/component-options ui)
+        {::app/keys [runtime-atom]} (comp/any->app form-instance)
+        element      :ref-container
+        layout-style (or
+                       (get layout-styles element)
+                       (get target-styles element)
+                       :default)
+        render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
+                       (get-in [element layout-style]))]
+    render-fn))
 
 
 (comment

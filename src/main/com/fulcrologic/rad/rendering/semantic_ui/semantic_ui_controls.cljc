@@ -18,9 +18,11 @@
    ;; completely configurable map...element types are malleable as are the styles. Plugins will need to doc where
    ;; they vary from the "standard" set.
    :com.fulcrologic.rad.form/element->style->layout
-   {:form-container      {:default sui-form/standard-form-container}
+   {:form-container      {:default sui-form/standard-form-container
+                          :file-as-icon sui-form/file-icon-renderer}
     :form-body-container {:default sui-form/standard-form-layout-renderer}
-    :ref-container       {:default sui-form/standard-ref-container}}
+    :ref-container       {:default sui-form/standard-ref-container
+                          :file    sui-form/file-ref-container}}
 
    :com.fulcrologic.rad.form/type->style->control
    {
