@@ -2,13 +2,14 @@
   (:require
     [clojure.string :as str]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.options-util :refer [?!]]
+    [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.ui-validation :as validation]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.blob :as blob]
     [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.fulcro-i18n.i18n :as i18n :refer [tr]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
     [com.fulcrologic.fulcro.mutations :as m]
     #?(:cljs [com.fulcrologic.fulcro.dom :as dom :refer [div h3 button i span]]
@@ -108,7 +109,7 @@
                                                     ::form/parent form-instance
                                                     ::form/child-class ui)))} "Create")))))
 
-(defn render-ref [env {::attr/keys [cardinality] :as attr} options]
+(defn standard-ref-container [env {::attr/keys [cardinality] :as attr} options]
   (if (= :many cardinality)
     (render-to-many env attr options)
     (render-to-one env attr options)))
@@ -116,7 +117,8 @@
 (defn render-attribute [env attr {::form/keys [subforms] :as options}]
   (let [{k ::attr/qualified-key} attr]
     (if (contains? subforms k)
-      (render-ref env attr options)
+      (let [render-ref (or (form/ref-container-renderer env) standard-ref-container)]
+        (render-ref env attr options))
       (form/render-field env attr))))
 
 (def n-fields-string {1 "one field"
@@ -148,13 +150,30 @@
             row)))
       layout)))
 
-(defn ui-render-layout [{::form/keys [props computed-props form-instance master-form] :as env}]
+(defn ui-render-entity-picker [{::form/keys [picker-instance] :as env} attribute]
+  (let [k        (::attr/qualified-key attribute)
+        {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed picker-instance)
+        {:ui/keys [options]} (comp/props picker-instance)
+        invalid? (validation/invalid-attribute-value? env attribute)
+        {::form/keys [field-label]} attribute]
+    (div :.ui.field {:key (str k) :classes [(when invalid? "error")]}
+      (dom/label (str (or field-label (some-> k name str/capitalize))
+                   (when invalid? " (Required)")))
+      (ui-wrapped-dropdown (cond->
+                             {:onChange (fn [v] (onSelect v))
+                              :value    currently-selected-value
+                              :options  options}
+                             onSearchChange (assoc :onSearchChange onSearchChange))))))
+
+(declare standard-form-layout-renderer)
+
+(defn standard-form-container [{::form/keys [props computed-props form-instance master-form] :as env}]
   (let [{::form/keys [can-delete?]} computed-props
-        nested?  (not= master-form form-instance)
-        {::form/keys [attributes layout] :as options} (comp/component-options form-instance)
-        valid?   (form/valid? env)
-        invalid? (form/invalid? env)
-        dirty?   (or (:ui/new? props) (fs/dirty? props))]
+        nested?       (not= master-form form-instance)
+        valid?        (form/valid? env)
+        invalid?      (form/invalid? env)
+        dirty?        (or (:ui/new? props) (fs/dirty? props))
+        render-fields (or (form/form-layout-renderer env) standard-form-layout-renderer)]
     (when #?(:cljs goog.DEBUG :clj true)
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
       (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
@@ -166,11 +185,7 @@
                                                             :onClick  (fn []
                                                                         (form/delete-child! env))}
               (i :.times.icon)))
-          (if layout
-            (render-layout env options)
-            (mapv
-              (fn [attr] (render-attribute env attr options))
-              attributes))))
+          (render-fields env)))
       (div :.ui.container
         (div :.ui.form {:classes [(when invalid? "error")]}
           (div :.ui.top.menu
@@ -187,26 +202,12 @@
                                                     :onClick  (fn [] (form/save! env))} (tr "Save")))))
           (div :.ui.error.message (tr "The form has errors and cannot be saved."))
           (div :.ui.attached.segment
-            (if layout
-              (render-layout env (merge options computed-props {::form/nested? true}))
-              (mapv
-                (fn [attr] (render-attribute env attr options))
-                attributes))))))))
+            (render-fields env)))))))
 
-(defn layout-renderer [env]
-  (ui-render-layout env))
-
-(defn ui-render-entity-picker [{::form/keys [picker-instance] :as env} attribute]
-  (let [k        (::attr/qualified-key attribute)
-        {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed picker-instance)
-        {:ui/keys [options]} (comp/props picker-instance)
-        invalid? (validation/invalid-attribute-value? env attribute)
-        {::form/keys [field-label]} attribute]
-    (div :.ui.field {:key (str k) :classes [(when invalid? "error")]}
-      (dom/label (str (or field-label (some-> k name str/capitalize))
-                   (when invalid? " (Required)")))
-      (ui-wrapped-dropdown (cond->
-                             {:onChange (fn [v] (onSelect v))
-                              :value    currently-selected-value
-                              :options  options}
-                             onSearchChange (assoc :onSearchChange onSearchChange))))))
+(defn standard-form-layout-renderer [{::form/keys [form-instance] :as env}]
+  (let [{::form/keys [attributes layout] :as options} (comp/component-options form-instance)]
+    (if layout
+      (render-layout env options)
+      (mapv
+        (fn [attr] (render-attribute env attr options))
+        attributes))))

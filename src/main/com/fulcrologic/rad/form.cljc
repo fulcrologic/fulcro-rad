@@ -27,7 +27,7 @@
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
     #?(:cljs [goog.object])
-    [com.fulcrologic.rad.options-util :refer [?!]]
+    [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
 
 (def create-action "create")
@@ -46,6 +46,35 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn render-fn
+  "Find the correct UI renderer for the given form layout `element`.
+
+   `element` must be one of :
+
+   ```
+   #{:form-container :form-body-container :element-renderer :ref-container}
+   ```
+  "
+  [{::keys [form-instance] :as form-env} element]
+  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
+        style-key    (narrow-keyword ::layout-style element)
+        layout-style (or (some-> form-instance comp/component-options style-key) :default)
+        render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
+                       (get element) (get layout-style))]
+    render-fn))
+
+(defn form-container-renderer
+  "The top-level container for the entire on-screen form"
+  [form-env] (render-fn form-env :form-container))
+(defn form-layout-renderer
+  "The container for the form fields. Used to wrap the main set of fields, and as the container for
+   fields in nested forms. This renderer can determine layout of the fields themselves."
+  [form-env] (render-fn form-env :form-body-container))
+(defn ref-container-renderer
+  "Renderer that wraps and lays out elements of refs (to-many/to-one)???"
+  [form-env] (render-fn form-env :ref-container))
+
 
 (comment
   ;;potential refactoring for subform stuff
@@ -120,13 +149,12 @@
        ::computed-props cprops})))
 
 (defn render-layout [form-instance props]
-  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        layout-style (or (some-> form-instance comp/component-options ::layout-style) :default)
-        layout       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
-    (if layout
-      (layout (rendering-env form-instance props))
+  (let [env    (rendering-env form-instance props)
+        render (form-container-renderer env)]
+    (if render
+      (render env)
       (do
-        (log/error "No layout function found for form layout style" layout-style)
+        (log/error "No container layout rendering defined. Cannot render form " (comp/component-name form-instance))
         nil))))
 
 #?(:clj

@@ -104,16 +104,16 @@
         (when (seq url)
           (dom/a {:href (str url "?filename=" filename)} "Download"))
         (dom/div :.ui.small.blue.progress
-          (div :.bar {:style {:transition-duration "300ms"
-                              :display             "block"
-                              :width               pct}}
+          (div :.bar {:style {:transitionDuration "300ms"
+                              :display            "block"
+                              :width              pct}}
             (div :.progress
               (str pct))))
         #_(dom/input (cond-> {:id       (str qualified-key)
-                            :ref      save-ref
-                            :onChange on-change
-                            :type     "file"}
-                     accept-file-types (assoc :allow (?! accept-file-types))))))))
+                              :ref      save-ref
+                              :onChange on-change
+                              :type     "file"}
+                       accept-file-types (assoc :allow (?! accept-file-types))))))))
 
 (def ui-file-upload-field (comp/computed-factory FileUploadField
                             {:keyfn (fn [props] (some-> props comp/get-computed ::attr/qualified-key))}))

@@ -2,6 +2,7 @@
   "Utilities for interpreting and coping with form/report options."
   (:require
     [clojure.string]
+    [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
     #?(:cljs [goog.functions :as gf])))
 
@@ -31,7 +32,7 @@
   Requires that the incoming keyword already have a namespace.
   "
   [k new-name]
-  [qualified-keyword? string? => qualified-keyword?]
+  [qualified-keyword? (s/or :string string? :k keyword? :sym symbol?) => qualified-keyword?]
   (let [old-ns (namespace k)
         nm     (name k)
         new-ns (str old-ns "." nm)]

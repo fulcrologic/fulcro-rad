@@ -331,6 +331,7 @@
            progress-key (progress-key k)
            status-key   (status-key k)]
        `(def ~sym (-> (assoc (attr/new-attribute ~k :string ~attribute-map)
+                        ;; FIXME: Should NOT override user desire
                         :com.fulcrologic.rad.form/field-style ::file-upload
                         ::remote ~fulcro-http-remote
                         ::store ~remote-store-name)
