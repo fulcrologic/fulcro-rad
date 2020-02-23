@@ -2,8 +2,10 @@
   (:require
     [clojure.string :as str]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.ui-validation :as validation]
     [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.blob :as blob]
     [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.fulcro-i18n.i18n :as i18n :refer [tr]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
@@ -13,28 +15,47 @@
        :clj  [com.fulcrologic.fulcro.dom-server :as dom :refer [div h3 button i span]])
     [com.fulcrologic.fulcro.dom.html-entities :as ent]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
+    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
+    [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 (defn render-to-many [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
   (let [{:semantic-ui/keys [add-position]
-         ::form/keys       [ui title can-delete-row? can-add-row? sort-children]} (get subforms k)
+         ::form/keys       [ui title can-delete? can-add? added-via-upload? sort-children]} (get subforms k)
         parent      (comp/props form-instance)
-        can-delete? (fn [item] (can-delete-row? parent item))
+        can-delete? (fn [item] (?! can-delete? parent item))
         items       (-> form-instance comp/props k
                       (cond->
                         sort-children sort-children))
         title       (or
                       title
                       (some-> ui (comp/component-options ::form/title)) "")
-        add         (when (and can-add-row? (can-add-row? parent))
-                      (button :.ui.tiny.icon.button
-                        {:onClick (fn [_]
-                                    (form/add-child! (assoc env
-                                                       ::form/parent-relation k
-                                                       ::form/parent form-instance
-                                                       ::form/child-class ui)))}
-                        (i :.plus.icon)))
+        add         (when (or (nil? can-add?) (?! can-add? parent))
+                      (if (?! added-via-upload? env)
+                        (dom/input {:type     "file"
+                                    :onChange (fn [evt]
+                                                (log/info "UPLOAD FILE!!!")
+                                                (let [new-id     (tempid/tempid)
+                                                      js-file    (-> evt blob/evt->js-files first)
+                                                      attributes (comp/component-options ui ::form/attributes)
+                                                      id-attr    (comp/component-options ui ::form/id)
+                                                      id-key     (::attr/qualified-key id-attr)
+                                                      {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
+                                                                                                          attributes))
+                                                      target     (conj (comp/get-ident form-instance) k)
+                                                      new-entity (fs/add-form-config ui
+                                                                   {id-key        new-id
+                                                                    qualified-key ""})]
+                                                  (merge/merge-component! form-instance ui new-entity :append target)
+                                                  (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})
+                        (button :.ui.tiny.icon.button
+                          {:onClick (fn [_]
+                                      (form/add-child! (assoc env
+                                                         ::form/parent-relation k
+                                                         ::form/parent form-instance
+                                                         ::form/child-class ui)))}
+                          (i :.plus.icon))))
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
       (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
@@ -45,12 +66,12 @@
               env
               {::form/parent          form-instance
                ::form/parent-relation k
-               ::form/can-delete?     (if can-delete-row? can-delete? false)})))
+               ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
         items)
       (when (= :bottom add-position) add))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
-  (let [{::form/keys [ui can-delete-row? title pick-one label] :as subform-options} (get subforms k)
+  (let [{::form/keys [ui can-delete? title pick-one label] :as subform-options} (get subforms k)
         picker?    (boolean pick-one)
         parent     (comp/props form-instance)
         form-props (comp/props form-instance)
@@ -60,8 +81,8 @@
         std-props  {::form/nested?         true
                     ::form/parent          form-instance
                     ::form/parent-relation k
-                    ::form/can-delete?     (if can-delete-row?
-                                             (partial can-delete-row? parent)
+                    ::form/can-delete?     (if can-delete?
+                                             (partial can-delete? parent)
                                              false)}]
     (cond
       picker?
@@ -69,7 +90,7 @@
             picker-key      (form/picker-join-key k)
             picker-props    (get form-props picker-key)]
         (ui-factory picker-props
-          (merge env std-props subform-options {::form/env env
+          (merge env std-props subform-options {::form/env                env
                                                 ::attr/attribute          attr
                                                 :currently-selected-value selected-option
                                                 :onSelect                 (fn [v] (form/input-changed! env k v))})))
@@ -141,7 +162,7 @@
       (div :.ui.form {:classes [(when invalid? "error")]}
         (div :.ui.segment
           (when can-delete?
-            (button :.ui.icon.primary.right.floated.button {:disabled (not (can-delete? props))
+            (button :.ui.icon.primary.right.floated.button {:disabled (not (?! can-delete? props))
                                                             :onClick  (fn []
                                                                         (form/delete-child! env))}
               (i :.times.icon)))

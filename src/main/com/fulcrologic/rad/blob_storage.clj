@@ -10,6 +10,7 @@
 ;:deposit.check-front/size
 
 (defprotocol Storage
+  (blob-exists? [this name] "Returns true if the SHA already exists in the store")
   (save-blob! [this name input-stream] "Save the data from an InputStream as the given name. This function does not close the stream.")
   (blob-url [this name] "Return a global URL for the file content.")
   (delete-blob! [this name] "Delete the given thing from storage by name.")
@@ -26,8 +27,12 @@
       (swap! sha->file assoc name f)))
   (blob-url [this name] (str base-url "/" name))
   (delete-blob! [this name]
-    (some->> (get @sha->file name)  (.delete))
+    (some->> (get @sha->file name) (.delete))
     (swap! sha->file dissoc name))
+  (blob-exists? [this name]
+    (boolean
+      (when-let [file ^File (get @sha->file name)]
+        (.exists file))))
   (blob-stream [_ name]
     (when-let [file (get @sha->file name)]
       (log/info "getting stream for" file)

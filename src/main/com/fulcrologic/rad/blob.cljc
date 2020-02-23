@@ -14,6 +14,7 @@
   a to-one string attribute with:
   ** The form field style to use a renderer that supports file uploads.
   ** ::blob/store to indicate the identifer of an implementation of blob-storage/Storage. "
+  #?(:cljs (:require-macros com.fulcrologic.rad.blob))
   (:require
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.options-util :refer [narrow-keyword]]
@@ -40,6 +41,12 @@
   (:import
     #?(:clj  (org.apache.commons.codec.digest DigestUtils)
        :cljs [goog.crypt Sha256])))
+
+(defn url-key [k] (narrow-keyword k "url"))
+(defn progress-key [k] (narrow-keyword k "progress"))
+(defn status-key [k] (narrow-keyword k "status"))
+(defn filename-key [k] (narrow-keyword k "filename"))
+(defn size-key [k] (narrow-keyword k "size"))
 
 (defn file-sha256
   "Finds the SHA256 from the given Blob/File
@@ -112,61 +119,55 @@
 (m/declare-mutation upload-file `upload-file)
 
 (defmethod m/mutate `upload-file [{:keys [ast]}]
-  (let [{::keys      [id file-sha local-filename]
+  (let [{::keys      [file-sha filename]
          ::attr/keys [qualified-key]
-         :keys       [remote form-ident]} (get ast :params)
+         :keys       [remote file-ident]} (get ast :params)
         remote-key (or remote :remote)]
-    {:action          (fn action [{:keys [state]}]
-                        (let [new-blob (fs/add-form-config
-                                         Blob
-                                         {::id             id
-                                          ::local-filename local-filename
-                                          ::file-sha       file-sha})]
-                          (log/info "Upload starting")
-                          (fns/swap!-> state
-                            (merge/merge-component Blob new-blob :append (conj form-ident ::blobs))
-                            (update-in [::id id] assoc :ui/uploading? true :ui/percent-complete 0)
-                            (assoc-in (conj form-ident qualified-key) file-sha))))
-     :progress-action (fn progress-action [{:keys [state] :as env}]
-                        (log/info "Progress update")
-                        #?(:cljs
-                           (let [pct (net/overall-progress env)]
-                             (swap! state assoc-in [::id id :ui/percent-complete] pct))))
-     :result-action   (fn result-action [{:keys [state result]}]
-                        ;; TODO: Error handling
-                        (log/info "Upload complete" result)
-                        (let [ok? (= 200 (:status-code result))]
-                          (swap! state update-in [::id id] assoc
-                            :ui/uploading? false
-                            :ui/status (if ok? :ready :failed)
-                            :ui/percent-complete 100)))
-     remote-key       (fn remote [env] true)}))
+    (let [name-path     (conj file-ident (filename-key qualified-key))
+          status-path   (conj file-ident (status-key qualified-key))
+          progress-path (conj file-ident (progress-key qualified-key))]
+      {:action          (fn progress-action [{:keys [state] :as env}]
+                          #?(:cljs
+                             (fns/swap!-> state
+                               (assoc-in (conj file-ident qualified-key) file-sha)
+                               (assoc-in name-path filename)
+                               (assoc-in progress-path 0)
+                               (assoc-in status-path :uploading))))
+       :progress-action (fn progress-action [{:keys [state] :as env}]
+                          #?(:cljs
+                             (let [pct (net/overall-progress env)]
+                               (log/info "Progress update" pct)
+                               (swap! state assoc-in progress-path pct))))
+       :result-action   (fn result-action [{:keys [state result]}]
+                          ;; TODO: Error handling
+                          (log/info "Upload complete" result)
+                          (let [ok? (= 200 (:status-code result))]
+                            (fns/swap!-> state
+                              (assoc-in status-path (if ok? :available :not-found))
+                              (assoc-in progress-path (if ok? 100 0)))))
+       remote-key       (fn remote [env] true)})))
 
 (defn upload-file!
-  "This adds a new Blob instance to the form, computes a SHA for the file, starts the upload (with progress tracking), and
-  sets the form attribute to the SHA. The rendering layer will auto-detect when a file upload attribute is a SHA
+  "This computes a SHA for the js-file, starts the upload (with progress tracking), and
+  sets the form attribute to the SHA. The narrowed attributes (e.g. :file.sha/progress) will be updated as the file
+  upload progresses. The rendering layer will auto-detect when a file upload attribute is a SHA
   and can render the progress of the upload (possibly with a preview, etc.).
 
-  The Blob itself will include the local filename and a tempid so it will be sent with form save (and remapped to real
-  ID on completion).
-
-  The server save middleware will receive the uploaded but unprocessed blobs on save, and must use the SHA to
-  claim, relocate, and fix the form data."
-  [{:com.fulcrologic.rad.form/keys [form-instance]} {::keys      [remote]
-                                                     ::attr/keys [qualified-key]} js-file]
+  You must install rewrite middleware for the attribute so that you can move the uploaded file from temporary store
+  into the permanent store when the sha is actually saved with the form. The upload can be aborted using the SHA."
+  [form-instance {::keys      [remote]
+                  ::attr/keys [qualified-key]} js-file {:keys [file-ident]}]
   #?(:cljs
      (async/go
        (let [sha      (async/<! (file-sha256 js-file))
              filename (or (.-name js-file) "file")
-             blob-id  (tempid/tempid)
              uploads  [(file-upload/new-upload filename js-file)]]
          (comp/transact! form-instance
            [(upload-file (file-upload/attach-uploads
-                           {:form-ident          (comp/get-ident form-instance)
+                           {:file-ident          file-ident
                             :remote              (or remote :remote)
                             ::attr/qualified-key qualified-key
-                            ::id                 blob-id
-                            ::local-filename     filename
+                            ::filename           filename
                             ::file-sha           sha}
                            uploads))]
            {:abort-id sha})))))
@@ -211,20 +212,26 @@
            (when-not (seq blob-keys)
              (log/warn "wrap-persist-images is installed in form middleware, but no attributes are marked to be stored as Blobs."))
            (let [delta        (:com.fulcrologic.rad.form/delta params)
-                 blob-tempids (sp/select [sp/MAP-KEYS (sp/pred #(= ::id (first %))) sp/LAST tempid/tempid?] delta)
-                 tid->rid     (zipmap blob-tempids (repeatedly #(java.util.UUID/randomUUID)))
                  pruned-delta (sp/transform [sp/MAP-VALS (sp/pred map?)] #(select-keys % blob-keys) delta)]
              (doseq [entity (vals pruned-delta)
                      [k {:keys [before after]}] entity
                      :let [{::keys [store]} (get blob-attributes k)
                            permanent-storage (get permanent-stores store)]]
+               (when-not permanent-storage
+                 (log/error "Cannot find permanent store" store))
                ;; TODO: Not right...may have remapped name...need to extract SHA???
-               (when (and before (not= before after))
-                 (storage/delete-blob! permanent-storage before))
-               (when after
+               (when (and permanent-storage before (not= before after))
+                 (try
+                   (storage/delete-blob! permanent-storage before)
+                   (catch Exception _
+                     (log/error "Delete failed."))))
+               (when (and temporary-store permanent-storage after)
                  (log/info "Moving file to permanent storage" after)
-                 (storage/move-blob! temporary-store after permanent-storage)))
-             (deep-merge {:tempids tid->rid} handler-result)))))))
+                 (try
+                   (storage/move-blob! temporary-store after permanent-storage)
+                   (catch Exception e
+                     (log/error e "Failed to persist blob" after)))))
+             handler-result))))))
 
 #?(:clj
    (defn pathom-plugin
@@ -247,29 +254,53 @@
      [{::keys      [store]
        ::attr/keys [qualified-key] :as attribute}]
      (let
-       [url-key      (narrow-keyword qualified-key "url")
-        url-resolver (pc/resolver 'url {::pc/input  #{qualified-key}
-                                        ::pc/output [url-key]}
-                       (fn [{::keys [permanent-stores]} input]
-                         (let [sha        (get input qualified-key)
-                               file-store (get permanent-stores store)]
-                           (when-not sha
-                             (log/error "Could not file file URL. No sha." qualified-key))
-                           (when-not file-store
-                             (log/error "Attempt to retrieve a file URL, but there was no store in parsing env: " store))
-                           (when (and sha file-store)
-                             {url-key (storage/blob-url file-store sha)}))))]
-       [url-resolver])))
+       [url-key           (url-key qualified-key)
+        url-resolver      (pc/resolver 'url {::pc/input  #{qualified-key}
+                                             ::pc/output [url-key]}
+                            (fn [{::keys [permanent-stores]} input]
+                              (let [sha        (get input qualified-key)
+                                    file-store (get permanent-stores store)]
+                                (when-not sha
+                                  (log/error "Could not file file URL. No sha." qualified-key))
+                                (when-not file-store
+                                  (log/error "Attempt to retrieve a file URL, but there was no store in parsing env: " store))
+                                (when (and sha file-store)
+                                  {url-key (storage/blob-url file-store sha)}))))
+        sha-exists?       (fn [{::keys [permanent-stores]} input]
+                            (let [sha        (get input qualified-key)
+                                  file-store (get permanent-stores store)]
+                              (when-not sha
+                                (log/error "Could not check file. No sha." qualified-key))
+                              (when-not file-store
+                                (log/error "Attempt to retrieve a file, but there was no store in parsing env: " store))
+                              (boolean (and sha file-store (storage/blob-exists? file-store sha)))))
+        progress-key      (progress-key qualified-key)
+        status-key        (status-key qualified-key)
+        progress-resolver (pc/resolver 'progress {::pc/input  #{qualified-key}
+                                                  ::pc/output [progress-key]}
+                            (fn [env input]
+                              (if (sha-exists? env input)
+                                {progress-key 100}
+                                {progress-key 0})))
+        status-resolver   (pc/resolver 'progress {::pc/input  #{qualified-key}
+                                                  ::pc/output [progress-key]}
+                            (fn [env input]
+                              (if (sha-exists? env input)
+                                {status-key :available}
+                                {status-key :not-found})))]
+       [url-resolver progress-resolver status-resolver])))
 
 #?(:clj
    (defn wrap-blob-service [handler base-path blob-store]
-     (fn [{:keys [uri] :as req}]
+     (fn [{:keys [uri params] :as req}]
        (if (str/starts-with? uri base-path)
-         (let [sha (last (str/split uri #"/"))]
+         (let [sha      (last (str/split uri #"/"))
+               filename (:filename params)]
            (log/info "Trying to serve file " sha)
            (if-let [stream (storage/blob-stream blob-store sha)]
              {:status  200
-              :headers {"content-type" "image/*"}
+              :headers {"Content-Disposition" (str "attachment; filename=" filename)
+                        "Cache-Control"       "max-age=31536000, public, immutable"}
               :body    stream}
              {:status  400
               :headers {"content-type" "text/plain"}
@@ -281,3 +312,38 @@
      (let [blob-attributes (filterv ::store all-attributes)]
        (into [upload-file]
          (map blob-resolvers blob-attributes)))))
+
+#?(:clj
+   (defmacro defblobattr
+     "Use this to create a Blob SHA (string) attribute that will track a file upload:
+
+     ```
+     (defblobattr sha :file/sha :remote-file-store :remote
+       {... normal attribute map ...})
+     ```
+
+     The `remote-file-store` is the name of the store that the file will be stored in, and the `fulcro-http-remote` is the Fulcro
+     client HTTP remote to use for the file transfer (which must be configured with the proper upload middleware on the
+     client and server).
+     "
+     [sym k remote-store-name fulcro-http-remote attribute-map]
+     (let [url-key      (url-key k)
+           progress-key (progress-key k)
+           status-key   (status-key k)]
+       `(def ~sym (-> (assoc (attr/new-attribute ~k :string ~attribute-map)
+                        :com.fulcrologic.rad.form/field-style ::file-upload
+                        ::remote ~fulcro-http-remote
+                        ::store ~remote-store-name)
+                    (update :com.fulcrologic.rad.form/query-inclusion (fnil conj [])
+                      ~url-key ~progress-key ~status-key))))))
+
+(defn evt->js-files
+  "Convert a file input change event into a sequence of the js File objects."
+  [evt]
+  #?(:cljs
+     (let [js-file-list (.. evt -target -files)]
+       (map (fn [file-idx]
+              (let [js-file (.item js-file-list file-idx)
+                    name    (.-name js-file)]
+                js-file))
+         (range (.-length js-file-list))))))

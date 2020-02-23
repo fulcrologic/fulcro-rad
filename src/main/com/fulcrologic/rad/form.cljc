@@ -19,7 +19,6 @@
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.blob :as blob]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
@@ -47,6 +46,39 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(comment
+  ;;potential refactoring for subform stuff
+  (defn subform
+    "Marks an attribute as a subform.
+
+     * `attribute`: The base attribute (must be a ref) that describes the relation to the subform data.
+     * `ui`: The component that acts as the subform
+     * `settings-overrides`: a map of k/v pairs that will be used as overrides/options for the rendering of the subform.
+     "
+    ([attribute ui]
+     (merge attribute {::ui ui}))
+    ([attribute ui setting-overrides]
+     (merge attribute {::ui ui} setting-overrides)))
+
+  (>defn in-place-subform
+    "Creates a virtual \"edge\" in the form graph where the query stays in the same context (of the current form) but
+     joins to a sub-form. Allows for more complex layout control. The `ui` must have the same `::form/id` as the
+     form in which this is used.
+
+     * `virtual-edge-name`: A simple keyword to use as the virtual edge name. Must be unique within the attributes
+      listed in this form.
+     * `ui`: The component that acts as the subform
+     * `settings-overrides`: a map of k/v pairs that will be used as overrides/options for the rendering of the subform.
+     "
+    ([virtual-edge-name ui]
+     [simple-keyword? comp/component-class? => ::attr/attribute]
+     (in-place-subform virtual-edge-name ui {}))
+    ([virtual-edge-name ui setting-overrides]
+     [simple-keyword? comp/component-class? map? => ::attr/attribute]
+     (merge {::attr/qualified-key (keyword ">" (name virtual-edge-name))
+             ::attr/type          :ref
+             ::ui                 ui} setting-overrides))))
 
 (defn master-form
   "Return the master form for the given component instance."
@@ -120,7 +152,6 @@
                              [id-key
                               :ui/confirmation-message
                               [::uism/asm-id '_]
-                              {::blob/blobs (comp/get-query blob/Blob)}
                               fs/form-config-join]
                              (map ::attr/qualified-key)
                              scalars)
@@ -179,23 +210,25 @@
   (required! location options ::attributes vector?)
   (required! location options ::id attr/attribute?)
   (let [{::keys [id attributes route-prefix query-inclusion]} options
-        id-key       (::attr/qualified-key id)
-        form-field?  (fn [{::attr/keys [identity?]}] (not identity?))
-        base-options (merge
-                       {::validator (attr/make-attribute-validator attributes)}
-                       options
-                       (cond->
-                         {:ident       (fn [_ props] [id-key (get props id-key)])
-                          :form-fields (into #{::blob/blobs}
-                                         (comp
-                                           (filter form-field?)
-                                           (map ::attr/qualified-key))
-                                         attributes)}
-                         route-prefix (merge {:route-segment [route-prefix :action :id]
-                                              :will-leave    form-will-leave
-                                              :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
-        query        (cond-> (form-options->form-query base-options)
-                       (vector? query-inclusion) (into query-inclusion))]
+        id-key                     (::attr/qualified-key id)
+        form-field?                (fn [{::attr/keys [identity?]}] (not identity?))
+        attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
+        base-options               (merge
+                                     {::validator (attr/make-attribute-validator attributes)}
+                                     options
+                                     (cond->
+                                       {:ident       (fn [_ props] [id-key (get props id-key)])
+                                        :form-fields (into #{}
+                                                       (comp
+                                                         (filter form-field?)
+                                                         (map ::attr/qualified-key))
+                                                       attributes)}
+                                       route-prefix (merge {:route-segment [route-prefix :action :id]
+                                                            :will-leave    form-will-leave
+                                                            :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
+        inclusions                 (set/union attribute-query-inclusions (set query-inclusion))
+        query                      (cond-> (form-options->form-query base-options)
+                                     (seq inclusions) (into inclusions))]
     (when (and #?(:cljs goog.DEBUG :clj true) (not (string? route-prefix)))
       (log/info "NOTE: " location " does not have a route prefix and will only be usable as a sub-form."))
     (assoc base-options :query (fn [_] query))))
@@ -795,7 +828,7 @@
                                                                        {:ref (comp/get-ident this)})}))))
 
 (defsc ToOneEntityPicker [this _ {::keys      [env]
-                                      ::attr/keys [attribute]}]
+                                  ::attr/keys [attribute]}]
   {:query             [:picker/id
                        :ui/options
                        :ui/query-result]
@@ -880,3 +913,4 @@
         ::delete-middleware delete-middleware))))
 
 #?(:clj (def resolvers [save-form delete-entity]))
+
