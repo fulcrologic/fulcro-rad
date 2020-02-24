@@ -89,6 +89,7 @@
                       (let [{::uism/keys [event-data]} env
                             run-on-mount? (report-options env ::run-on-mount?)]
                         (-> env
+                          (uism/store :route-params (:route-params event-data))
                           (initialize-parameters)
                           (cond-> run-on-mount? (load-report!))
                           (uism/activate :state/gathering-parameters))))}
@@ -132,7 +133,8 @@
   (let [report-ident (comp/get-ident report-class {})]
     (dr/route-deferred report-ident
       (fn []
-        (uism/begin! app report-machine report-ident {:actor/report report-class})
+        (uism/begin! app report-machine report-ident {:route-params route-params
+                                                      :actor/report report-class})
         (comp/transact! app [(dr/target-ready {:target report-ident})])))))
 
 (defn report-will-leave [_ _] true)
@@ -164,7 +166,7 @@
            query    (into [{source-attribute subquery} [df/marker-table '(quote _)]]
                       (keys parameters))
            options  (assoc options
-                      :route-segment [route]
+                      :route-segment (if (vector? route) route [route])
                       :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
                       :will-leave `report-will-leave
                       :query query
@@ -174,8 +176,6 @@
                       [`(render-layout ~this-sym)])]
        (req! sym options ::BodyItem)
        (req! sym options ::source-attribute keyword?)
-       (req! sym options ::route string?)
-       (opt! sym options ::parameters (fn [p] (and (map? p) (every? keyword? (keys p)))))
        `(comp/defsc ~sym ~arglist ~options ~@body))))
 
 (def reload!

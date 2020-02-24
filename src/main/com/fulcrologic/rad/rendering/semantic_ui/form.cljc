@@ -2,38 +2,61 @@
   (:require
     [clojure.string :as str]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
+    [com.fulcrologic.rad.ui-validation :as validation]
     [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.blob :as blob]
     [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.fulcro-i18n.i18n :as i18n :refer [tr]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
     [com.fulcrologic.fulcro.mutations :as m]
-    #?(:cljs
-       [com.fulcrologic.fulcro.dom :refer [div h3 label button i span]]
-       :clj
-       [com.fulcrologic.fulcro.dom-server :refer [div h3 label button i span]])
+    #?(:cljs [com.fulcrologic.fulcro.dom :as dom :refer [div h3 button i span]]
+       :clj  [com.fulcrologic.fulcro.dom-server :as dom :refer [div h3 button i span]])
     [com.fulcrologic.fulcro.dom.html-entities :as ent]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
+    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
+    [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 (defn render-to-many [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
   (let [{:semantic-ui/keys [add-position]
-         ::form/keys       [ui can-delete-row? can-add-row? sort-children]} (get subforms k)
+         ::form/keys       [ui title can-delete? can-add? added-via-upload? sort-children]} (get subforms k)
         parent      (comp/props form-instance)
-        can-delete? (fn [item] (can-delete-row? parent item))
+        can-delete? (fn [item] (?! can-delete? parent item))
         items       (-> form-instance comp/props k
                       (cond->
                         sort-children sort-children))
-        title       (or (some-> ui (comp/component-options ::form/title)) "")
-        add         (when (and can-add-row? (can-add-row? parent))
-                      (button :.ui.tiny.icon.button
-                        {:onClick (fn [_]
-                                    (form/add-child! (assoc env
-                                                       ::form/parent-relation k
-                                                       ::form/parent form-instance
-                                                       ::form/child-class ui)))}
-                        (i :.plus.icon)))
+        title       (or
+                      title
+                      (some-> ui (comp/component-options ::form/title)) "")
+        add         (when (or (nil? can-add?) (?! can-add? parent))
+                      (if (?! added-via-upload? env)
+                        (dom/input {:type     "file"
+                                    :onChange (fn [evt]
+                                                (log/info "UPLOAD FILE!!!")
+                                                (let [new-id     (tempid/tempid)
+                                                      js-file    (-> evt blob/evt->js-files first)
+                                                      attributes (comp/component-options ui ::form/attributes)
+                                                      id-attr    (comp/component-options ui ::form/id)
+                                                      id-key     (::attr/qualified-key id-attr)
+                                                      {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
+                                                                                                          attributes))
+                                                      target     (conj (comp/get-ident form-instance) k)
+                                                      new-entity (fs/add-form-config ui
+                                                                   {id-key        new-id
+                                                                    qualified-key ""})]
+                                                  (merge/merge-component! form-instance ui new-entity :append target)
+                                                  (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})
+                        (button :.ui.tiny.icon.button
+                          {:onClick (fn [_]
+                                      (form/add-child! (assoc env
+                                                         ::form/parent-relation k
+                                                         ::form/parent form-instance
+                                                         ::form/child-class ui)))}
+                          (i :.plus.icon))))
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
       (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
@@ -44,34 +67,34 @@
               env
               {::form/parent          form-instance
                ::form/parent-relation k
-               ::form/can-delete?     (if can-delete-row? can-delete? false)})))
+               ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
         items)
       (when (= :bottom add-position) add))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
-  (let [{::form/keys [ui can-delete-row? pick-one label] :as subform-options} (get subforms k)
+  (let [{::form/keys [ui can-delete? title pick-one label] :as subform-options} (get subforms k)
         picker?    (boolean pick-one)
         parent     (comp/props form-instance)
         form-props (comp/props form-instance)
         props      (get form-props k)
-        title      (or (some-> ui (comp/component-options ::form/title)) "")
+        title      (or title (some-> ui (comp/component-options ::form/title)) "")
         ui-factory (comp/computed-factory ui)
         std-props  {::form/nested?         true
                     ::form/parent          form-instance
                     ::form/parent-relation k
-                    ::form/can-delete?     (if can-delete-row?
-                                             (partial can-delete-row? parent)
+                    ::form/can-delete?     (if can-delete?
+                                             (partial can-delete? parent)
                                              false)}]
     (cond
       picker?
       (let [selected-option props
             picker-key      (form/picker-join-key k)
             picker-props    (get form-props picker-key)]
-        (div :.field {:key (str k)}
-          (label (str (or label (some-> k name str/capitalize))))
-          (ui-factory picker-props
-            (merge std-props subform-options {:currently-selected-value selected-option
-                                              :onSelect                 (fn [v] (form/input-changed! env k v))}))))
+        (ui-factory picker-props
+          (merge env std-props subform-options {::form/env                env
+                                                ::attr/attribute          attr
+                                                :currently-selected-value selected-option
+                                                :onSelect                 (fn [v] (form/input-changed! env k v))})))
 
       props
       (div {:key (str k)}
@@ -86,15 +109,87 @@
                                                     ::form/parent form-instance
                                                     ::form/child-class ui)))} "Create")))))
 
-(defn render-ref [env {::attr/keys [cardinality] :as attr} options]
+(defn standard-ref-container [env {::attr/keys [cardinality] :as attr} options]
   (if (= :many cardinality)
     (render-to-many env attr options)
     (render-to-one env attr options)))
 
+(defn render-single-file [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
+  (let [{::form/keys [ui can-delete? title pick-one label] :as subform-options} (get subforms k)
+        parent     (comp/props form-instance)
+        form-props (comp/props form-instance)
+        props      (get form-props k)
+        ui-factory (comp/computed-factory ui)
+        label      (form/field-label env attr)
+        std-props  {::form/nested?         true
+                    ::form/parent          form-instance
+                    ::form/parent-relation k
+                    ::form/can-delete?     (if can-delete?
+                                             (partial can-delete? parent)
+                                             false)}]
+    (if props
+      (div :.field {:key (str k)}
+        (dom/label label)
+        (ui-factory props (merge env std-props)))
+      (div {:key (str k)}
+        (div "Upload??? (TODO)")))))
+
+(defn render-many-files [{::form/keys [form-instance] :as env}
+                         {k ::attr/qualified-key :as attr}
+                         {::form/keys [subforms] :as options}]
+  (let [{:semantic-ui/keys [add-position]
+         ::form/keys       [ui title can-delete? can-add? sort-children]} (get subforms k)
+        parent      (comp/props form-instance)
+        can-delete? (fn [item] (?! can-delete? parent item))
+        items       (-> form-instance comp/props k
+                      (cond->
+                        sort-children sort-children))
+        title       (or
+                      title
+                      (some-> ui (comp/component-options ::form/title)) "")
+        add         (when (or (nil? can-add?) (?! can-add? parent))
+                      (dom/input {:type     "file"
+                                  :onChange (fn [evt]
+                                              (let [new-id     (tempid/tempid)
+                                                    js-file    (-> evt blob/evt->js-files first)
+                                                    attributes (comp/component-options ui ::form/attributes)
+                                                    id-attr    (comp/component-options ui ::form/id)
+                                                    id-key     (::attr/qualified-key id-attr)
+                                                    {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
+                                                                                                        attributes))
+                                                    target     (conj (comp/get-ident form-instance) k)
+                                                    new-entity (fs/add-form-config ui
+                                                                 {id-key        new-id
+                                                                  qualified-key ""})]
+                                                (merge/merge-component! form-instance ui new-entity :append target)
+                                                (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))}))
+        ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
+    (div :.ui.basic.segment {:key (str k)}
+      (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
+      (div :.ui.grid
+        (mapv
+          (fn [props]
+            (div :.four.wide.column
+              (ui-factory props
+                (merge
+                  env
+                  {::form/parent          form-instance
+                   ::form/parent-relation k
+                   ::form/can-delete?     (if can-delete? (?! can-delete?) false)}))))
+          items))
+      (when (= :bottom add-position) add))))
+
+(defn file-ref-container
+  [env {::attr/keys [cardinality] :as attr} options]
+  (if (= :many cardinality)
+    (render-many-files env attr options)
+    (render-single-file env attr options)))
+
 (defn render-attribute [env attr {::form/keys [subforms] :as options}]
   (let [{k ::attr/qualified-key} attr]
     (if (contains? subforms k)
-      (render-ref env attr options)
+      (let [render-ref (or (form/ref-container-renderer env attr) standard-ref-container)]
+        (render-ref env attr options))
       (form/render-field env attr))))
 
 (def n-fields-string {1 "one field"
@@ -126,13 +221,30 @@
             row)))
       layout)))
 
-(defn ui-render-layout [{::form/keys [props computed-props form-instance master-form] :as env}]
+(defn ui-render-entity-picker [{::form/keys [picker-instance] :as env} attribute]
+  (let [k        (::attr/qualified-key attribute)
+        {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed picker-instance)
+        {:ui/keys [options]} (comp/props picker-instance)
+        invalid? (validation/invalid-attribute-value? env attribute)
+        {::form/keys [field-label]} attribute]
+    (div :.ui.field {:key (str k) :classes [(when invalid? "error")]}
+      (dom/label (str (or field-label (some-> k name str/capitalize))
+                   (when invalid? " (Required)")))
+      (ui-wrapped-dropdown (cond->
+                             {:onChange (fn [v] (onSelect v))
+                              :value    currently-selected-value
+                              :options  options}
+                             onSearchChange (assoc :onSearchChange onSearchChange))))))
+
+(declare standard-form-layout-renderer)
+
+(defn standard-form-container [{::form/keys [props computed-props form-instance master-form] :as env}]
   (let [{::form/keys [can-delete?]} computed-props
-        nested?  (not= master-form form-instance)
-        {::form/keys [attributes layout] :as options} (comp/component-options form-instance)
-        valid?   (form/valid? env)
-        invalid? (form/invalid? env)
-        dirty?   (or (:ui/new? props) (fs/dirty? props))]
+        nested?       (not= master-form form-instance)
+        valid?        (form/valid? env)
+        invalid?      (form/invalid? env)
+        dirty?        (or (:ui/new? props) (fs/dirty? props))
+        render-fields (or (form/form-layout-renderer env) standard-form-layout-renderer)]
     (when #?(:cljs goog.DEBUG :clj true)
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
       (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
@@ -140,15 +252,11 @@
       (div :.ui.form {:classes [(when invalid? "error")]}
         (div :.ui.segment
           (when can-delete?
-            (button :.ui.icon.primary.right.floated.button {:disabled (not (can-delete? props))
+            (button :.ui.icon.primary.right.floated.button {:disabled (not (?! can-delete? props))
                                                             :onClick  (fn []
                                                                         (form/delete-child! env))}
               (i :.times.icon)))
-          (if layout
-            (render-layout env options)
-            (mapv
-              (fn [attr] (render-attribute env attr options))
-              attributes))))
+          (render-fields env)))
       (div :.ui.container
         (div :.ui.form {:classes [(when invalid? "error")]}
           (div :.ui.top.menu
@@ -165,25 +273,31 @@
                                                     :onClick  (fn [] (form/save! env))} (tr "Save")))))
           (div :.ui.error.message (tr "The form has errors and cannot be saved."))
           (div :.ui.attached.segment
-            (if layout
-              (render-layout env (merge options computed-props {::form/nested? true}))
-              (mapv
-                (fn [attr] (render-attribute env attr options))
-                attributes))))))))
+            (render-fields env)))))))
 
-(defn layout-renderer [env]
-  (ui-render-layout env))
+(defn standard-form-layout-renderer [{::form/keys [form-instance] :as env}]
+  (let [{::form/keys [attributes layout] :as options} (comp/component-options form-instance)]
+    (if layout
+      (render-layout env options)
+      (mapv
+        (fn [attr] (render-attribute env attr options))
+        attributes))))
 
+(defn- file-icon-renderer* [{::form/keys [form-instance] :as env}]
+  (let [{::form/keys [attributes] :as options} (comp/component-options form-instance)
+        sha-key  (::attr/qualified-key (first (filter ::blob/store attributes)))
+        file-key (blob/filename-key sha-key)
+        url-key  (blob/url-key sha-key)
+        props    (comp/props form-instance)
+        filename (get props file-key "File")
+        url      (get props url-key)]
+    (dom/a {:target  "_blank"
+            :href    (str url "?filename=" filename)
+            :onClick (fn [evt]
+                       (when-not (js/confirm "View/download?")
+                         (evt/stop-propagation! evt)
+                         (evt/prevent-default! evt)))}
+      (dom/i :.large.file.icon)
+      filename)))
 
-(defn ui-render-entity-picker [{::form/keys [form-instance] :as env} attribute]
-  (let [k (::attr/qualified-key attribute)
-        {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed form-instance)
-        {:ui/keys [options]} (comp/props form-instance)
-        {::form/keys [field-label]} attribute]
-    (div :.ui.field {:key (str k)}
-      (label (or field-label (some-> k name str/capitalize)))
-      (ui-wrapped-dropdown (cond->
-                             {:onChange (fn [v] (onSelect v))
-                              :value    currently-selected-value
-                              :options  options}
-                             onSearchChange (assoc :onSearchChange onSearchChange))))))
+(defn file-icon-renderer [env] (file-icon-renderer* env))

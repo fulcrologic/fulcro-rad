@@ -75,7 +75,7 @@
 
 (specification "New entity initial state" :focus
   (component "simple entity"
-    (let [id 1
+    (let [id (tempid/tempid)
           v  (form/default-state AddressForm id)]
       (assertions
         "Includes the new ID as the ID of the entity"
@@ -83,7 +83,7 @@
         "Adds any default fields to the entity"
         (get v :address/street) => default-street)))
   (component "nested entity"
-    (let [id 1
+    (let [id (tempid/tempid)
           v  (form/default-state AccountForm id)]
       (assertions
         "Includes the new ID as the ID of the entity"

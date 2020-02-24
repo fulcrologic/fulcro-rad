@@ -22,11 +22,12 @@
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
+    [com.wsscode.pathom.core :as p]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
     #?(:cljs [goog.object])
-    [com.fulcrologic.rad.options-util :refer [?!]]
+    [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
 
 (def create-action "create")
@@ -45,6 +46,80 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn render-fn
+  "Find the correct UI renderer for the given form layout `element`.
+
+   `element` must be one of :
+
+   ```
+   #{:form-container :form-body-container}
+   ```
+  "
+  [{::keys [form-instance] :as form-env} element]
+  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
+        style-path   [::layout-styles element]
+        layout-style (or (some-> form-instance comp/component-options (get-in style-path)) :default)
+        render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
+                       (get element) (get layout-style))]
+    render-fn))
+
+(defn form-container-renderer
+  "The top-level container for the entire on-screen form"
+  [form-env] (render-fn form-env :form-container))
+(defn form-layout-renderer
+  "The container for the form fields. Used to wrap the main set of fields, and as the container for
+   fields in nested forms. This renderer can determine layout of the fields themselves."
+  [form-env] (render-fn form-env :form-body-container))
+(defn ref-container-renderer
+  "Renderer that wraps and lays out elements of refs"
+  [{::keys [form-instance] :as form-env} {::attr/keys [qualified-key] :as attr}]
+  (let [{::keys [subforms] :as options} (comp/component-options form-instance)
+        {::keys [ui layout-styles]} (get subforms qualified-key)
+        {target-styles ::layout-styles} (comp/component-options ui)
+        {::app/keys [runtime-atom]} (comp/any->app form-instance)
+        element      :ref-container
+        layout-style (or
+                       (get layout-styles element)
+                       (get target-styles element)
+                       :default)
+        render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
+                       (get-in [element layout-style]))]
+    render-fn))
+
+
+(comment
+  ;;potential refactoring for subform stuff
+  (defn subform
+    "Marks an attribute as a subform.
+
+     * `attribute`: The base attribute (must be a ref) that describes the relation to the subform data.
+     * `ui`: The component that acts as the subform
+     * `settings-overrides`: a map of k/v pairs that will be used as overrides/options for the rendering of the subform.
+     "
+    ([attribute ui]
+     (merge attribute {::ui ui}))
+    ([attribute ui setting-overrides]
+     (merge attribute {::ui ui} setting-overrides)))
+
+  (>defn in-place-subform
+    "Creates a virtual \"edge\" in the form graph where the query stays in the same context (of the current form) but
+     joins to a sub-form. Allows for more complex layout control. The `ui` must have the same `::form/id` as the
+     form in which this is used.
+
+     * `virtual-edge-name`: A simple keyword to use as the virtual edge name. Must be unique within the attributes
+      listed in this form.
+     * `ui`: The component that acts as the subform
+     * `settings-overrides`: a map of k/v pairs that will be used as overrides/options for the rendering of the subform.
+     "
+    ([virtual-edge-name ui]
+     [simple-keyword? comp/component-class? => ::attr/attribute]
+     (in-place-subform virtual-edge-name ui {}))
+    ([virtual-edge-name ui setting-overrides]
+     [simple-keyword? comp/component-class? map? => ::attr/attribute]
+     (merge {::attr/qualified-key (keyword ">" (name virtual-edge-name))
+             ::attr/type          :ref
+             ::ui                 ui} setting-overrides))))
 
 (defn master-form
   "Return the master form for the given component instance."
@@ -86,13 +161,12 @@
        ::computed-props cprops})))
 
 (defn render-layout [form-instance props]
-  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        layout-style (or (some-> form-instance comp/component-options ::layout-style) :default)
-        layout       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
-    (if layout
-      (layout (rendering-env form-instance props))
+  (let [env    (rendering-env form-instance props)
+        render (form-container-renderer env)]
+    (if render
+      (render env)
       (do
-        (log/error "No layout function found for form layout style" layout-style)
+        (log/error "No container layout rendering defined. Cannot render form " (comp/component-name form-instance))
         nil))))
 
 #?(:clj
@@ -115,7 +189,10 @@
         id-key             (::attr/qualified-key id-attr)
         {refs true scalars false} (group-by #(= :ref (::attr/type %)) attr)
         query-with-scalars (into
-                             [id-key :ui/new? :ui/confirmation-message [::uism/asm-id '_] fs/form-config-join]
+                             [id-key
+                              :ui/confirmation-message
+                              [::uism/asm-id '_]
+                              fs/form-config-join]
                              (map ::attr/qualified-key)
                              scalars)
         subforms           (::subforms form-options)
@@ -173,22 +250,25 @@
   (required! location options ::attributes vector?)
   (required! location options ::id attr/attribute?)
   (let [{::keys [id attributes route-prefix query-inclusion]} options
-        id-key       (::attr/qualified-key id)
-        form-field?  (fn [{::attr/keys [identity?]}] (not identity?))
-        base-options (merge
-                       {::validator (attr/make-attribute-validator attributes)}
-                       options
-                       (cond->
-                         {:ident       (fn [_ props] [id-key (get props id-key)])
-                          :form-fields (->> attributes
-                                         (filter form-field?)
-                                         (map ::attr/qualified-key)
-                                         (into #{}))}
-                         route-prefix (merge {:route-segment [route-prefix :action :id]
-                                              :will-leave    form-will-leave
-                                              :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
-        query        (cond-> (form-options->form-query base-options)
-                       (vector? query-inclusion) (into query-inclusion))]
+        id-key                     (::attr/qualified-key id)
+        form-field?                (fn [{::attr/keys [identity?]}] (not identity?))
+        attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
+        base-options               (merge
+                                     {::validator (attr/make-attribute-validator attributes)}
+                                     options
+                                     (cond->
+                                       {:ident       (fn [_ props] [id-key (get props id-key)])
+                                        :form-fields (into #{}
+                                                       (comp
+                                                         (filter form-field?)
+                                                         (map ::attr/qualified-key))
+                                                       attributes)}
+                                       route-prefix (merge {:route-segment [route-prefix :action :id]
+                                                            :will-leave    form-will-leave
+                                                            :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
+        inclusions                 (set/union attribute-query-inclusions (set query-inclusion))
+        query                      (cond-> (form-options->form-query base-options)
+                                     (seq inclusions) (into inclusions))]
     (when (and #?(:cljs goog.DEBUG :clj true) (not (string? route-prefix)))
       (log/info "NOTE: " location " does not have a route prefix and will only be usable as a sub-form."))
     (assoc base-options :query (fn [_] query))))
@@ -242,25 +322,21 @@
 ;; LOGIC
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; do-saves! params/env => return value
+;; -> params/env -> middleware-in -> do-saves -> middleware-out
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::master-pk ::diff ::delta}}
      (log/debug "Save invoked from client with " params)
      (let [save-middleware (::save-middleware env)
-           params          (if save-middleware (save-middleware env params) params)
+           save-env        {::pathom-env env ::params params}
+           result          (if save-middleware
+                             (save-middleware save-env)
+                             (throw (ex-info "form/pathom-plugin is not installed on the parser." {})))
            {::keys [master-pk delta]} params
            idents          (keys delta)
            pk              (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
-       (if-let [save-handlers (seq (::save-handlers env))]
-         (reduce
-           (fn [result handler]
-             (update result :tempids merge (handler env params)))
-           {master-pk pk
-            :tempids  {}}
-           save-handlers)
-         (do
-           (log/error "No save handlers are in the parser env.")
-           {master-pk pk}))))
+       (merge result {master-pk pk})))
    :cljs
    (m/defmutation save-form [_]
      (action [_] :noop)))
@@ -292,7 +368,7 @@
 (defn- default-to-many [FormClass attribute]
   (let [{::keys [subforms default]} (comp/component-options FormClass)
         {::attr/keys [qualified-key default-value]} attribute
-        default-value (get default qualified-key default-value)]
+        default-value (?! (get default qualified-key default-value))]
     (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])
                  id-key   (some-> SubClass comp/component-options ::id ::attr/qualified-key)]
       (do
@@ -302,21 +378,20 @@
         (when-not (keyword? id-key)
           (log/error "Subform class" (comp/component-name SubClass)
             "must include a ::form/id that is an attr/attribute"))
-        (cond (or (nil? default-value) (vector? default-value))
-              (mapv (fn [v]
-                      (let [id (tempid/tempid)]
-                        (merge
-                          (default-state SubClass id)
-                          (?! v)
-                          {id-key id})))
-                default-value)
-              (fn? default-value) (default-value)
-              :else (do
-                      (log/error "Default value for" qualified-key "MUST be a vector.")
-                      [])))
+        (if (or (nil? default-value) (vector? default-value))
+          (mapv (fn [v]
+                  (let [id (tempid/tempid)]
+                    (merge
+                      (default-state SubClass id)
+                      (?! v)
+                      {id-key id})))
+            default-value)
+          (do
+            (log/error "Default value for" qualified-key "MUST be a vector.")
+            nil)))
       (do
         (log/error "Subform not declared (or is missing ::form/id) for" qualified-key "on" (comp/component-name FormClass))
-        []))))
+        nil))))
 
 (defn- default-to-one [FormClass attribute]
   (let [{::keys [subforms default]} (comp/component-options FormClass)
@@ -329,13 +404,13 @@
     (when-not SubClass
       (log/error "Subforms for class" (comp/component-name FormClass)
         "must include a ::form/ui entry for" qualified-key))
-    (when-not (keyword? id-key)
+    (when-not (or picker? (keyword? id-key))
       (log/error "Subform class" (comp/component-name SubClass)
         "must include a ::form/id that is an attr/attribute"))
     (cond
+      ;; to-one picker can start out pointing at nothing
       (and SubClass picker?)
       nil
-      #_(comp/get-initial-state SubClass {:id (new-uuid)})
 
       picker?
       (do
@@ -400,7 +475,10 @@
 
 (defn mark-filled-fields-complete* [state-map {:keys [entity-ident initialized-keys]}]
   (let [mark-complete* (fn [entity {::fs/keys [fields complete?] :as form-config}]
-                         (let [to-mark (set/union (set complete?) (set/intersection (set fields) (set initialized-keys)))]
+                         (let [to-mark (set/union (set complete?) (set/intersection (set fields) (set initialized-keys)))
+                               to-mark (into #{}
+                                         (filter (fn [k] (not (nil? (get entity k)))))
+                                         to-mark)]
                            [entity (assoc form-config ::fs/complete? to-mark)]))]
     (fs/update-forms state-map mark-complete* entity-ident)))
 
@@ -624,8 +702,9 @@
                                     (merge params
                                       {::uism/error-event :event/save-failed
                                        ::master-pk        master-pk
-                                       ;; TODO: Make return optional?
-                                       ;::m/returning      form-class
+                                       ;; FIXME: This would be nice, but it breaks the form at the moment because the
+                                       ;; merge removes the form config.
+                                       ;;::m/returning      form-class
                                        ::uism/ok-event    :event/saved}))
                                   (uism/activate :state/saving)))
                               (-> env
@@ -686,11 +765,13 @@
   "Route to the given form for editing the entity with the given ID."
   ([this form-class entity-id]
    (dr/change-route this (dr/path-to form-class {:action edit-action
-                                                 :id     entity-id})))
+                                                 :id     entity-id})
+     {:deferred-timeout 16}))
   ([this form-class entity-id {:keys [router]}]
    (if router
      (dr/change-route-relative this router (dr/path-to form-class {:action edit-action
-                                                                   :id     entity-id}))
+                                                                   :id     entity-id}
+                                             {:deferred-timeout 16}))
      (edit! this form-class entity-id))))
 
 (defn create!
@@ -711,15 +792,13 @@
                                :id     (str (new-uuid))}))
      (create! app-ish form-class))))
 
-;; TASK: Probably should move the server implementations to a diff ns, so that this is all consistent with
-;; running UI headless (or SSR) on back-end.
 #?(:clj
    (pc/defmutation delete-entity [env params]
      {}
-     (let [ident (first params)]
-       (if-let [delete-handlers (seq (::delete-handlers env))]
-         (doseq [handler delete-handlers] (handler env ident))
-         (log/error "No delete handlers are in the parser env."))))
+     (if-let [delete-middleware (::delete-middleware env)]
+       (let [delete-env {::pathom-env env ::params params}]
+         (delete-middleware delete-env))
+       (throw (ex-info "form/pathom-plugin in not installed on Pathom parser." {}))))
    :cljs
    (m/defmutation delete-entity [params]
      (ok-action [{:keys [state]}]
@@ -788,7 +867,8 @@
                                                :post-mutation-params (merge picker-options
                                                                        {:ref (comp/get-ident this)})}))))
 
-(defsc ToOneEntityPicker [this _]
+(defsc ToOneEntityPicker [this _ {::keys      [env]
+                                  ::attr/keys [attribute]}]
   {:query             [:picker/id
                        :ui/options
                        :ui/query-result]
@@ -800,7 +880,7 @@
         control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)
         control     (get-in control-map [:entity-picker :default])]
     (when control
-      (control {::form-instance this} {}))))
+      (control (assoc env ::picker-instance this) attribute))))
 
 (defn field-label
   "Returns a human readable label for a given attribute (which can be declared on the attribute, and overridden on the
@@ -860,4 +940,17 @@
         autocomplete (if (nil? override) autocomplete override)
         autocomplete (if (boolean? autocomplete) (if autocomplete "on" "off") autocomplete)]
     autocomplete))
+
+(defn pathom-plugin
+  "A pathom plugin that installs general form save/delete support on the pathom parser. Requires
+  save and delete middleware, which will accomplish the actual actions.  Calling RAD form save/delete
+  without this plugin and both bits of middleware will result in a runtime error."
+  [save-middleware delete-middleware]
+  (p/env-wrap-plugin
+    (fn [env]
+      (assoc env
+        ::save-middleware save-middleware
+        ::delete-middleware delete-middleware))))
+
+#?(:clj (def resolvers [save-form delete-entity]))
 

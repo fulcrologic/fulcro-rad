@@ -1748,12 +1748,32 @@ if you need the arbitrary precision data type for storage.
 
 == File Upload/Download
 
-NOTE: Not yet implemented. Fulcro has all of the necessary network-layer implementation, so it should not be much of
-a stretch to get this working.
+NOTE: Implementation in progress...
 
-RAD Forms can support file uploads, along with download/preview of previously-uploaded files. This support requires
-the configuration of a file store that can be used to save the file itself, along with proper configuration to
-associate a URL with the file's content so that the result can be seen later by RAD.
+RAD Forms can support file uploads, along with download/preview of previously-uploaded files.
+
+* Attribute(s) that represent the details you want to store in a database to track the file.
+* An attribute that represents the file itself and can be used to generate a URL of the file. EQL resolvers
+sends transit, so it is not possible to query for the file *content* via a Pathom resolver. Instead you must
+supply a resolver that can, given the current parsing context, resolve the URL of the file's content for download
+by the UI.
+
+File transfer support leverages Fulcro's normal file upload mechanisms for upload and the normal HTTP GET mechanisms for
+download. The file is sent as a separate upload mutation during form interaction, and upload progress blocks exiting
+the form until the upload is complete (the form field itself for the upload relies on correctly-installed
+validation for this to function).
+
+The file itself is stored on the server as a temporary file until such time as you save the form itself (though
+you can also configure the form to auto-save when upload is complete). When you save the form you must use
+the save middleware to move the temporary file to a permanent store of your choice and then augment the
+incoming form data to include the details about the file that will allow your file detail resolver to
+emit a proper URL for getting the file.
+
+=== Setup
+
+* Add the middleware to receive the HTTP posts of the temporary files.
+* Add the save middleware to handle post-processing of files on form save.
+
 
 = Reports
 

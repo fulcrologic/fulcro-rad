@@ -84,11 +84,18 @@
         r
         attributes))))
 
+(def predefined-attributes #{:com.fulcrologic.rad.blob/blobs
+                             :com.fulcrologic.rad.blob/id})
+
 (>defn key->attribute
   "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
   [k]
   [keyword? => (? ::attribute)]
-  (get @attribute-registry k))
+  (if (contains? predefined-attributes k)
+    {::internal?     true
+     ::qualified-key k
+     ::type          :internal}
+    (get @attribute-registry k)))
 
 (>defn to-many?
   "Returns true if the attribute with the given key is a to-many."

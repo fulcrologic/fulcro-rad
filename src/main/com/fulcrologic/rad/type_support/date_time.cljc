@@ -138,17 +138,17 @@
    [::local-date-time => inst?]
    (local-datetime->inst nil local-dt))
   ([zone-name local-dt]
-   [::zone-name ::local-date-time => inst?]
+   [(? ::zone-name) ::local-date-time => inst?]
    (let [z      (get-zone-id zone-name)
          zdt    (ldt/at-zone local-dt z)
          millis (instant/to-epoch-milli (zdt/to-instant zdt))]
      (new-date millis)))
   ([zone-name month day yyyy hh mm ss]
-   [::zone-name int? int? int? int? int? int? => inst?]
+   [(? ::zone-name) int? int? int? int? int? int? => inst?]
    (let [local-dt (ldt/of yyyy month day hh mm ss)]
      (local-datetime->inst zone-name local-dt)))
   ([zone-name month day yyyy hh mm]
-   [::zone-name int? int? int? int? int? => inst?]
+   [(? ::zone-name) int? int? int? int? int? => inst?]
    (local-datetime->inst zone-name month day yyyy hh mm 0)))
 
 (>defn inst->local-datetime
@@ -158,7 +158,7 @@
       :instant ::instant) => ::local-date-time]
    (inst->local-datetime nil inst))
   ([zone-name inst]
-   [::zone-name (s/or :inst inst?
+   [(? ::zone-name) (s/or :inst inst?
                   :instant ::instant) => ::local-date-time]
    (let [z   (get-zone-id zone-name)
          i   (instant/of-epoch-milli (inst-ms inst))
@@ -170,7 +170,7 @@
    [string? => inst?]
    (html-datetime-string->inst nil date-time-string))
   ([zone-name date-time-string]
-   [::zone-name string? => inst?]
+   [(? ::zone-name) string? => inst?]
    (let [z   (get-zone-id zone-name)
          dt  (ldt/parse date-time-string)
          zdt (ldt/at-zone dt z)
@@ -182,7 +182,7 @@
    [inst? => string?]
    (inst->html-datetime-string nil inst))
   ([zone-name inst]
-   [::zone-name inst? => string?]
+   [(? ::zone-name) inst? => string?]
    (let [z         (get-zone-id zone-name)
          ldt       (ldt/of-instant (inst->instant inst) z)
          formatter cljc.java-time.format.date-time-formatter/iso-local-date-time]
