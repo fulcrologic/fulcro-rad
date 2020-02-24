@@ -134,9 +134,10 @@
       (div {:key (str k)}
         (div "Upload??? (TODO)")))))
 
-(defn render-many-files [{::form/keys [form-instance] :as env}
-                         {k ::attr/qualified-key :as attr}
-                         {::form/keys [subforms] :as options}]
+(defsc ManyFiles [this {{::form/keys [form-instance] :as env} :env
+                        {k ::attr/qualified-key :as attr}     :attribute
+                        {::form/keys [subforms] :as options}  :options}]
+  {:initLocalState (fn [this] {:input-key (str (rand-int 1000000))})}
   (let [{:semantic-ui/keys [add-position]
          ::form/keys       [ui title can-delete? can-add? sort-children]} (get subforms k)
         parent      (comp/props form-instance)
@@ -154,6 +155,8 @@
                           (dom/i :.ui.plus.icon)
                           "Add File")
                         (dom/input {:type     "file"
+                                    ;; trick: changing the key on change clears the input, so a failed upload can be retried
+                                    :key      (comp/get-state this :input-key)
                                     :id       upload-id
                                     :style    {:zIndex  -1
                                                :width   "1px"
@@ -172,7 +175,8 @@
                                                                    {id-key        new-id
                                                                     qualified-key ""})]
                                                   (merge/merge-component! form-instance ui new-entity :append target)
-                                                  (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})))
+                                                  (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})
+                                                  (comp/set-state! this {:input-key (str (rand-int 1000000))})))})))
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
       (dom/h2 :.ui.header title)
@@ -189,10 +193,12 @@
           items))
       (when (= :bottom add-position) add))))
 
+(def ui-many-files (comp/factory ManyFiles {:keyfn :id}))
+
 (defn file-ref-container
   [env {::attr/keys [cardinality] :as attr} options]
   (if (= :many cardinality)
-    (render-many-files env attr options)
+    (ui-many-files {:env env :attribute attr :options options})
     (render-single-file env attr options)))
 
 (defn render-attribute [env attr {::form/keys [subforms] :as options}]
@@ -304,6 +310,7 @@
         props     (comp/props form-instance)
         filename  (get props file-key "File")
         dirty?    (fs/dirty? props sha-key)
+        failed?   (blob/failed-upload? props sha-key)
         invalid?  (validation/invalid-attribute-value? env attribute)
         pct       (blob/upload-percentage props sha-key)
         sha       (get props sha-key)
@@ -320,8 +327,8 @@
         (div :.middle.aligned.content
           filename)
         (dom/button :.ui.red.icon.button {:onClick (fn []
-                                                          (app/abort! form-instance sha)
-                                                          (form/delete-child! env))}
+                                                     (app/abort! form-instance sha)
+                                                     (form/delete-child! env))}
           (dom/i :.times.icon)))
 
       ((if dirty? dom/span dom/a) :.item
@@ -333,14 +340,17 @@
                               (evt/stop-propagation! evt)
                               (evt/prevent-default! evt))))}
        (dom/div :.ui.tiny.image
-         (dom/i :.huge.file.icon))
+         (if failed?
+           (dom/i :.huge.skull.crossbones.icon)
+           (dom/i :.huge.file.icon)))
        (div :.middle.aligned.content
-         (str filename (when dirty? " (unsaved)")))
+         (str filename (cond failed? " (Upload failed. Delete and try again.)"
+                             dirty? " (unsaved)")))
        (dom/button :.ui.red.icon.button {:onClick (fn [evt]
-                                                         (evt/stop-propagation! evt)
-                                                         (evt/prevent-default! evt)
-                                                         (when #?(:clj true :cljs (js/confirm "Permanently Delete File?"))
-                                                           (form/delete-child! env)))}
+                                                    (evt/stop-propagation! evt)
+                                                    (evt/prevent-default! evt)
+                                                    (when #?(:clj true :cljs (js/confirm "Permanently Delete File?"))
+                                                      (form/delete-child! env)))}
          (dom/i :.times.icon))))))
 
 (defn file-icon-renderer [env] (file-icon-renderer* env))

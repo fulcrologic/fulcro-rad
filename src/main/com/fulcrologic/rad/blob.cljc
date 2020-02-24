@@ -365,6 +365,12 @@
         sha    (get form-props sha-key)]
     (and (= :uploading status) (seq sha))))
 
+(defn failed-upload?
+  "Returns true of the blob tracked by sha-key failed to upload."
+  [form-props sha-key]
+  (let [status (get form-props (status-key sha-key))]
+    (= :failed status)))
+
 (defn upload-percentage
   "Returns a string of the form \"n%\" which represents what percentage of the given blob identified by
   sha-key has made it to the server."
