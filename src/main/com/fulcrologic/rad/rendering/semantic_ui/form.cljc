@@ -294,9 +294,9 @@
     (dom/a {:target  "_blank"
             :href    (str url "?filename=" filename)
             :onClick (fn [evt]
-                       (when-not (js/confirm "View/download?")
-                         (evt/stop-propagation! evt)
-                         (evt/prevent-default! evt)))}
+                       #?(:cljs (when-not (js/confirm "View/download?")
+                                  (evt/stop-propagation! evt)
+                                  (evt/prevent-default! evt))))}
       (dom/i :.large.file.icon)
       filename)))
 
