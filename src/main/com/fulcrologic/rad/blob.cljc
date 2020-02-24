@@ -260,11 +260,11 @@
                             (fn [{::keys [permanent-stores]} input]
                               (let [sha        (get input qualified-key)
                                     file-store (get permanent-stores store)]
-                                (when-not sha
+                                (when-not (seq sha)
                                   (log/error "Could not file file URL. No sha." qualified-key))
                                 (when-not file-store
                                   (log/error "Attempt to retrieve a file URL, but there was no store in parsing env: " store))
-                                (when (and sha file-store)
+                                (when (and (seq sha) file-store)
                                   {url-key (storage/blob-url file-store sha)}))))
         sha-exists?       (fn [{::keys [permanent-stores]} input]
                             (let [sha        (get input qualified-key)
@@ -348,3 +348,24 @@
                     name    (.-name js-file)]
                 js-file))
          (range (.-length js-file-list))))))
+
+(defn blob-downloadable?
+  "Returns true if the blob tracked by `sha-key` in the given `form-props` is in a state that would allow for a download."
+  [form-props sha-key]
+  (let [status (get form-props (status-key sha-key))
+        sha    (get form-props sha-key)
+        url    (get form-props (url-key sha-key))]
+    (and (= :available status) (seq sha) (seq url))))
+
+(defn uploading?
+  "Returns true of the blob tracked by sha-key is actively being uploaded."
+  [form-props sha-key]
+  (let [status (get form-props (status-key sha-key))
+        sha    (get form-props sha-key)]
+    (and (= :uploading status) (seq sha))))
+
+(defn upload-percentage
+  "Returns a string of the form \"n%\" which represents what percentage of the given blob identified by
+  sha-key has made it to the server."
+  [props sha-key]
+  (str (get props (progress-key sha-key) 0) "%"))

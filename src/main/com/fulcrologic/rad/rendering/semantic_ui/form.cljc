@@ -166,16 +166,15 @@
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
       (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
-      (div :.ui.grid
+      (div :.ui.very.relaxed.items
         (mapv
           (fn [props]
-            (div :.four.wide.column
-              (ui-factory props
-                (merge
-                  env
-                  {::form/parent          form-instance
-                   ::form/parent-relation k
-                   ::form/can-delete?     (if can-delete? (?! can-delete?) false)}))))
+            (ui-factory props
+              (merge
+                env
+                {::form/parent          form-instance
+                 ::form/parent-relation k
+                 ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
           items))
       (when (= :bottom add-position) add))))
 
@@ -285,19 +284,38 @@
 
 (defn- file-icon-renderer* [{::form/keys [form-instance] :as env}]
   (let [{::form/keys [attributes] :as options} (comp/component-options form-instance)
-        sha-key  (::attr/qualified-key (first (filter ::blob/store attributes)))
-        file-key (blob/filename-key sha-key)
-        url-key  (blob/url-key sha-key)
-        props    (comp/props form-instance)
-        filename (get props file-key "File")
-        url      (get props url-key)]
-    (dom/a {:target  "_blank"
-            :href    (str url "?filename=" filename)
-            :onClick (fn [evt]
-                       #?(:cljs (when-not (js/confirm "View/download?")
-                                  (evt/stop-propagation! evt)
-                                  (evt/prevent-default! evt))))}
-      (dom/i :.large.file.icon)
-      filename)))
+        attribute (first (filter ::blob/store attributes))
+        sha-key   (::attr/qualified-key attribute)
+        file-key  (blob/filename-key sha-key)
+        url-key   (blob/url-key sha-key)
+        props     (comp/props form-instance)
+        filename  (get props file-key "File")
+        dirty?    (fs/dirty? props sha-key)
+        invalid?  (validation/invalid-attribute-value? env attribute)
+        pct       (blob/upload-percentage props sha-key)
+        url       (get props url-key)]
+    (if (blob/uploading? props sha-key)
+      (div :.item
+        (dom/div :.ui.tiny.image
+          (dom/i :.huge.file.icon)
+          (dom/div :.ui.bottom.attached.blue.progress {:data-percent pct}
+            (div :.bar {:style {:transitionDuration "300ms"
+                                :width              pct}}
+              (div :.progress ""))))
+        (div :.middle.aligned.content
+          filename))
+
+      ((if dirty? dom/span dom/a) :.item
+       {:target  "_blank"
+        :href    (str url "?filename=" filename)
+        :onClick (fn [evt]
+                   #?(:cljs (when-not (or (not (blob/blob-downloadable? props sha-key))
+                                        (js/confirm "View/download?"))
+                              (evt/stop-propagation! evt)
+                              (evt/prevent-default! evt))))}
+       (dom/div :.ui.tiny.image
+         (dom/i :.huge.file.icon))
+       (div :.middle.aligned.content
+         (str filename (when dirty? " (unsaved)")))))))
 
 (defn file-icon-renderer [env] (file-icon-renderer* env))
