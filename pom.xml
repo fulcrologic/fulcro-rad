@@ -4,7 +4,7 @@
   <groupId>com.fulcrologic</groupId>
   <artifactId>fulcro-rad</artifactId>
   <packaging>jar</packaging>
-  <version>0.0.1-alpha-5</version>
+  <version>0.0.1-alpha-6</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -72,9 +72,14 @@
       <version>2.2.30</version>
     </dependency>
     <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+      <version>1.14</version>
+    </dependency>
+    <dependency>
       <groupId>com.fulcrologic</groupId>
       <artifactId>guardrails</artifactId>
-      <version>0.0.11</version>
+      <version>0.0.12</version>
     </dependency>
     <dependency>
       <groupId>edn-query-language</groupId>
@@ -99,7 +104,7 @@
     <dependency>
       <groupId>com.fulcrologic</groupId>
       <artifactId>fulcro</artifactId>
-      <version>3.1.6</version>
+      <version>3.1.13</version>
     </dependency>
     <dependency>
       <groupId>cljc.java-time</groupId>
