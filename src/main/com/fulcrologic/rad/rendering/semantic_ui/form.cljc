@@ -147,22 +147,32 @@
         title       (or
                       title
                       (some-> ui (comp/component-options ::form/title)) "")
+        upload-id   (str k "-file-upload")
         add         (when (or (nil? can-add?) (?! can-add? parent))
-                      (dom/input {:type     "file"
-                                  :onChange (fn [evt]
-                                              (let [new-id     (tempid/tempid)
-                                                    js-file    (-> evt blob/evt->js-files first)
-                                                    attributes (comp/component-options ui ::form/attributes)
-                                                    id-attr    (comp/component-options ui ::form/id)
-                                                    id-key     (::attr/qualified-key id-attr)
-                                                    {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
-                                                                                                        attributes))
-                                                    target     (conj (comp/get-ident form-instance) k)
-                                                    new-entity (fs/add-form-config ui
-                                                                 {id-key        new-id
-                                                                  qualified-key ""})]
-                                                (merge/merge-component! form-instance ui new-entity :append target)
-                                                (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))}))
+                      (dom/div
+                        (dom/label :.ui.huge.green.right.floated.button {:htmlFor upload-id}
+                          (dom/i :.ui.plus.icon)
+                          "Add File")
+                        (dom/input {:type     "file"
+                                    :id       upload-id
+                                    :style    {:zIndex  -1
+                                               :width   "1px"
+                                               :height  "1px"
+                                               :opacity 0}
+                                    :onChange (fn [evt]
+                                                (let [new-id     (tempid/tempid)
+                                                      js-file    (-> evt blob/evt->js-files first)
+                                                      attributes (comp/component-options ui ::form/attributes)
+                                                      id-attr    (comp/component-options ui ::form/id)
+                                                      id-key     (::attr/qualified-key id-attr)
+                                                      {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
+                                                                                                          attributes))
+                                                      target     (conj (comp/get-ident form-instance) k)
+                                                      new-entity (fs/add-form-config ui
+                                                                   {id-key        new-id
+                                                                    qualified-key ""})]
+                                                  (merge/merge-component! form-instance ui new-entity :append target)
+                                                  (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})))
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
       (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
@@ -243,6 +253,7 @@
         valid?        (form/valid? env)
         invalid?      (form/invalid? env)
         dirty?        (or (:ui/new? props) (fs/dirty? props))
+        remote-busy?  (log/spy :info (seq (::app/active-remotes props)))
         render-fields (or (form/form-layout-renderer env) standard-form-layout-renderer)]
     (when #?(:cljs goog.DEBUG :clj true)
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
@@ -268,7 +279,8 @@
                   (if dirty? (tr "Cancel") (tr "Done")))
                 (button :.ui.positive.basic.button {:disabled (not dirty?)
                                                     :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
-                (button :.ui.positive.basic.button {:disabled (not dirty?)
+                (button :.ui.positive.basic.button {:disabled (or (not dirty?) remote-busy?)
+                                                    :classes [(when remote-busy? "loading")]
                                                     :onClick  (fn [] (form/save! env))} (tr "Save")))))
           (div :.ui.error.message (tr "The form has errors and cannot be saved."))
           (div :.ui.attached.segment
@@ -293,17 +305,23 @@
         dirty?    (fs/dirty? props sha-key)
         invalid?  (validation/invalid-attribute-value? env attribute)
         pct       (blob/upload-percentage props sha-key)
+        sha       (get props sha-key)
         url       (get props url-key)]
     (if (blob/uploading? props sha-key)
-      (div :.item
+      (dom/span :.item
         (dom/div :.ui.tiny.image
           (dom/i :.huge.file.icon)
+          (dom/div :.ui.active.red.loader {:style {:marginLeft "-10px"}})
           (dom/div :.ui.bottom.attached.blue.progress {:data-percent pct}
             (div :.bar {:style {:transitionDuration "300ms"
                                 :width              pct}}
               (div :.progress ""))))
         (div :.middle.aligned.content
-          filename))
+          filename)
+        (dom/button :.ui.tiny.red.icon.button {:onClick (fn []
+                                                          (app/abort! form-instance sha)
+                                                          (form/delete-child! env))}
+          (dom/i :.times.icon)))
 
       ((if dirty? dom/span dom/a) :.item
        {:target  "_blank"
@@ -316,6 +334,12 @@
        (dom/div :.ui.tiny.image
          (dom/i :.huge.file.icon))
        (div :.middle.aligned.content
-         (str filename (when dirty? " (unsaved)")))))))
+         (str filename (when dirty? " (unsaved)")))
+       (dom/button :.ui.tiny.red.icon.button {:onClick (fn [evt]
+                                                         (evt/stop-propagation! evt)
+                                                         (evt/prevent-default! evt)
+                                                         (when #?(:clj true :cljs (js/confirm "Permanently Delete File?"))
+                                                           (form/delete-child! env)))}
+         (dom/i :.times.icon))))))
 
 (defn file-icon-renderer [env] (file-icon-renderer* env))

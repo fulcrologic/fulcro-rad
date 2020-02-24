@@ -191,6 +191,7 @@
         query-with-scalars (into
                              [id-key
                               :ui/confirmation-message
+                              [::app/active-remotes '_]
                               [::uism/asm-id '_]
                               fs/form-config-join]
                              (map ::attr/qualified-key)

@@ -37,7 +37,8 @@
                [clojure.pprint :refer [pprint]]
                [clojure.java.io :as jio]])
     [com.wsscode.pathom.core :as p]
-    [clojure.string :as str])
+    [clojure.string :as str]
+    [com.fulcrologic.fulcro.application :as app])
   (:import
     #?(:clj  (org.apache.commons.codec.digest DigestUtils)
        :cljs [goog.crypt Sha256])))
