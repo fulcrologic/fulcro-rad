@@ -137,14 +137,14 @@
        :progress-action (fn progress-action [{:keys [state] :as env}]
                           #?(:cljs
                              (let [pct (net/overall-progress env)]
-                               (log/info "Progress update" pct)
+                               (log/debug "Progress update" pct)
                                (swap! state assoc-in progress-path pct))))
        :result-action   (fn result-action [{:keys [state result]}]
                           ;; TODO: Error handling
-                          (log/info "Upload complete" result)
+                          (log/debug "Upload complete" result)
                           (let [ok? (= 200 (:status-code result))]
                             (fns/swap!-> state
-                              (assoc-in status-path (if ok? :available :not-found))
+                              (assoc-in status-path (if ok? :available :failed))
                               (assoc-in progress-path (if ok? 100 0)))))
        remote-key       (fn remote [env] true)})))
 
@@ -178,7 +178,7 @@
                                 {::keys             [file-sha id local-filename]
                                  ::file-upload/keys [files] :as params}]
      {::pc/doc "Server-side handler for an uploaded file in the RAD Blob system"}
-     (log/info "Received file" local-filename)
+     (log/debug "Received file" local-filename)
      (let [file (-> files first :tempfile)]
        (cond
          (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")

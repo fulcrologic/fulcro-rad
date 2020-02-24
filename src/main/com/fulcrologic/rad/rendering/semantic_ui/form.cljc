@@ -150,7 +150,7 @@
         upload-id   (str k "-file-upload")
         add         (when (or (nil? can-add?) (?! can-add? parent))
                       (dom/div
-                        (dom/label :.ui.huge.green.right.floated.button {:htmlFor upload-id}
+                        (dom/label :.ui.green.button {:htmlFor upload-id}
                           (dom/i :.ui.plus.icon)
                           "Add File")
                         (dom/input {:type     "file"
@@ -175,7 +175,8 @@
                                                   (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})))
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
-      (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
+      (dom/h2 :.ui.header title)
+      (when (or (nil? add-position) (= :top add-position)) add)
       (div :.ui.very.relaxed.items
         (mapv
           (fn [props]
@@ -253,7 +254,7 @@
         valid?        (form/valid? env)
         invalid?      (form/invalid? env)
         dirty?        (or (:ui/new? props) (fs/dirty? props))
-        remote-busy?  (log/spy :info (seq (::app/active-remotes props)))
+        remote-busy?  (seq (::app/active-remotes props))
         render-fields (or (form/form-layout-renderer env) standard-form-layout-renderer)]
     (when #?(:cljs goog.DEBUG :clj true)
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
@@ -280,7 +281,7 @@
                 (button :.ui.positive.basic.button {:disabled (not dirty?)
                                                     :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
                 (button :.ui.positive.basic.button {:disabled (or (not dirty?) remote-busy?)
-                                                    :classes [(when remote-busy? "loading")]
+                                                    :classes  [(when remote-busy? "loading")]
                                                     :onClick  (fn [] (form/save! env))} (tr "Save")))))
           (div :.ui.error.message (tr "The form has errors and cannot be saved."))
           (div :.ui.attached.segment
@@ -318,7 +319,7 @@
               (div :.progress ""))))
         (div :.middle.aligned.content
           filename)
-        (dom/button :.ui.tiny.red.icon.button {:onClick (fn []
+        (dom/button :.ui.red.icon.button {:onClick (fn []
                                                           (app/abort! form-instance sha)
                                                           (form/delete-child! env))}
           (dom/i :.times.icon)))
@@ -335,7 +336,7 @@
          (dom/i :.huge.file.icon))
        (div :.middle.aligned.content
          (str filename (when dirty? " (unsaved)")))
-       (dom/button :.ui.tiny.red.icon.button {:onClick (fn [evt]
+       (dom/button :.ui.red.icon.button {:onClick (fn [evt]
                                                          (evt/stop-propagation! evt)
                                                          (evt/prevent-default! evt)
                                                          (when #?(:clj true :cljs (js/confirm "Permanently Delete File?"))

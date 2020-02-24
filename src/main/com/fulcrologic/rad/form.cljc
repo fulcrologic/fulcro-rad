@@ -242,8 +242,9 @@
   (let [id         (comp/get-ident this)
         abandoned? (= :state/abandoned (uism/get-active-state this id))
         dirty?     (and (not abandoned?) (fs/dirty? form-props))]
-    (when dirty? (uism/trigger! this id :event/route-denied))
-    (not dirty?)))
+    (if dirty?
+      #?(:clj true :cljs (js/confirm "Unsaved changed. Are you sure?"))
+      true)))
 
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
@@ -536,9 +537,7 @@
                        (uism/exit env)))}
 
    :event/route-denied
-   {::uism/handler (fn [env]
-                     #?(:cljs (js/alert "Editing in progress"))
-                     env)}})
+   {::uism/handler (fn [env] env)}})
 
 (defn auto-create-to-one
   "Create any to-one referenced entities that did not load, but which are marked as auto-create."
