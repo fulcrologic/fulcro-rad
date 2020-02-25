@@ -34,9 +34,7 @@
   (save-blob! [this name input-stream]
     (let [f (java.io.File/createTempFile name "-upload")]
       (clean-old-files! this)
-      (log/info "Copying stream to file" f)
       (jio/copy input-stream f)
-      (log/info "resulting file size " (.length f))
       (swap! sha->file assoc name f)))
   (blob-url [this name] (str base-url "/" name))
   (delete-blob! [this name]
@@ -48,12 +46,10 @@
         (.exists file))))
   (blob-stream [_ name]
     (when-let [file (get @sha->file name)]
-      (log/info "getting stream for" file)
       (jio/make-input-stream file {})))
   (move-blob! [this name target-storage]
     (if-let [stream (blob-stream this name)]
       (with-open [in stream]
-        (log/info "Moving blob" name "to new store")
         (save-blob! target-storage name in)
         (delete-blob! this name))
       (log/error "Failed to move blob. No stream for " name))))

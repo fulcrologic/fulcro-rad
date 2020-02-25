@@ -331,7 +331,7 @@
      {::pc/params #{::master-pk ::diff ::delta}}
      (log/debug "Save invoked from client with " params)
      (let [save-middleware (::save-middleware env)
-           save-env        {::pathom-env env ::params params}
+           save-env        (assoc env ::params params)
            result          (if save-middleware
                              (save-middleware save-env)
                              (throw (ex-info "form/pathom-plugin is not installed on the parser." {})))
@@ -794,7 +794,7 @@
    (pc/defmutation delete-entity [env params]
      {}
      (if-let [delete-middleware (::delete-middleware env)]
-       (let [delete-env {::pathom-env env ::params params}]
+       (let [delete-env (assoc env ::params params)]
          (delete-middleware delete-env))
        (throw (ex-info "form/pathom-plugin in not installed on Pathom parser." {}))))
    :cljs

@@ -201,10 +201,10 @@
                              all-attributes)
            blob-keys       (set (keys blob-attributes))]
        (log/info "Wrapping persist-images with image keys" blob-keys)
-       (fn [save-env]
-         (let [{:com.fulcrologic.rad.form/keys [pathom-env params]} save-env
-               {::keys [temporary-store permanent-stores]} pathom-env
-               handler-result (handler save-env)]
+       (fn [pathom-env]
+         (let [{:com.fulcrologic.rad.form/keys [params]
+                ::keys                         [temporary-store permanent-stores]} pathom-env
+               handler-result (handler pathom-env)]
            (log/debug "Check for files to persist in " params)
            (when-not temporary-store
              (log/error "No temporary storage in pathom env."))
