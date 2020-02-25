@@ -684,9 +684,11 @@
 
         :event/delete-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                          (let [{::keys [form-instance]} event-data
-                                child-ident (comp/get-ident form-instance)]
-                            (uism/apply-action env fns/remove-entity child-ident)))}
+                          (let [{::keys [form-instance parent parent-relation]} event-data
+                                child-ident (comp/get-ident form-instance)
+                                path        (and parent (conj (comp/get-ident parent) parent-relation))]
+                            (when path
+                              (uism/apply-action env fns/remove-ident child-ident path))))}
 
         :event/save
         {::uism/handler (fn [{::uism/keys [state-map event-data] :as env}]
