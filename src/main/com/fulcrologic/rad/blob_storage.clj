@@ -1,13 +1,9 @@
 (ns com.fulcrologic.rad.blob-storage
   (:require [clojure.java.io :as jio]
-            [taoensso.timbre :as log])
+            [taoensso.timbre :as log]
+            [com.fulcrologic.rad.type-support.date-time :as dt])
   (:import
     (java.io File)))
-
-;:deposit/check-front ;; a SHA
-;:deposit.check-front/url
-;:deposit.check-front/mime-type
-;:deposit.check-front/size
 
 (defprotocol Storage
   (blob-exists? [this name] "Returns true if the SHA already exists in the store")
@@ -17,10 +13,27 @@
   (blob-stream [this name] "Returns an open InputStream for the given blob with name. You must close it (use with-open).")
   (move-blob! [this name target-storage] "Move the blob with the given name from this store to a target store."))
 
-(defrecord LeakyBlobStore [sha->file base-url]
+(defn- clean-old-files!
+  "Clean old temp files out of the store. Runs on new saves to clean up stuff that should no longer be stored."
+  [store]
+  (try
+    (let [sha->file            (:sha->file store)
+          tracked-shas         (set (keys @sha->file))
+          oldest-creation-time (- (dt/now-ms) (* (:max-store-mins store) 60000))]
+      (doseq [sha tracked-shas
+              :let [f          (get @sha->file sha)
+                    created-tm (.lastModified f)]]
+        (when (< created-tm oldest-creation-time)
+          (when (.exists f) (.delete f))
+          (swap! sha->file dissoc name))))
+    (catch Exception e
+      (log/error e "Unable to clean up files."))))
+
+(defrecord TransientBlobStore [sha->file base-url max-store-mins]
   Storage
   (save-blob! [this name input-stream]
     (let [f (java.io.File/createTempFile name "-upload")]
+      (clean-old-files! this)
       (log/info "Copying stream to file" f)
       (jio/copy input-stream f)
       (log/info "resulting file size " (.length f))
@@ -45,13 +58,21 @@
         (delete-blob! this name))
       (log/error "Failed to move blob. No stream for " name))))
 
-(defn leaky-blob-store
-  "Create a dev-time blob store that uses an ever-growing map of entries to track file uploads. This leaks
-  memory slowly over time (thus the name). Calling `delete-blob!` on this store will clean up the association
-  and can be used to manually clear the leaks. This blob store is destroyed on code reload, though the files it
-  tracks are not.
+(defn transient-blob-store
+  "Create a blob store that uses a map of entries to track file uploads and saves the actual files to local
+  temp files on disk. The `max-store-mins` is a time (in minutes) after which blobs in this store will disappear.
 
-  * `base-url` is the prefix to use for returning URLs for a blob in this store."
-  [base-url]
-  (->LeakyBlobStore (atom {}) base-url))
+  This store is useful as the temporary store for file uploads on forms that have not yet been saved. Be sure to set
+  the time high enough that it won't clean up uploaded things that have not been put in the database yet. You might
+  also think about adding auto-save to forms that have uploads.
+
+  This store can also be used as a development-time store if you're ok with them disappearing on restarts.
+
+  * `base-url` is the prefix to use for returning URLs for a blob in this store.
+  * `max-store-mins` is the maximum time after which files will be removed from disk.
+
+  NOTE: file cleanup happens on the next `save-blob!`. Restarting the server can cause some of the temporary files
+  that were being tracked by this store to be left on disk."
+  [base-url max-store-mins]
+  (->TransientBlobStore (atom {}) base-url max-store-mins))
 

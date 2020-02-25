@@ -97,6 +97,11 @@
   [=> inst?]
   (new-date))
 
+(defn now-ms
+  "Returns the current time in ms."
+  []
+  (inst-ms (now)))
+
 (defn inst->instant [i] (instant/of-epoch-milli (inst-ms i)))
 (defn instant->inst [i] (new-date (instant/to-epoch-milli i)))
 
@@ -159,7 +164,7 @@
    (inst->local-datetime nil inst))
   ([zone-name inst]
    [(? ::zone-name) (s/or :inst inst?
-                  :instant ::instant) => ::local-date-time]
+                      :instant ::instant) => ::local-date-time]
    (let [z   (get-zone-id zone-name)
          i   (instant/of-epoch-milli (inst-ms inst))
          ldt (ldt/of-instant i z)]
