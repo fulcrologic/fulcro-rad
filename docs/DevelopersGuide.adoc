@@ -62,13 +62,13 @@ endif::[]
 </style>
 ++++
 
-TODO: ::form/field-style-config(s): :input/props, :sorted-set -> :sorted-set/valid-values
-TODO: Form validator is always used from MASTER form
-TODO: Form validation messages use merge of MASTER overrides FORM overrides ATTRIBUTE
-TODO: Importance of defaults on attributes, which can be values or fns
-TODO: ::form/query-inclusion
-TODO: ::form/sort-children
-TODO: :semantic-ui/add-position
+* TODO: ::form/field-style-config(s): :input/props, :sorted-set -> :sorted-set/valid-values
+* TODO: Form validator is always used from MASTER form
+* TODO: Form validation messages use merge of MASTER overrides FORM overrides ATTRIBUTE
+* TODO: Importance of defaults on attributes, which can be values or fns
+* TODO: ::form/query-inclusion
+* TODO: ::form/sort-children
+* TODO: :semantic-ui/add-position
 
 = Introduction
 
@@ -78,6 +78,9 @@ we are not committed to maintaining the APIs with backward compatibility since t
 development and could lock us into design decisions that have not been fully vetted. That said, the
 overall central goals are well-known, and this should prevent it from being terribly difficult
 to port an existing RAD app forward to a new version.
+
+Please let someone know on the Fulcro slack channel if this document is out of date with the live implementation
+in the RAD Demo.
 
 This book covers Rapid Application Development (RAD) tools for Fulcro.  The RAD system is intended to be augmented with
 any number of plugins that can handle anything from back-end database management to front-end UI automation.
@@ -557,6 +560,48 @@ of Fulcro for more information on how these configurations are merged, using val
 {:my-config-value 42}
 -----
 
+== Form Middleware
+
+Forms support middleware that allows plugins to hook into the I/O subsystem of forms. This allows
+RAD form support plugins be inserted into the chain to do things like save form data to a particular
+database. They use a pattern similar to Ring middleware.
+
+There are currently two middlewares that must be created: save and delete.
+
+=== Save Middleware
+
+The save middleware is simply a function that will receive the Pathom mutation `env`, which
+is augmented with `::form/params`.  Usually you will just compose a set of pre-supplied middleware
+like so:
+
+[source]
+-----
+(ns com.example.components.save-middleware
+  (:require
+    [com.fulcrologic.rad.middleware.save-middleware :as r.s.middleware]
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
+    [com.example.components.datomic :refer [datomic-connections]]
+    [com.example.model :as model]))
+
+(def middleware
+  (->
+    (datomic/wrap-datomic-save)
+    (r.s.middleware/wrap-rewrite-values)))
+-----
+
+=== Delete Middleware
+
+Very similar to save middleware, but is invoked during a request to delete an entity.
+
+[source]
+-----
+(ns com.example.components.delete-middleware
+(:require
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]))
+
+(def middleware (datomic/wrap-datomic-delete))
+-----
+
 == Pathom Parser
 
 You will normally use Pathom to provide the processing for the network API. RAD has some logic to generate resolvers, and many of
@@ -587,27 +632,35 @@ The result will look like this:
   (:require
     [com.example.components.auto-resolvers :refer [automatic-resolvers]]
     [com.example.components.config :refer [config]]
+    [com.example.components.datomic :refer [datomic-connections]]
+    [com.example.components.save-middleware :as save]
+    [com.example.components.delete-middleware :as delete]
+    [com.example.model.account :as account]
+    [com.example.model :refer [all-attributes]]
+    [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.pathom :as pathom]
     [mount.core :refer [defstate]]
-    [com.fulcrologic.rad.form :as form]))
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]))
 
 (defstate parser
   :start
   (pathom/new-parser config
-    (fn [env]
-      (-> env
-        ... augment parsing env per request ...))
+    [(form/pathom-plugin save/middleware delete/middleware)
+     (datomic/pathom-plugin (fn [env] {:production (:main datomic-connections)}))]
     [automatic-resolvers
-     form/save-form
-     form/delete-entity
-     ...]))
+     form/resolvers
+     account/login
+     account/check-session]))
 -----
 
-Your parser will typically end up dependent on things like storage adapters, and the `env` augmentation is used
-to hook those things up to the auto-generated resolvers at server runtime. See the storage adapter documentation
-for those additional items.
+The supplied constructor for pathom parsers is not required, you can use the source to see what it includes
+by default. The RAD parser construction function takes a Fulcro-style server config map, a vector of plugins,
+and a vector of resolvers (the resolvers can be nested sequences).
 
-== The Server Middleware
+You will always want the form plugin, along with any storage adapter plugin that works with a database on
+your server.
+
+== The Server (Ring) Middleware
 
 Once you have a parser you just need to wrap it in a Fulcro API handler.
 The resulting minimal server will be a Ring-based system with middleware like this:
@@ -869,15 +922,13 @@ If you're using `mount` for server state management this will look something lik
 (defstate parser
   :start
   (pathom/new-parser config
-    (fn [env]
-      (-> env
-        ;; you must create a map from SCHEMA name to the database that should serve that
-        ;; schema for this request.
-        (datomic/add-datomic-env {:production (:main datomic-connections)})))
+    [(form/pathom-plugin save/middleware delete/middleware)
+     ;; you must create a map from SCHEMA name to the database that should serve that
+     ;; schema for this request.
+     (datomic/pathom-plugin (fn [env] {:production (:main datomic-connections)}))]
     [automatic-resolvers
-     ;; Standard form hooks, which know how to use database adapter handlers
-     form/save-form
-     form/delete-entity
+     ;; Standard form hooks, which know how to use the database plugin
+     form/resolvers
      ...]))
 -----
 
@@ -913,8 +964,7 @@ In order to get a basic form working in RAD you need the following:
 
 * <<Attributes, Declarations of the attributes>> that will be part of the form.
 * Resolvers that can pull that form's data from the server (usually auto-generated from one or more plugins).
-* A save mutation that can save the form (pre-defined, but requires a handler for each database, which is typically
-supplied by one or more db plugin).
+* A save mutation that can save the form (pre-defined, but requires save middleware and a parser plugin for each database)
 * (optional) Configuration of the ui rendering to auto-generate the UI (you may also hand-design the UI with
 normal Fulcro/React code).
 * (optional) Code that sets the time zone (usually based on the active user's session) if you will be storing
@@ -936,6 +986,48 @@ Most db adapters can <<DatomicResolvers, automatically generate>> these resolver
 can simply ensure all of the attributes a form might need can be resolved via an ident-based Fulcro
 query against that form (e.g. `[{[:account/id id] [:account/name]}]`).
 
+== Form Middleware
+
+Forms support middleware that allows plugins to hook into the I/O subsystem of forms. This allows
+RAD form support plugins be inserted into the chain to do things like save form data to a particular
+database. They use a pattern similar to Ring middleware.
+
+There are currently two middlewares that must be created: save and delete.
+
+=== Save Middleware
+
+The save middleware is simply a function that will receive the Pathom mutation `env`, which
+is augmented with `::form/params`.  Usually you will just compose a set of pre-supplied middleware
+like so:
+
+[source]
+-----
+(ns com.example.components.save-middleware
+  (:require
+    [com.fulcrologic.rad.middleware.save-middleware :as r.s.middleware]
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
+    [com.example.components.datomic :refer [datomic-connections]]
+    [com.example.model :as model]))
+
+(def middleware
+  (->
+    (datomic/wrap-datomic-save)
+    (r.s.middleware/wrap-rewrite-values)))
+-----
+
+=== Delete Middleware
+
+Very similar to save middleware, but is invoked during a request to delete an entity.
+
+[source]
+-----
+(ns com.example.components.delete-middleware
+(:require
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]))
+
+(def middleware (datomic/wrap-datomic-delete))
+-----
+
 === Server-side Save and Delete Mutations
 
 The form system comes with predefined save and delete mutations which you should install on your Pathom parser. These
@@ -948,51 +1040,12 @@ This will look like this in your server code (assuming you're using `defstate` f
 (defstate parser
   :start
   (pathom/new-parser config
-    (fn [env] env)
+    [(form/pathom-plugin save/middleware delete/middleware)
+     ...]
     [...
-     form/save-form
-     form/delete-entity
+     form/resolvers
      ...]))
 -----
-
-==== Save Middleware
-
-You can also install middleware that can pre-process an incoming save so that it is fully compatible with the
-built-in save that comes with your database adapter. Fulcro RAD will always send a form save in the following
-format: (see Fulcro Form State docs)
-
-[source]
------
-TODO: example
------
-
-Your middleware is a `(fn [env save-data] save-data)` that will receive the full server parsing `env` along with
-the data that is to be saved. Your middleware should return the updated `save-data`.
-
-You should install your middleware in the parser env under the `::form/middleware` key. If you are
-using the RAD pathom parser, then this will look something like:
-
-[source]
------
-(defn my-save-middleware [env params] ...)
-
-(defstate parser
-  :start
-  (pathom/new-parser config
-    (fn [env] (assoc env ::form/save-middleware my-save-middleware))
-    [...
-     form/save-form
-     form/delete-entity
-     ...]))
------
-
-This could be used for pretty much anything, but common examples include:
-
-* Adding default required fields that should not appear on the form (i.e. ownership info).
-* Aborting the save (by throwing an exception)
-* Creating or updating derived fields (e.g. Datomic tuple values) from other form data.
-
-
 
 === Configuring the Client
 
