@@ -448,10 +448,10 @@
               picker?       (some-> subforms (get-in [qualified-key ::pick-one]) (boolean))
               picker-state  (some-> subforms (get-in [qualified-key ::ui]) (comp/get-initial-state {:id (new-uuid)}))]
           (cond
-            (and (= :ref type) (attr/to-many? qualified-key))
+            (and (= :ref type) (attr/to-many? attr))
             (assoc result qualified-key (default-to-many FormClass attr))
 
-            (and (= :ref type) (not (attr/to-many? qualified-key)))
+            (and (= :ref type) (not (attr/to-many? attr)))
             (cond-> (assoc result qualified-key (default-to-one FormClass attr))
               picker? (assoc (picker-join-key qualified-key) picker-state))
 

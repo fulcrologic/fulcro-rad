@@ -1,6 +1,7 @@
 (ns ^:always-reload com.fulcrologic.rad.attributes
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
+    [com.wsscode.pathom.core :as p]
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [clojure.walk :as walk]
@@ -65,43 +66,11 @@
      [sym k type m]
      `(def ~sym (new-attribute ~k ~type ~m))))
 
-(def attribute-registry (atom {}))
-
-(defn clear-registry!
-  "Remove all attributes from the registry. Useful for tests."
-  []
-  (reset! attribute-registry {}))
-
-(defn register-attributes!
-  "Resets the attribute registry to include only the given attributes.
-   Should be called early in the startup of the client and server."
-  [attributes]
-  (swap! attribute-registry
-    (fn [r]
-      (reduce
-        (fn [reg {::keys [qualified-key] :as a}]
-          (assoc reg qualified-key a))
-        r
-        attributes))))
-
-(def predefined-attributes #{:com.fulcrologic.rad.blob/blobs
-                             :com.fulcrologic.rad.blob/id})
-
-(>defn key->attribute
-  "Look up a schema attribute using the runtime registry. Avoids having attributes in application state"
-  [k]
-  [keyword? => (? ::attribute)]
-  (if (contains? predefined-attributes k)
-    {::internal?     true
-     ::qualified-key k
-     ::type          :internal}
-    (get @attribute-registry k)))
-
 (>defn to-many?
   "Returns true if the attribute with the given key is a to-many."
-  [k]
-  [keyword? => boolean?]
-  (= :many (-> k key->attribute ::cardinality)))
+  [attr]
+  [::attribute => boolean?]
+  (= :many (::cardinality attr)))
 
 (>defn to-int [str]
   [string? => int?]
@@ -112,28 +81,6 @@
          :cljs (js/parseInt str))
       (catch #?(:clj Exception :cljs :default) e
         0))))
-
-;; TODO: These need to be tied to the database adapter. Native controls in DOM always deal in strings, but
-;; it is possible that custom inputs might not need coercion?
-(>defn string->value [k v]
-  [::qualified-key string? => any?]
-  (let [{::keys [type]} (key->attribute k)]
-    (case type
-      :uuid (new-uuid v)
-      :int (to-int v)
-      ;; TODO: More coercion
-      v)))
-
-(>defn value->string [k v]
-  [::qualified-key any? => string?]
-  (let [{::keys [type]} (key->attribute k)]
-    ;; TODO: more coercion
-    (str v)))
-
-(>defn identity?
-  [k]
-  [qualified-keyword? => boolean?]
-  (boolean (some-> k key->attribute ::unique? (= true))))
 
 (>defn attributes->eql
   "Returns an EQL query for all of the attributes that are available for the given database-id"
@@ -213,3 +160,11 @@
     (fs/make-validator
       (fn [form k]
         (valid-value? (get attribute-map k) (get form k))))))
+
+(defn pathom-plugin [all-attributes]
+  (p/env-wrap-plugin
+    (fn [env]
+      (let [attribute-map (into {}
+                            (map (fn [{::keys [qualified-key] :as attr}] [qualified-key attr]))
+                            all-attributes)]
+        (assoc env ::key->attribute attribute-map)))))

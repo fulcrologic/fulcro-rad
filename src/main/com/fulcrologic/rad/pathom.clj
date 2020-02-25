@@ -91,7 +91,8 @@
        (let-chan [res (parser env tx)]
          (f env res))))})
 
-(defn add-empty-vectors
+;; FIXME: to-many? now takes an attr, not a key
+#_(defn add-empty-vectors
   "For cardinality many attributes, replaces ::p/not-found with an empty vector."
   [input]
   (with-meta
@@ -129,7 +130,8 @@
                      plugins
                      [(p/env-plugin {::p/process-error process-error})
                       (when log-requests? (preprocess-parser-plugin log-request!))
-                      (p/post-process-parser-plugin add-empty-vectors)
+                      ;; TODO: Do we need this, and if so, we need to pass the attribute map
+                      ;(p/post-process-parser-plugin add-empty-vectors)
                       (p/post-process-parser-plugin p/elide-not-found)
                       (p/post-process-parser-plugin elide-reader-errors)
                       (when log-responses? (post-process-parser-plugin-with-env log-response!))
