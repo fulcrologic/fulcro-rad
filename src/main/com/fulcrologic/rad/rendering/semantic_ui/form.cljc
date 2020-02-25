@@ -224,18 +224,56 @@
                          {}
                          attributes))))
 
+(defn- render-layout* [env options k->attribute layout]
+  (map-indexed
+    (fn [idx row]
+      (div {:key idx :className (n-fields-string (count row))}
+        (mapv (fn [col]
+                (enc/if-let [_    k->attribute
+                             attr (k->attribute col)]
+                  (render-attribute env attr options)
+                  (log/error "Missing attribute (or lookup) for" col)))
+          row)))
+    layout))
+
 (defn render-layout [env {::form/keys [attributes layout] :as options}]
   (let [k->attribute (attribute-map attributes)]
-    (map-indexed
-      (fn [idx row]
-        (div {:key idx :className (n-fields-string (count row))}
-          (mapv (fn [col]
-                  (enc/if-let [_    k->attribute
-                               attr (k->attribute col)]
-                    (render-attribute env attr options)
-                    (log/error "Missing attribute (or lookup) for" col)))
-            row)))
-      layout)))
+    (render-layout* env options k->attribute layout)))
+
+(defsc TabbedLayout [this env {::form/keys [attributes tabbed-layout] :as options}]
+  {:initLocalState (fn [this]
+                     (try
+                       {:current-tab 0
+                        :tab-details (memoize
+                                       (fn [attributes tabbed-layout]
+                                         (let [k->attr           (attribute-map attributes)
+                                               tab-labels        (filterv string? tabbed-layout)
+                                               tab-label->layout (into {}
+                                                                   (map vec)
+                                                                   (partition 2 (mapv first (partition-by string? tabbed-layout))))]
+                                           {:k->attr           k->attr
+                                            :tab-labels        (log/spy :info tab-labels)
+                                            :tab-label->layout tab-label->layout})))}
+                       (catch #?(:clj Exception :cljs :default) _
+                         (log/error "Cannot build tabs for tabbed layout. Check your tabbed-layout options for" (comp/component-name this)))))}
+  (let [{:keys [tab-details current-tab]} (comp/get-state this)
+        {:keys [k->attr tab-labels tab-label->layout]} (tab-details attributes tabbed-layout)
+        active-layout (some->> current-tab
+                        (get tab-labels)
+                        (get tab-label->layout))]
+    (div
+      (div :.ui.pointing.menu {}
+        (map-indexed
+          (fn [idx title]
+            (dom/a :.item
+              {:key     (str idx)
+               :onClick #(comp/set-state! this {:current-tab idx})
+               :classes [(when (= current-tab idx) "active")]}
+              title)) tab-labels))
+      (div :.ui.segment
+        (render-layout* env options k->attr active-layout)))))
+
+(def ui-tabbed-layout (comp/computed-factory TabbedLayout))
 
 (defn ui-render-entity-picker [{::form/keys [picker-instance] :as env} attribute]
   (let [k        (::attr/qualified-key attribute)
@@ -294,12 +332,11 @@
             (render-fields env)))))))
 
 (defn standard-form-layout-renderer [{::form/keys [form-instance] :as env}]
-  (let [{::form/keys [attributes layout] :as options} (comp/component-options form-instance)]
-    (if layout
-      (render-layout env options)
-      (mapv
-        (fn [attr] (render-attribute env attr options))
-        attributes))))
+  (let [{::form/keys [attributes layout tabbed-layout] :as options} (comp/component-options form-instance)]
+    (cond
+      (vector? layout) (render-layout env options)
+      (vector? tabbed-layout) (ui-tabbed-layout env options)
+      :else (mapv (fn [attr] (render-attribute env attr options)) attributes))))
 
 (defn- file-icon-renderer* [{::form/keys [form-instance] :as env}]
   (let [{::form/keys [attributes] :as options} (comp/component-options form-instance)
