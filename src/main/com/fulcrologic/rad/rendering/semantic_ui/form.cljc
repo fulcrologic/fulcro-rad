@@ -252,7 +252,7 @@
                                                                    (map vec)
                                                                    (partition 2 (mapv first (partition-by string? tabbed-layout))))]
                                            {:k->attr           k->attr
-                                            :tab-labels        (log/spy :info tab-labels)
+                                            :tab-labels        tab-labels
                                             :tab-label->layout tab-label->layout})))}
                        (catch #?(:clj Exception :cljs :default) _
                          (log/error "Cannot build tabs for tabbed layout. Check your tabbed-layout options for" (comp/component-name this)))))}
@@ -261,7 +261,7 @@
         active-layout (some->> current-tab
                         (get tab-labels)
                         (get tab-label->layout))]
-    (div
+    (div {:key (str current-tab)}
       (div :.ui.pointing.menu {}
         (map-indexed
           (fn [idx title]
