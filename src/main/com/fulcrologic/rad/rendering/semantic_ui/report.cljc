@@ -47,7 +47,7 @@
                       (fn [idx k]
                         (dom/th {:key idx}
                           (or
-                            (some-> k attr/key->attribute ::report/column-header)
+                            ;(some-> k attr/key->attribute ::report/column-header)
                             (some-> k name str/capitalize))))
                       columns))))
               (dom/tbody

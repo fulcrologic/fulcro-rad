@@ -17,11 +17,11 @@
 
 (defn rewrite-values
   "Rewrite the delta in ::form/params of save-env. Returns the new save-env."
-  [save-env]
-  (update-in save-env [::form/params ::form/delta]
+  [pathom-env]
+  (update-in pathom-env [::form/params ::form/delta]
     #(reduce-kv
        (fn rewrite-value-step* [m ident new-value]
-         (let [rewritten-value (rewrite-value save-env ident new-value)]
+         (let [rewritten-value (rewrite-value pathom-env ident new-value)]
            (if (nil? rewritten-value)
              (dissoc m ident)
              (assoc m ident rewritten-value))))
@@ -31,7 +31,7 @@
   "Middleware that allows the distribution of incoming save diff rewrite across models. Should be at the bottom
    (early side) of the middleware if used."
   [handler]
-  (fn [save-env]
-    (let [new-save-env (rewrite-values save-env)]
+  (fn [pathom-env]
+    (let [new-save-env (rewrite-values pathom-env)]
       (handler new-save-env))))
 

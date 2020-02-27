@@ -207,15 +207,15 @@
         (and permissions (contains? (set (permissions env)) :read))))))
 
 (defn redact
-  "Creates a post-processing plugin that "
-  [env query-result]
-  (let [attr-map @attr/attribute-registry]
-    (p/transduce-maps (map (fn [[k v]]
-                             (let [a (get attr-map k)]
-                               (if (readable? env a)
-                                 [k v]
-                                 [k ::REDACTED]))))
-      query-result)))
+  "Creates a post-processing plugin that redacts attributes that are marked as non-readable"
+  [{attr-map ::attr/key->attribute
+    :as      env} query-result]
+  (p/transduce-maps (map (fn [[k v]]
+                           (let [a (get attr-map k)]
+                             (if (readable? env a)
+                               [k v]
+                               [k ::REDACTED]))))
+    query-result))
 
 #?(:clj
    (defmacro defauthenticator [sym authority-map]

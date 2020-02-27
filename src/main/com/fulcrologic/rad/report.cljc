@@ -133,8 +133,8 @@
   (let [report-ident (comp/get-ident report-class {})]
     (dr/route-deferred report-ident
       (fn []
-        (uism/begin! app report-machine report-ident {:route-params route-params
-                                                      :actor/report report-class})
+        (uism/begin! app report-machine report-ident {:actor/report report-class}
+          {:route-params route-params})
         (comp/transact! app [(dr/target-ready {:target report-ident})])))))
 
 (defn report-will-leave [_ _] true)

@@ -37,7 +37,8 @@
                [clojure.pprint :refer [pprint]]
                [clojure.java.io :as jio]])
     [com.wsscode.pathom.core :as p]
-    [clojure.string :as str])
+    [clojure.string :as str]
+    [com.fulcrologic.fulcro.application :as app])
   (:import
     #?(:clj  (org.apache.commons.codec.digest DigestUtils)
        :cljs [goog.crypt Sha256])))
@@ -136,14 +137,14 @@
        :progress-action (fn progress-action [{:keys [state] :as env}]
                           #?(:cljs
                              (let [pct (net/overall-progress env)]
-                               (log/info "Progress update" pct)
+                               (log/debug "Progress update" pct)
                                (swap! state assoc-in progress-path pct))))
        :result-action   (fn result-action [{:keys [state result]}]
                           ;; TODO: Error handling
-                          (log/info "Upload complete" result)
+                          (log/debug "Upload complete" result)
                           (let [ok? (= 200 (:status-code result))]
                             (fns/swap!-> state
-                              (assoc-in status-path (if ok? :available :not-found))
+                              (assoc-in status-path (if ok? :available :failed))
                               (assoc-in progress-path (if ok? 100 0)))))
        remote-key       (fn remote [env] true)})))
 
@@ -177,7 +178,7 @@
                                 {::keys             [file-sha id local-filename]
                                  ::file-upload/keys [files] :as params}]
      {::pc/doc "Server-side handler for an uploaded file in the RAD Blob system"}
-     (log/info "Received file" local-filename)
+     (log/debug "Received file" local-filename)
      (let [file (-> files first :tempfile)]
        (cond
          (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
@@ -200,10 +201,10 @@
                              all-attributes)
            blob-keys       (set (keys blob-attributes))]
        (log/info "Wrapping persist-images with image keys" blob-keys)
-       (fn [save-env]
-         (let [{:com.fulcrologic.rad.form/keys [pathom-env params]} save-env
-               {::keys [temporary-store permanent-stores]} pathom-env
-               handler-result (handler save-env)]
+       (fn [pathom-env]
+         (let [{:com.fulcrologic.rad.form/keys [params]
+                ::keys                         [temporary-store permanent-stores]} pathom-env
+               handler-result (handler pathom-env)]
            (log/debug "Check for files to persist in " params)
            (when-not temporary-store
              (log/error "No temporary storage in pathom env."))
@@ -260,11 +261,11 @@
                             (fn [{::keys [permanent-stores]} input]
                               (let [sha        (get input qualified-key)
                                     file-store (get permanent-stores store)]
-                                (when-not sha
+                                (when-not (seq sha)
                                   (log/error "Could not file file URL. No sha." qualified-key))
                                 (when-not file-store
                                   (log/error "Attempt to retrieve a file URL, but there was no store in parsing env: " store))
-                                (when (and sha file-store)
+                                (when (and (seq sha) file-store)
                                   {url-key (storage/blob-url file-store sha)}))))
         sha-exists?       (fn [{::keys [permanent-stores]} input]
                             (let [sha        (get input qualified-key)
@@ -348,3 +349,30 @@
                     name    (.-name js-file)]
                 js-file))
          (range (.-length js-file-list))))))
+
+(defn blob-downloadable?
+  "Returns true if the blob tracked by `sha-key` in the given `form-props` is in a state that would allow for a download."
+  [form-props sha-key]
+  (let [status (get form-props (status-key sha-key))
+        sha    (get form-props sha-key)
+        url    (get form-props (url-key sha-key))]
+    (and (= :available status) (seq sha) (seq url))))
+
+(defn uploading?
+  "Returns true of the blob tracked by sha-key is actively being uploaded."
+  [form-props sha-key]
+  (let [status (get form-props (status-key sha-key))
+        sha    (get form-props sha-key)]
+    (and (= :uploading status) (seq sha))))
+
+(defn failed-upload?
+  "Returns true of the blob tracked by sha-key failed to upload."
+  [form-props sha-key]
+  (let [status (get form-props (status-key sha-key))]
+    (= :failed status)))
+
+(defn upload-percentage
+  "Returns a string of the form \"n%\" which represents what percentage of the given blob identified by
+  sha-key has made it to the server."
+  [props sha-key]
+  (str (get props (progress-key sha-key) 0) "%"))

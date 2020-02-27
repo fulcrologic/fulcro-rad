@@ -134,9 +134,10 @@
       (div {:key (str k)}
         (div "Upload??? (TODO)")))))
 
-(defn render-many-files [{::form/keys [form-instance] :as env}
-                         {k ::attr/qualified-key :as attr}
-                         {::form/keys [subforms] :as options}]
+(defsc ManyFiles [this {{::form/keys [form-instance] :as env} :env
+                        {k ::attr/qualified-key :as attr}     :attribute
+                        {::form/keys [subforms] :as options}  :options}]
+  {:initLocalState (fn [this] {:input-key (str (rand-int 1000000))})}
   (let [{:semantic-ui/keys [add-position]
          ::form/keys       [ui title can-delete? can-add? sort-children]} (get subforms k)
         parent      (comp/props form-instance)
@@ -147,42 +148,57 @@
         title       (or
                       title
                       (some-> ui (comp/component-options ::form/title)) "")
+        upload-id   (str k "-file-upload")
         add         (when (or (nil? can-add?) (?! can-add? parent))
-                      (dom/input {:type     "file"
-                                  :onChange (fn [evt]
-                                              (let [new-id     (tempid/tempid)
-                                                    js-file    (-> evt blob/evt->js-files first)
-                                                    attributes (comp/component-options ui ::form/attributes)
-                                                    id-attr    (comp/component-options ui ::form/id)
-                                                    id-key     (::attr/qualified-key id-attr)
-                                                    {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
-                                                                                                        attributes))
-                                                    target     (conj (comp/get-ident form-instance) k)
-                                                    new-entity (fs/add-form-config ui
-                                                                 {id-key        new-id
-                                                                  qualified-key ""})]
-                                                (merge/merge-component! form-instance ui new-entity :append target)
-                                                (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))}))
+                      (dom/div
+                        (dom/label :.ui.green.button {:htmlFor upload-id}
+                          (dom/i :.ui.plus.icon)
+                          "Add File")
+                        (dom/input {:type     "file"
+                                    ;; trick: changing the key on change clears the input, so a failed upload can be retried
+                                    :key      (comp/get-state this :input-key)
+                                    :id       upload-id
+                                    :style    {:zIndex  -1
+                                               :width   "1px"
+                                               :height  "1px"
+                                               :opacity 0}
+                                    :onChange (fn [evt]
+                                                (let [new-id     (tempid/tempid)
+                                                      js-file    (-> evt blob/evt->js-files first)
+                                                      attributes (comp/component-options ui ::form/attributes)
+                                                      id-attr    (comp/component-options ui ::form/id)
+                                                      id-key     (::attr/qualified-key id-attr)
+                                                      {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
+                                                                                                          attributes))
+                                                      target     (conj (comp/get-ident form-instance) k)
+                                                      new-entity (fs/add-form-config ui
+                                                                   {id-key        new-id
+                                                                    qualified-key ""})]
+                                                  (merge/merge-component! form-instance ui new-entity :append target)
+                                                  (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})
+                                                  (comp/set-state! this {:input-key (str (rand-int 1000000))})))})))
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
-      (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
-      (div :.ui.grid
+      (dom/h2 :.ui.header title)
+      (when (or (nil? add-position) (= :top add-position)) add)
+      (div :.ui.very.relaxed.items
         (mapv
           (fn [props]
-            (div :.four.wide.column
-              (ui-factory props
-                (merge
-                  env
-                  {::form/parent          form-instance
-                   ::form/parent-relation k
-                   ::form/can-delete?     (if can-delete? (?! can-delete?) false)}))))
+            (ui-factory props
+              (merge
+                env
+                {::form/parent          form-instance
+                 ::form/parent-relation k
+                 ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
           items))
       (when (= :bottom add-position) add))))
+
+(def ui-many-files (comp/factory ManyFiles {:keyfn :id}))
 
 (defn file-ref-container
   [env {::attr/keys [cardinality] :as attr} options]
   (if (= :many cardinality)
-    (render-many-files env attr options)
+    (ui-many-files {:env env :attribute attr :options options})
     (render-single-file env attr options)))
 
 (defn render-attribute [env attr {::form/keys [subforms] :as options}]
@@ -208,18 +224,56 @@
                          {}
                          attributes))))
 
+(defn- render-layout* [env options k->attribute layout]
+  (map-indexed
+    (fn [idx row]
+      (div {:key idx :className (n-fields-string (count row))}
+        (mapv (fn [col]
+                (enc/if-let [_    k->attribute
+                             attr (k->attribute col)]
+                  (render-attribute env attr options)
+                  (log/error "Missing attribute (or lookup) for" col)))
+          row)))
+    layout))
+
 (defn render-layout [env {::form/keys [attributes layout] :as options}]
   (let [k->attribute (attribute-map attributes)]
-    (map-indexed
-      (fn [idx row]
-        (div {:key idx :className (n-fields-string (count row))}
-          (mapv (fn [col]
-                  (enc/if-let [_    k->attribute
-                               attr (k->attribute col)]
-                    (render-attribute env attr options)
-                    (log/error "Missing attribute (or lookup) for" col)))
-            row)))
-      layout)))
+    (render-layout* env options k->attribute layout)))
+
+(defsc TabbedLayout [this env {::form/keys [attributes tabbed-layout] :as options}]
+  {:initLocalState (fn [this]
+                     (try
+                       {:current-tab 0
+                        :tab-details (memoize
+                                       (fn [attributes tabbed-layout]
+                                         (let [k->attr           (attribute-map attributes)
+                                               tab-labels        (filterv string? tabbed-layout)
+                                               tab-label->layout (into {}
+                                                                   (map vec)
+                                                                   (partition 2 (mapv first (partition-by string? tabbed-layout))))]
+                                           {:k->attr           k->attr
+                                            :tab-labels        tab-labels
+                                            :tab-label->layout tab-label->layout})))}
+                       (catch #?(:clj Exception :cljs :default) _
+                         (log/error "Cannot build tabs for tabbed layout. Check your tabbed-layout options for" (comp/component-name this)))))}
+  (let [{:keys [tab-details current-tab]} (comp/get-state this)
+        {:keys [k->attr tab-labels tab-label->layout]} (tab-details attributes tabbed-layout)
+        active-layout (some->> current-tab
+                        (get tab-labels)
+                        (get tab-label->layout))]
+    (div {:key (str current-tab)}
+      (div :.ui.pointing.menu {}
+        (map-indexed
+          (fn [idx title]
+            (dom/a :.item
+              {:key     (str idx)
+               :onClick #(comp/set-state! this {:current-tab idx})
+               :classes [(when (= current-tab idx) "active")]}
+              title)) tab-labels))
+      (div :.ui.segment
+        (render-layout* env options k->attr active-layout)))))
+
+(def ui-tabbed-layout (comp/computed-factory TabbedLayout))
 
 (defn ui-render-entity-picker [{::form/keys [picker-instance] :as env} attribute]
   (let [k        (::attr/qualified-key attribute)
@@ -244,6 +298,7 @@
         valid?        (form/valid? env)
         invalid?      (form/invalid? env)
         dirty?        (or (:ui/new? props) (fs/dirty? props))
+        remote-busy?  (seq (::app/active-remotes props))
         render-fields (or (form/form-layout-renderer env) standard-form-layout-renderer)]
     (when #?(:cljs goog.DEBUG :clj true)
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
@@ -269,35 +324,70 @@
                   (if dirty? (tr "Cancel") (tr "Done")))
                 (button :.ui.positive.basic.button {:disabled (not dirty?)
                                                     :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
-                (button :.ui.positive.basic.button {:disabled (not dirty?)
+                (button :.ui.positive.basic.button {:disabled (or (not dirty?) remote-busy?)
+                                                    :classes  [(when remote-busy? "loading")]
                                                     :onClick  (fn [] (form/save! env))} (tr "Save")))))
           (div :.ui.error.message (tr "The form has errors and cannot be saved."))
           (div :.ui.attached.segment
             (render-fields env)))))))
 
 (defn standard-form-layout-renderer [{::form/keys [form-instance] :as env}]
-  (let [{::form/keys [attributes layout] :as options} (comp/component-options form-instance)]
-    (if layout
-      (render-layout env options)
-      (mapv
-        (fn [attr] (render-attribute env attr options))
-        attributes))))
+  (let [{::form/keys [attributes layout tabbed-layout] :as options} (comp/component-options form-instance)]
+    (cond
+      (vector? layout) (render-layout env options)
+      (vector? tabbed-layout) (ui-tabbed-layout env options)
+      :else (mapv (fn [attr] (render-attribute env attr options)) attributes))))
 
 (defn- file-icon-renderer* [{::form/keys [form-instance] :as env}]
   (let [{::form/keys [attributes] :as options} (comp/component-options form-instance)
-        sha-key  (::attr/qualified-key (first (filter ::blob/store attributes)))
-        file-key (blob/filename-key sha-key)
-        url-key  (blob/url-key sha-key)
-        props    (comp/props form-instance)
-        filename (get props file-key "File")
-        url      (get props url-key)]
-    (dom/a {:target  "_blank"
-            :href    (str url "?filename=" filename)
-            :onClick (fn [evt]
-                       #?(:cljs (when-not (js/confirm "View/download?")
-                                  (evt/stop-propagation! evt)
-                                  (evt/prevent-default! evt))))}
-      (dom/i :.large.file.icon)
-      filename)))
+        attribute (first (filter ::blob/store attributes))
+        sha-key   (::attr/qualified-key attribute)
+        file-key  (blob/filename-key sha-key)
+        url-key   (blob/url-key sha-key)
+        props     (comp/props form-instance)
+        filename  (get props file-key "File")
+        dirty?    (fs/dirty? props sha-key)
+        failed?   (blob/failed-upload? props sha-key)
+        invalid?  (validation/invalid-attribute-value? env attribute)
+        pct       (blob/upload-percentage props sha-key)
+        sha       (get props sha-key)
+        url       (get props url-key)]
+    (if (blob/uploading? props sha-key)
+      (dom/span :.item
+        (dom/div :.ui.tiny.image
+          (dom/i :.huge.file.icon)
+          (dom/div :.ui.active.red.loader {:style {:marginLeft "-10px"}})
+          (dom/div :.ui.bottom.attached.blue.progress {:data-percent pct}
+            (div :.bar {:style {:transitionDuration "300ms"
+                                :width              pct}}
+              (div :.progress ""))))
+        (div :.middle.aligned.content
+          filename)
+        (dom/button :.ui.red.icon.button {:onClick (fn []
+                                                     (app/abort! form-instance sha)
+                                                     (form/delete-child! env))}
+          (dom/i :.times.icon)))
+
+      ((if dirty? dom/span dom/a) :.item
+       {:target  "_blank"
+        :href    (str url "?filename=" filename)
+        :onClick (fn [evt]
+                   #?(:cljs (when-not (or (not (blob/blob-downloadable? props sha-key))
+                                        (js/confirm "View/download?"))
+                              (evt/stop-propagation! evt)
+                              (evt/prevent-default! evt))))}
+       (dom/div :.ui.tiny.image
+         (if failed?
+           (dom/i :.huge.skull.crossbones.icon)
+           (dom/i :.huge.file.icon)))
+       (div :.middle.aligned.content
+         (str filename (cond failed? " (Upload failed. Delete and try again.)"
+                             dirty? " (unsaved)")))
+       (dom/button :.ui.red.icon.button {:onClick (fn [evt]
+                                                    (evt/stop-propagation! evt)
+                                                    (evt/prevent-default! evt)
+                                                    (when #?(:clj true :cljs (js/confirm "Permanently Delete File?"))
+                                                      (form/delete-child! env)))}
+         (dom/i :.times.icon))))))
 
 (defn file-icon-renderer [env] (file-icon-renderer* env))

@@ -13,7 +13,8 @@
     [com.fulcrologic.rad.blob :as blob]
     [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
-    [com.fulcrologic.rad.rendering.semantic-ui.field :refer [render-field-factory]]))
+    [com.fulcrologic.rad.rendering.semantic-ui.field :refer [render-field-factory]]
+    [com.fulcrologic.fulcro.algorithms.form-state :as fs]))
 
 (defn evt->js-files [evt]
   #?(:cljs
@@ -91,29 +92,25 @@
         current-sha        (get props qualified-key)
         url                (get props url-key)
         filename           (get props name-key)
-        status             (get props (blob/status-key qualified-key))
-        pct                (str (get props (blob/progress-key qualified-key)) "%")
+        pct                (blob/upload-percentage props qualified-key)
         has-current-value? (seq current-sha)
         {:keys [save-ref on-change on-click]} (comp/get-state this)
-        upload-complete?   false
+        dirty?             (fs/dirty? props qualified-key)
         label              (form/field-label env attribute)
-        valid?             (and upload-complete? has-current-value?)]
+        invalid?           (validation/invalid-attribute-value? env attribute)
+        validation-message (when invalid? (validation/validation-error-message env attribute))]
     (div :.field {:key (str qualified-key)}
       (dom/label label)
-      (if (= status :available)
-        (when (seq url)
-          (dom/a {:href (str url "?filename=" filename)} "Download"))
+      (cond
+        (blob/blob-downloadable? props qualified-key)
+        (dom/a {:href (str url "?filename=" filename)} "Download")
+
+        (blob/uploading? props qualified-key)
         (dom/div :.ui.small.blue.progress
           (div :.bar {:style {:transitionDuration "300ms"
                               :display            "block"
                               :width              pct}}
-            (div :.progress
-              (str pct))))
-        #_(dom/input (cond-> {:id       (str qualified-key)
-                              :ref      save-ref
-                              :onChange on-change
-                              :type     "file"}
-                       accept-file-types (assoc :allow (?! accept-file-types))))))))
+            (div :.progress pct)))))))
 
 (def ui-file-upload-field (comp/computed-factory FileUploadField
                             {:keyfn (fn [props] (some-> props comp/get-computed ::attr/qualified-key))}))

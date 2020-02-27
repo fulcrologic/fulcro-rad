@@ -191,6 +191,7 @@
         query-with-scalars (into
                              [id-key
                               :ui/confirmation-message
+                              [::app/active-remotes '_]
                               [::uism/asm-id '_]
                               fs/form-config-join]
                              (map ::attr/qualified-key)
@@ -241,8 +242,9 @@
   (let [id         (comp/get-ident this)
         abandoned? (= :state/abandoned (uism/get-active-state this id))
         dirty?     (and (not abandoned?) (fs/dirty? form-props))]
-    (when dirty? (uism/trigger! this id :event/route-denied))
-    (not dirty?)))
+    (if dirty?
+      #?(:clj true :cljs (js/confirm "Unsaved changed. Are you sure?"))
+      true)))
 
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
@@ -329,7 +331,7 @@
      {::pc/params #{::master-pk ::diff ::delta}}
      (log/debug "Save invoked from client with " params)
      (let [save-middleware (::save-middleware env)
-           save-env        {::pathom-env env ::params params}
+           save-env        (assoc env ::params params)
            result          (if save-middleware
                              (save-middleware save-env)
                              (throw (ex-info "form/pathom-plugin is not installed on the parser." {})))
@@ -446,10 +448,10 @@
               picker?       (some-> subforms (get-in [qualified-key ::pick-one]) (boolean))
               picker-state  (some-> subforms (get-in [qualified-key ::ui]) (comp/get-initial-state {:id (new-uuid)}))]
           (cond
-            (and (= :ref type) (attr/to-many? qualified-key))
+            (and (= :ref type) (attr/to-many? attr))
             (assoc result qualified-key (default-to-many FormClass attr))
 
-            (and (= :ref type) (not (attr/to-many? qualified-key)))
+            (and (= :ref type) (not (attr/to-many? attr)))
             (cond-> (assoc result qualified-key (default-to-one FormClass attr))
               picker? (assoc (picker-join-key qualified-key) picker-state))
 
@@ -535,9 +537,7 @@
                        (uism/exit env)))}
 
    :event/route-denied
-   {::uism/handler (fn [env]
-                     #?(:cljs (js/alert "Editing in progress"))
-                     env)}})
+   {::uism/handler (fn [env] env)}})
 
 (defn auto-create-to-one
   "Create any to-one referenced entities that did not load, but which are marked as auto-create."
@@ -684,9 +684,11 @@
 
         :event/delete-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                          (let [{::keys [form-instance]} event-data
-                                child-ident (comp/get-ident form-instance)]
-                            (uism/apply-action env fns/remove-entity child-ident)))}
+                          (let [{::keys [form-instance parent parent-relation]} event-data
+                                child-ident (comp/get-ident form-instance)
+                                path        (and parent (conj (comp/get-ident parent) parent-relation))]
+                            (when path
+                              (uism/apply-action env fns/remove-ident child-ident path))))}
 
         :event/save
         {::uism/handler (fn [{::uism/keys [state-map event-data] :as env}]
@@ -702,9 +704,7 @@
                                     (merge params
                                       {::uism/error-event :event/save-failed
                                        ::master-pk        master-pk
-                                       ;; FIXME: This would be nice, but it breaks the form at the moment because the
-                                       ;; merge removes the form config.
-                                       ;;::m/returning      form-class
+                                       ::m/returning      form-class
                                        ::uism/ok-event    :event/saved}))
                                   (uism/activate :state/saving)))
                               (-> env
@@ -796,7 +796,7 @@
    (pc/defmutation delete-entity [env params]
      {}
      (if-let [delete-middleware (::delete-middleware env)]
-       (let [delete-env {::pathom-env env ::params params}]
+       (let [delete-env (assoc env ::params params)]
          (delete-middleware delete-env))
        (throw (ex-info "form/pathom-plugin in not installed on Pathom parser." {}))))
    :cljs
