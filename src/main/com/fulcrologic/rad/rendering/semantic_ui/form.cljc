@@ -193,7 +193,7 @@
           items))
       (when (= :bottom add-position) add))))
 
-(def ui-many-files (comp/factory ManyFiles {:keyfn :id}))
+(def ui-many-files (comp/factory ManyFiles {:keyfn (fn [{:keys [attribute]}] (::attr/qualified-key attribute))}))
 
 (defn file-ref-container
   [env {::attr/keys [cardinality] :as attr} options]
