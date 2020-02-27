@@ -304,7 +304,8 @@
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
       (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
     (if nested?
-      (div :.ui.form {:classes [(when invalid? "error")]}
+      (div :.ui.form {:classes [(when invalid? "error")]
+                      :key     (str (comp/get-ident form-instance))}
         (div :.ui.segment
           (when can-delete?
             (button :.ui.icon.primary.right.floated.button {:disabled (not (?! can-delete? props))
@@ -312,7 +313,7 @@
                                                                         (form/delete-child! env))}
               (i :.times.icon)))
           (render-fields env)))
-      (div :.ui.container
+      (div :.ui.container {:key (str (comp/get-ident form-instance))}
         (div :.ui.form {:classes [(when invalid? "error")]}
           (div :.ui.top.menu
             (div :.header.item
@@ -353,7 +354,7 @@
         sha       (get props sha-key)
         url       (get props url-key)]
     (if (blob/uploading? props sha-key)
-      (dom/span :.item
+      (dom/span :.item {:key (str sha)}
         (dom/div :.ui.tiny.image
           (dom/i :.huge.file.icon)
           (dom/div :.ui.active.red.loader {:style {:marginLeft "-10px"}})
@@ -367,9 +368,9 @@
                                                      (app/abort! form-instance sha)
                                                      (form/delete-child! env))}
           (dom/i :.times.icon)))
-
       ((if dirty? dom/span dom/a) :.item
        {:target  "_blank"
+        :key     (str sha)
         :href    (str url "?filename=" filename)
         :onClick (fn [evt]
                    #?(:cljs (when-not (or (not (blob/blob-downloadable? props sha-key))
