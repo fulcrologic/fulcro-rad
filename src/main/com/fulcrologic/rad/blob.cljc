@@ -184,6 +184,7 @@
          (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
          (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
          :else (storage/save-blob! temporary-store file-sha file)))
+     ;; TASK: Remove...I think this no longer needed
      {:tempids {id file-sha}}))
 
 #?(:clj
@@ -256,7 +257,7 @@
        ::attr/keys [qualified-key] :as attribute}]
      (let
        [url-key           (url-key qualified-key)
-        url-resolver      (pc/resolver 'url {::pc/input  #{qualified-key}
+        url-resolver      (pc/resolver `url {::pc/input  #{qualified-key}
                                              ::pc/output [url-key]}
                             (fn [{::keys [permanent-stores]} input]
                               (let [sha        (get input qualified-key)
@@ -277,14 +278,14 @@
                               (boolean (and sha file-store (storage/blob-exists? file-store sha)))))
         progress-key      (progress-key qualified-key)
         status-key        (status-key qualified-key)
-        progress-resolver (pc/resolver 'progress {::pc/input  #{qualified-key}
+        progress-resolver (pc/resolver `progress {::pc/input  #{qualified-key}
                                                   ::pc/output [progress-key]}
                             (fn [env input]
                               (if (sha-exists? env input)
                                 {progress-key 100}
                                 {progress-key 0})))
-        status-resolver   (pc/resolver 'progress {::pc/input  #{qualified-key}
-                                                  ::pc/output [progress-key]}
+        status-resolver   (pc/resolver `status {::pc/input  #{qualified-key}
+                                                ::pc/output [progress-key]}
                             (fn [env input]
                               (if (sha-exists? env input)
                                 {status-key :available}
