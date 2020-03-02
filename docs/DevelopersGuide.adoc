@@ -1,6 +1,6 @@
 = Fulcro RAD Developer's Guide
 :author: Tony Kay
-:revdate: December 8, 2019
+:revdate: March 1, 2020
 :lang: en
 :encoding: UTF-8
 :doctype: book
@@ -1801,13 +1801,11 @@ if you need the arbitrary precision data type for storage.
 
 == File Upload/Download
 
-NOTE: Implementation in progress...
-
 RAD Forms can support file uploads, along with download/preview of previously-uploaded files.
 
 * Attribute(s) that represent the details you want to store in a database to track the file.
 * An attribute that represents the file itself and can be used to generate a URL of the file. EQL resolvers
-sends transit, so it is not possible to query for the file *content* via a Pathom resolver. Instead you must
+send transit, so it is not possible to query for the file *content* via a Pathom resolver. Instead you must
 supply a resolver that can, given the current parsing context, resolve the URL of the file's content for download
 by the UI.
 
@@ -1822,13 +1820,252 @@ the save middleware to move the temporary file to a permanent store of your choi
 incoming form data to include the details about the file that will allow your file detail resolver to
 emit a proper URL for getting the file.
 
-=== Setup
+=== General Operation
 
-* Add the middleware to receive the HTTP posts of the temporary files.
-* Add the save middleware to handle post-processing of files on form save.
+RAD's built-in support for BLOBs requires that you define a place in one of your database stores to keep a fingerprint
+for the file. RAD uses SHA256 to generate such a fingerprint for files (much like `git`). The fingerprint is treated
+as the key to the binary data in the store where you place the bytes of the file. This allows you to do things like
+duplicate detection, and can help in situations where many users might upload the same content (your regular database
+would track who has access to what files, but they'd be deduped).
 
+Forms need to know where to upload the file content. Fulcro requires an HTTP remote for file upload, since it sends the
+file through a normal HTTP POST. If your primary remote is HTTP, then your client needs nothing more than the standard
+file upload middleware added to the request middleware on the client, and file upload middleware on the server that
+can receive the files.
+
+The general operation of file support in RAD is shown in the diagram below. As the user edits a form with a file
+upload control they can choose local files. RAD generates a SHA for each file, and begins uploading it immediately
+(tracking progress and disabling save/navigation until the upload is complete). The SHA is stored in the form field
+(and is what you'll have in your database as a key to find the binary data later).
+
+The file is saved in a temporary store (usually a temporary disk file).
+
+Once the file(s) is/are uploaded then the form can be saved. When the user does this the SHA comes across in the save
+delta and middleware on the server detects it. This triggers the content (named as the SHA) to be moved from the
+temporary store to a permanent store. Of course the SHA is saved in the entity/document/row of your database (along
+with other facets of the file you've set up, such as user-specified filename).
+
+The permanent store is configured to understand how to provide a URL (properly protected) to serve the file content,
+allowing the form, reports, and other features of your application to provide the file content on demand.
+
+[ditaa]
+-----
+
+                   Temporary
+RAD Form           Store (usu. temp file)
++----------+      +------------+
+| {d}      +----->| SHA  bytes |
+| SHA      |      |            |
+| filename |      |            |
++--+-------+      +----+-------+
+   |                   |
+   | save! - - - - ->  | bytes moved to real store
+   |       triggers    |
+   v                   v
++----------+      +------------+
+| {s}      |      | SHA  bytes | Permanent Store
+| SHA      |      |            | (S3, disk, etc.)
+| filename |      |            |
++---------++      +----+-------+
+          |            |
+   RAD DB              |
+          |            |
+          +- - - - - ->| SHA based URL
+                       |
+                       v
+
+                    Browser
+-----
+
+Since RAD controls the rendering of the file in forms it needs to know how to group together attributes of a file
+so that it knows which is the filename, which is the URL, etc.  RAD does this by keyword "narrowing", our term
+for the process of using the current attribute's full name as a namespace (by replacing `/` with `.`) and adding
+a new name.
+
+Thus, if you define a blob attribute `:file/sha` then the filename attribute will *be assumed* to be `:file.sha/filename`
+by the auto-generated UI in RAD. You can use rewrite middleware and custom resolvers if you want to save it under a
+different name in your real database, but it is easiest in greenfield projects just to adopt the convention.
+
+=== Defining Binary Large Object (BLOB) attributes
+
+There is a special macro in the `blob` namespace `defblobattr` that should be used to declare a BLOB-tracking attribute
+in your database. It ensures that you supply sufficient information about the attribute for uploads to work correctly.
+
+A sample `file` entity (backed by Datomic) might be defined like this:
+
+[source]
+-----
+(ns com.example.model.file
+  (:require
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.blob :as blob]))
+
+(defattr id :file/id :uuid
+  {::attr/identity?                                          true
+   :com.fulcrologic.rad.database-adapters.datomic/schema     :production
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:file/id}
+   :com.fulcrologic.rad.database-adapters.sql/schema         :production
+   :com.fulcrologic.rad.database-adapters.sql/tables         #{"file"}})
+
+(blob/defblobattr sha :file/sha :files :remote
+  {:com.fulcrologic.rad.database-adapters.datomic/schema     :production
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:file/id}
+   :com.fulcrologic.rad.database-adapters.sql/schema         :production
+   :com.fulcrologic.rad.database-adapters.sql/tables         #{"file"}})
+
+(defattr filename :file.sha/filename :string
+  {:com.fulcrologic.rad.database-adapters.datomic/schema     :production
+   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:file/id}
+   :com.fulcrologic.rad.database-adapters.sql/schema         :production
+   :com.fulcrologic.rad.database-adapters.sql/tables         #{"file"}})
+
+;; TODO: other attributes the are useful, such as size and mime-type.
+
+(def attributes [id sha filename])
+-----
+
+The `defblobattr` requires you supply a keyword for the attribute, the name of the permanent store for the content
+(`:files` in this example), and the name of the Fulcro client remote (`:remote` in this example) that can transmit the
+file bytes.
+
+=== Setting up the Client
+
+You must configure an HTTP remote on the client that includes the Fulcro file upload middleware. This is
+covered in the Fulcro Developer's guide, but looks like this:
+
+[source]
+-----
+(def request-middleware
+  (->
+    (net/wrap-fulcro-request)
+    (file-upload/wrap-file-upload)))
+
+(defonce app (app/fulcro-app {:remotes {:remote (http/fulcro-http-remote {:url                "/api"
+                                                                          :request-middleware request-middleware})}
+-----
+
+=== Setting up the Server
+
+The server setup needs several things.
+
+
+First, you need to define a temporary and permanent store. RAD requires a store to implement the
+`com.fulcrologic.rad.blob-storage/Storage` protocol.
+The temporary store can just use the pre-supplied transient store, which uses (and tries to garbage collect) temporary
+disk files on your server's disk. RAD's transient store requires connection stickiness so that the eventual form save will go to the
+save server as the temporary store. If that is not possible in your deployment then you may wish to use your permanent store
+as the temporary store and just plan on cleaning up stray files at some future time.
+
+Once you've defined you two stores you can add the blob support to your Ring middleware and as a plugin to your
+Pathom parser.
+
+There are two parts to the Ring middleware, and one is optional and is only necessary if you plan to serve the BLOB URLs from your server.
+
+[source]
+-----
+(ns app.ring-middleware
+  (:require
+    [com.fulcrologic.fulcro.networking.file-upload :as file-upload]
+    [ring.middleware.defaults :refer [wrap-defaults]]
+    [com.example.components.blob-store :as bs]
+    [com.fulcrologic.rad.blob :as blob]))
+
+(def middleware
+  (-> not-found-handler
+    (wrap-api "/api")
+    ;; Fulcro upload middleware is needed to recognize file uploads
+    (file-upload/wrap-mutation-file-uploads {})
+    ;; Only needed if you plan to serve the file URLs from this server
+    (blob/wrap-blob-service "/files" bs/file-blob-store)
+    (server/wrap-transit-params {})
+    (server/wrap-transit-response {})
+    ;; wrap defaults should have param and multipart support turned on
+    (wrap-defaults defaults-config)))
+-----
+
+You must also install plugins and resolvers to your parser:
+
+[source]
+-----
+(ns com.example.components.parser
+  (:require
+    [com.example.components.auto-resolvers :refer [automatic-resolvers]]
+    [com.example.components.config :refer [config]]
+    [com.example.components.datomic :refer [datomic-connections]]
+    [com.example.components.save-middleware :as save]
+    [com.example.components.delete-middleware :as delete]
+    [com.example.model.account :as account]
+    [com.example.model :refer [all-attributes]]
+    [com.fulcrologic.rad.blob :as blob]
+    [com.fulcrologic.rad.form :as form]
+    [com.example.components.blob-store :as bs]
+    [com.fulcrologic.rad.pathom :as pathom]
+    [mount.core :refer [defstate]]
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
+    [com.fulcrologic.rad.attributes :as attr]))
+
+(defstate parser
+  :start
+  (pathom/new-parser config
+    [(attr/pathom-plugin all-attributes)
+     (form/pathom-plugin save/middleware delete/middleware)
+     (datomic/pathom-plugin (fn [env] {:production (:main datomic-connections)}))
+     ;; Configures the temp/permanent stores
+     (blob/pathom-plugin bs/temporary-blob-store {:files bs/file-blob-store})]
+    [automatic-resolvers
+     form/resolvers
+     ;; Adds automatic resolvers for blob attributes (URL, progress, and status)
+     (blob/resolvers all-attributes)
+     ...]))
+-----
+
+The blob plugin mainly puts the temporary store and permanent store(s) into the parsing env so that they are available
+when built-in blob-related reads/mutations are called. The BLOB resolvers use the keyword narrowing of your SHA attribute
+and the `env` to provide values that can be derived from the SHA and the store (i.e. `:file.sha/url`).
+
+
+=== File Arity
+
+A file is tracked by a SHA. Therefore you can support a fixed number of files simply be defining more than one
+SHA-based attribute on an entity/document/row of your database. You can also support general to-many support for files
+simply by creating a `ref` attribute that refers to a entity/row/document that has a file SHA on it.
+
+=== Rendering File Upload Controls
+
+Each set of UI rendering controls will have one or more ways of rendering and dealing with file uploads. See the
+documentation of the rendering system you've chosen to see what comes with it. Of course, you can always render
+exactly what you want simply by following Fulcro and RAD documentation.
+
+You can use the `blob/upload-file!` function to submit a file for upload processing. The system will automatically
+add a status and progress attribute to the in-memory entity in your Fulcro client db.
+
+Assuming `this` represents the UI instance that has the file upload field, the call to start an upload is:
+
+[source]
+-----
+(blob/upload-file! this blob-attribute js-file {:file-ident (comp/get-ident this)})
+-----
+
+If your `blob-attribute` had the keyword `:file/sha` then you'd see a `:file.sha/progress` and `:file.sha/status` appear
+on that entity and update as the file upload progresses. Saving the form should then automatically move the file
+content (named by SHA) from temporary to permanent storage.
+
+=== Downloading Files
+
+The `Storage` protocol defines a `blob-url` method. This method is under the control of the implementation, of course,
+and may do nothing more than return the SHA you hand it. You are really responsible for hooking RAD up to a binary store
+that works for your deployment. The built-in support assumes that you'll serve the file content *through* your server
+for access control. The provided middleware simply asks the Storage protocol for a stream of the file's bytes, and
+serves them at a URI on your server.
+
+Thus, you might configure your permanent blob store to return the URL `/files/<SHA>`, and then configure your Ring middleware
+to provide the correct file when asked for `/files/<SHA>`. This is what the middleware configuration shown earlier will
+do.
 
 = Reports
+
+WARNING: Reports are still in design phase, and the API may change drastically.
 
 RAD Reports are based on the generalization that many reports are a query across data that is
 list-based, and most reports have parameters.  RAD's graph API is the source of the things that

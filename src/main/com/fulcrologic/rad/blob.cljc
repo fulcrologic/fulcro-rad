@@ -154,8 +154,7 @@
   upload progresses. The rendering layer will auto-detect when a file upload attribute is a SHA
   and can render the progress of the upload (possibly with a preview, etc.).
 
-  You must install rewrite middleware for the attribute so that you can move the uploaded file from temporary store
-  into the permanent store when the sha is actually saved with the form. The upload can be aborted using the SHA."
+  The upload can be aborted using the SHA."
   [form-instance {::keys      [remote]
                   ::attr/keys [qualified-key]} js-file {:keys [file-ident]}]
   #?(:cljs
