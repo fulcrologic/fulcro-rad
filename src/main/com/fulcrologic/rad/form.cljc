@@ -835,7 +835,10 @@
   [{:keys  [ref]
     ::keys [pick-one]}]
   (action [{:keys [state] :as env}]
-    (let [result    (get-in @state (conj ref :ui/query-result))
+    (let [{:options/keys [subquery]} pick-one
+          result    (:ui/query-result
+                      (fdn/db->tree [{:ui/query-result (comp/get-query subquery)}]
+                        (get-in @state ref) @state))
           transform (get pick-one :options/transform)
           options   (if transform
                       (mapv transform result)
@@ -847,24 +850,20 @@
   [this]
   (let [{::keys [pick-one] :as picker-options} (comp/get-computed this)
         {:options/keys [query-key subquery]} pick-one
-        fake-component (comp/configure-component! (fn []) ::fake {:query (fn [] subquery)
-                                                                  ;; not sure these should be normalized...but could be
-                                                                  ;;:ident (fn [this props] [id-key (get props id-key)])
-                                                                  })
-        target-path    (conj (comp/get-ident this) :ui/query-result)]
+        target-path (conj (comp/get-ident this) :ui/query-result)]
     (when (or (not query-key) (not subquery))
       (log/error "Options for picker are missing query-key or subquery"))
-    (when query-key
-      (df/load! this query-key fake-component {:target               target-path
-                                               :post-mutation        `transform-options
-                                               :post-mutation-params (merge picker-options
-                                                                       {:ref (comp/get-ident this)})}))))
+    (when (and query-key subquery)
+      (df/load! this query-key subquery {:target               target-path
+                                         :post-mutation        `transform-options
+                                         :post-mutation-params (merge picker-options
+                                                                 {:ref (comp/get-ident this)})}))))
 
 (defsc ToOneEntityPicker [this _ {::keys      [env]
                                   ::attr/keys [attribute]}]
-  {:query             [:picker/id
-                       :ui/options
-                       :ui/query-result]
+  {:query             (fn [] '[:picker/id
+                               :ui/options
+                               {:ui/query-result [*]}])
    :initial-state     (fn [{:keys [id]}] {:picker/id  id
                                           :ui/options []})
    :componentDidMount (fn [this] (load-options! this))
