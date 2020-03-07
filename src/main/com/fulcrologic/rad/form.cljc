@@ -642,7 +642,6 @@
            ;; the representation needed by the UI component (e.g. string)
            (let [{:keys       [value form-ident]
                   ::attr/keys [qualified-key]} event-data
-                 ;form-ident     (uism/actor->ident env :actor/form)
                  path           (when (and form-ident qualified-key)
                                   (conj form-ident qualified-key))
                  ;; TODO: Decide when to properly set the field to marked
@@ -651,16 +650,6 @@
                (log/error "Unable to record attribute change. Path cannot be calculated."))
              (cond-> env
                mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
-               ;; FIXME: Data coercion needs to happen at UI and db layer, but must
-               ;; be extensible. You should be able to select a variant of a form
-               ;; control for a given db-supported type. This allows the types
-               ;; to be fully extensible since the db adapter can isolate that
-               ;; coercion, and the UI control variant can do coercion at the UI
-               ;; layer.
-               ;; FIXME: One catch with coercion: sometimes the value has transient
-               ;; values during input that will not properly coerce. This means UI
-               ;; controls will need to buffer the user-interaction value and only
-               ;; do the commit/coercion at the end.
                path (uism/apply-action assoc-in path value))))}
 
         :event/blur
@@ -821,13 +810,17 @@
        :form-ident          form-ident
        :value               value})))
 
-(defn input-changed! [{::keys [form-instance master-form]} k value]
+(defn input-changed! [{::keys [form-instance master-form] :as env} k value]
   (let [form-ident (comp/get-ident form-instance)
+        on-change  (comp/component-options form-instance ::triggers :on-change)
+        old-value  (get (comp/props form-instance) k)
         asm-id     (comp/get-ident master-form)]
     (uism/trigger! form-instance asm-id :event/attribute-changed
       {::attr/qualified-key k
        :form-ident          form-ident
-       :value               value})))
+       :value               value})
+    (when on-change
+      (on-change env k old-value value))))
 
 (defn install-ui-controls!
   "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting
