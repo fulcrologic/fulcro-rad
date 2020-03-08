@@ -28,6 +28,7 @@
     #?(:clj [cljs.analyzer :as ana])
     #?(:cljs [goog.object])
     [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
+    [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
 
 (def create-action "create")
@@ -67,59 +68,32 @@
 (defn form-container-renderer
   "The top-level container for the entire on-screen form"
   [form-env] (render-fn form-env :form-container))
+
 (defn form-layout-renderer
   "The container for the form fields. Used to wrap the main set of fields, and as the container for
    fields in nested forms. This renderer can determine layout of the fields themselves."
   [form-env] (render-fn form-env :form-body-container))
+
+(declare render-field)
+
 (defn ref-container-renderer
   "Renderer that wraps and lays out elements of refs"
-  [{::keys [form-instance] :as form-env} {::attr/keys [qualified-key] :as attr}]
-  (let [{::keys [subforms] :as options} (comp/component-options form-instance)
-        {::keys [ui layout-styles]} (get subforms qualified-key)
-        {target-styles ::layout-styles} (comp/component-options ui)
-        {::app/keys [runtime-atom]} (comp/any->app form-instance)
-        element      :ref-container
-        layout-style (or
-                       (get layout-styles element)
-                       (get target-styles element)
-                       :default)
-        render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
-                       (get-in [element layout-style]))]
-    render-fn))
-
-
-(comment
-  ;;potential refactoring for subform stuff
-  (defn subform
-    "Marks an attribute as a subform.
-
-     * `attribute`: The base attribute (must be a ref) that describes the relation to the subform data.
-     * `ui`: The component that acts as the subform
-     * `settings-overrides`: a map of k/v pairs that will be used as overrides/options for the rendering of the subform.
-     "
-    ([attribute ui]
-     (merge attribute {::ui ui}))
-    ([attribute ui setting-overrides]
-     (merge attribute {::ui ui} setting-overrides)))
-
-  (>defn in-place-subform
-    "Creates a virtual \"edge\" in the form graph where the query stays in the same context (of the current form) but
-     joins to a sub-form. Allows for more complex layout control. The `ui` must have the same `::form/id` as the
-     form in which this is used.
-
-     * `virtual-edge-name`: A simple keyword to use as the virtual edge name. Must be unique within the attributes
-      listed in this form.
-     * `ui`: The component that acts as the subform
-     * `settings-overrides`: a map of k/v pairs that will be used as overrides/options for the rendering of the subform.
-     "
-    ([virtual-edge-name ui]
-     [simple-keyword? comp/component-class? => ::attr/attribute]
-     (in-place-subform virtual-edge-name ui {}))
-    ([virtual-edge-name ui setting-overrides]
-     [simple-keyword? comp/component-class? map? => ::attr/attribute]
-     (merge {::attr/qualified-key (keyword ">" (name virtual-edge-name))
-             ::attr/type          :ref
-             ::ui                 ui} setting-overrides))))
+  [{::keys [form-instance] :as form-env} {::keys      [field-style]
+                                          ::attr/keys [qualified-key] :as attr}]
+  (if field-style
+    (fn [env attr _] (render-field env attr))
+    (let [{::keys [subforms] :as options} (comp/component-options form-instance)
+          {::keys [ui layout-styles]} (get subforms qualified-key)
+          {target-styles ::layout-styles} (comp/component-options ui)
+          {::app/keys [runtime-atom]} (comp/any->app form-instance)
+          element      :ref-container
+          layout-style (or
+                         (get layout-styles element)
+                         (get target-styles element)
+                         :default)
+          render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
+                         (get-in [element layout-style]))]
+      render-fn)))
 
 (defn master-form
   "Return the master form for the given component instance."
@@ -129,7 +103,7 @@
 (def data-type->field-type {:string :text})
 
 (defn attr->renderer [{::keys [form-instance]} {::attr/keys [type qualified-key]
-                                                ::keys      [field-style]}]
+                                                ::keys      [field-style] :as attr}]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (or
                       (some-> form-instance comp/component-options ::field-styles qualified-key)
@@ -141,7 +115,9 @@
                       (do
                         (log/warn "Renderer not found: " type field-style)
                         (get-in control-map [type :default])))]
-    control))
+    (if control
+      control
+      (log/error "Unable to find control (no default) for attribute " attr))))
 
 (defn render-field [env attr]
   (let [render (attr->renderer env attr)]
@@ -191,6 +167,7 @@
         query-with-scalars (into
                              [id-key
                               :ui/confirmation-message
+                              [::picker-options/options-cache '_]
                               [::app/active-remotes '_]
                               [::uism/asm-id '_]
                               fs/form-config-join]
@@ -202,12 +179,8 @@
                                        (required! (str "Form attribute " qualified-key
                                                     " is a reference type. The ::form/subforms map")
                                          subforms qualified-key #(contains? % ::ui))
-                                       (let [subform (get-in subforms [qualified-key ::ui])
-                                             picker? (boolean (get-in subforms [qualified-key ::pick-one]))]
-                                         (if picker?
-                                           (let [picker-key (picker-join-key qualified-key)]
-                                             [qualified-key {picker-key (comp/get-query subform)}])
-                                           [{qualified-key (comp/get-query subform)}]))))
+                                       (let [subform (get-in subforms [qualified-key ::ui])]
+                                         [{qualified-key (comp/get-query subform)}])))
                              refs)]
     full-query))
 
@@ -400,25 +373,15 @@
         {::attr/keys [qualified-key default-value]} attribute
         default-value (?! (get default qualified-key default-value))
         SubClass      (get-in subforms [qualified-key ::ui])
-        picker?       (boolean (get-in subforms [qualified-key ::pick-one]))
         new-id        (tempid/tempid)
         id-key        (comp/component-options SubClass ::id ::attr/qualified-key)]
     (when-not SubClass
       (log/error "Subforms for class" (comp/component-name FormClass)
         "must include a ::form/ui entry for" qualified-key))
-    (when-not (or picker? (keyword? id-key))
+    (when-not (keyword? id-key)
       (log/error "Subform class" (comp/component-name SubClass)
         "must include a ::form/id that is an attr/attribute"))
     (cond
-      ;; to-one picker can start out pointing at nothing
-      (and SubClass picker?)
-      nil
-
-      picker?
-      (do
-        (log/error "Picker does not have a ::ui in ::subforms")
-        nil)
-
       id-key
       (merge
         (default-state SubClass new-id)
@@ -440,20 +403,18 @@
   (when-not (tempid/tempid? new-id)
     (throw (ex-info (str "Default state received " new-id " for a new form ID. It MUST be a Fulcro tempid.")
              {})))
-  (let [{::keys [id attributes default subforms]} (comp/component-options FormClass)
+  (let [{::keys [id attributes default field-styles]} (comp/component-options FormClass)
         {id-key ::attr/qualified-key} id]
     (reduce
-      (fn [result {::attr/keys [qualified-key type default-value] :as attr}]
-        (let [default-value (?! (get default qualified-key default-value))
-              picker?       (some-> subforms (get-in [qualified-key ::pick-one]) (boolean))
-              picker-state  (some-> subforms (get-in [qualified-key ::ui]) (comp/get-initial-state {:id (new-uuid)}))]
+      (fn [result {::attr/keys [qualified-key type default-value field-style] :as attr}]
+        (let [field-style   (?! (or (get field-styles qualified-key) field-style))
+              default-value (?! (get default qualified-key default-value))]
           (cond
-            (and (= :ref type) (attr/to-many? attr))
+            (and (not field-style) (= :ref type) (attr/to-many? attr))
             (assoc result qualified-key (default-to-many FormClass attr))
 
-            (and (= :ref type) (not (attr/to-many? attr)))
-            (cond-> (assoc result qualified-key (default-to-one FormClass attr))
-              picker? (assoc (picker-join-key qualified-key) picker-state))
+            (and (not field-style) (= :ref type) (not (attr/to-many? attr)))
+            (assoc result qualified-key (default-to-one FormClass attr))
 
             :otherwise
             (if default-value
@@ -829,50 +790,6 @@
   [app controls]
   (let [{::app/keys [runtime-atom]} app]
     (swap! runtime-atom assoc :com.fulcrologic.rad/controls controls)))
-
-(defmutation transform-options
-  "INTERNAL MUTATION. Do not use."
-  [{:keys  [ref]
-    ::keys [pick-one]}]
-  (action [{:keys [state] :as env}]
-    (let [{:options/keys [subquery]} pick-one
-          result    (:ui/query-result
-                      (fdn/db->tree [{:ui/query-result (comp/get-query subquery)}]
-                        (get-in @state ref) @state))
-          transform (get pick-one :options/transform)
-          options   (if transform
-                      (mapv transform result)
-                      result)]
-      (swap! state assoc-in (conj ref :ui/options) options))))
-
-(defn- load-options!
-  "Internal implementation detail of entity picker. Loads the options."
-  [this]
-  (let [{::keys [pick-one] :as picker-options} (comp/get-computed this)
-        {:options/keys [query-key subquery]} pick-one
-        target-path (conj (comp/get-ident this) :ui/query-result)]
-    (when (or (not query-key) (not subquery))
-      (log/error "Options for picker are missing query-key or subquery"))
-    (when (and query-key subquery)
-      (df/load! this query-key subquery {:target               target-path
-                                         :post-mutation        `transform-options
-                                         :post-mutation-params (merge picker-options
-                                                                 {:ref (comp/get-ident this)})}))))
-
-(defsc ToOneEntityPicker [this _ {::keys      [env]
-                                  ::attr/keys [attribute]}]
-  {:query             (fn [] '[:picker/id
-                               :ui/options
-                               {:ui/query-result [*]}])
-   :initial-state     (fn [{:keys [id]}] {:picker/id  id
-                                          :ui/options []})
-   :componentDidMount (fn [this] (load-options! this))
-   :ident             :picker/id}
-  (let [{::app/keys [runtime-atom]} (comp/any->app this)
-        control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)
-        control     (get-in control-map [:entity-picker :default])]
-    (when control
-      (control (assoc env ::picker-instance this) attribute))))
 
 (defn field-label
   "Returns a human readable label for a given attribute (which can be declared on the attribute, and overridden on the

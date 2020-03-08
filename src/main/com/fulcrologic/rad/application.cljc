@@ -26,6 +26,7 @@
   #{::uism/asm-id
     ::app/active-remotes
     :com.fulcrologic.rad.blob/blobs
+    :com.fulcrologic.rad.picker-options/options-cache
     df/marker-table
     ::fs/config})
 
