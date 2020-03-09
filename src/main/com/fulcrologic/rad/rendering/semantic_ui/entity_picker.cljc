@@ -17,19 +17,20 @@
                         (let [{:keys [env attr]} (comp/props this)]
                           (picker-options/load-options! (::form/form-instance env) attr)))}
   (let [{::form/keys [form-instance]} env
-        {::form/keys [subforms]} (comp/component-options form-instance)
-        {::form/keys           [field-label]
-         ::picker-options/keys [cache-key query-key]
-         ::attr/keys           [qualified-key]} attr
-        TargetClass (get-in subforms [qualified-key ::form/ui])
-        cache-key   (or cache-key query-key (log/error "Ref field MUST have either a ::picker-options/cache-key or ::picker-options/query-key in attribute " qualified-key))
-        props       (comp/props form-instance)
-        options     (get-in props [::picker-options/options-cache cache-key :options])
-        value       (if TargetClass
-                      (comp/get-ident TargetClass (get-in props [qualified-key]))
-                      (log/error "Entity picker is missing ::form/ui option in subforms of " (comp/component-name form-instance)))
-        invalid?    (validation/invalid-attribute-value? env attr)
-        onSelect    (fn [v] (m/set-value! form-instance qualified-key v))]
+        {::form/keys [attributes field-options]} (comp/component-options form-instance)
+        {::form/keys [field-label]
+         ::attr/keys [qualified-key]} attr
+        field-options (get field-options qualified-key)
+        target-id-key (first (keep (fn [{k ::attr/qualified-key ::attr/keys [target]}]
+                                     (when (= k qualified-key) target)) attributes))
+        {::picker-options/keys [cache-key query-key]} (merge attr field-options)
+        cache-key     (or cache-key query-key)
+        cache-key     (or cache-key query-key (log/error "Ref field MUST have either a ::picker-options/cache-key or ::picker-options/query-key in attribute " qualified-key))
+        props         (comp/props form-instance)
+        options       (get-in props [::picker-options/options-cache cache-key :options])
+        value         [target-id-key (get-in props [qualified-key target-id-key])]
+        invalid?      (validation/invalid-attribute-value? env attr)
+        onSelect      (fn [v] (m/set-value! form-instance qualified-key v))]
     (div :.ui.field {:classes [(when invalid? "error")]}
       (dom/label (str field-label (when invalid? " (Required)")))
       (ui-wrapped-dropdown (cond->

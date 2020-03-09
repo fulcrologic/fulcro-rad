@@ -80,20 +80,21 @@
   "Renderer that wraps and lays out elements of refs"
   [{::keys [form-instance] :as form-env} {::keys      [field-style]
                                           ::attr/keys [qualified-key] :as attr}]
-  (if field-style
-    (fn [env attr _] (render-field env attr))
-    (let [{::keys [subforms] :as options} (comp/component-options form-instance)
-          {::keys [ui layout-styles]} (get subforms qualified-key)
-          {target-styles ::layout-styles} (comp/component-options ui)
-          {::app/keys [runtime-atom]} (comp/any->app form-instance)
-          element      :ref-container
-          layout-style (or
-                         (get layout-styles element)
-                         (get target-styles element)
-                         :default)
-          render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
-                         (get-in [element layout-style]))]
-      render-fn)))
+  (let [{::keys [subforms field-styles] :as options} (comp/component-options form-instance)
+        field-style (or (get field-styles qualified-key) field-style)]
+    (if field-style
+      (fn [env attr _] (render-field env attr))
+      (let [{::keys [ui layout-styles]} (get subforms qualified-key)
+            {target-styles ::layout-styles} (comp/component-options ui)
+            {::app/keys [runtime-atom]} (comp/any->app form-instance)
+            element      :ref-container
+            layout-style (or
+                           (get layout-styles element)
+                           (get target-styles element)
+                           :default)
+            render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
+                           (get-in [element layout-style]))]
+        render-fn))))
 
 (defn master-form
   "Return the master form for the given component instance."
@@ -156,14 +157,17 @@
 #?(:clj
    (s/def ::defsc-form-options (s/keys :req [::attr/attributes])))
 
+(defn sc [registry-key options]
+  (let [cls (fn [])]
+    (comp/configure-component! cls registry-key options)))
+
 ;; NOTE: This MUST be used within a lambda in the component, not as a static bit of query at compile time.
 (defn form-options->form-query
   "Converts form options to a proper EQL query."
-  [form-options]
-  (let [attr               (::attributes form-options)
-        id-attr            (::id form-options)
-        id-key             (::attr/qualified-key id-attr)
-        {refs true scalars false} (group-by #(= :ref (::attr/type %)) attr)
+  [{id-attr ::id
+    ::keys  [attributes field-styles subforms] :as form-options}]
+  (let [id-key             (::attr/qualified-key id-attr)
+        {refs true scalars false} (group-by #(= :ref (::attr/type %)) attributes)
         query-with-scalars (into
                              [id-key
                               :ui/confirmation-message
@@ -173,14 +177,18 @@
                               fs/form-config-join]
                              (map ::attr/qualified-key)
                              scalars)
-        subforms           (::subforms form-options)
         full-query         (into query-with-scalars
                              (mapcat (fn [{::attr/keys [qualified-key]}]
-                                       (required! (str "Form attribute " qualified-key
-                                                    " is a reference type. The ::form/subforms map")
-                                         subforms qualified-key #(contains? % ::ui))
-                                       (let [subform (get-in subforms [qualified-key ::ui])]
-                                         [{qualified-key (comp/get-query subform)}])))
+                                       (if-let [subform (get-in subforms [qualified-key ::ui])]
+                                         [{qualified-key (comp/get-query subform)}]
+                                         (let [style          (get field-styles qualified-key)
+                                               k->attr        (into {} (map (fn [{::attr/keys [qualified-key] :as attr}] [qualified-key attr])) attributes)
+                                               target-id-key  (::attr/target (k->attr qualified-key))
+                                               fake-component (sc qualified-key {:query (fn [_] [target-id-key])
+                                                                                 :ident (fn [_ props] [target-id-key (get props target-id-key)])})]
+                                           (when-not (and style target-id-key)
+                                             (log/warn "Reference attribute" qualified-key "in form has no subform information and no field style/target id key."))
+                                           [{qualified-key (comp/get-query fake-component)}]))))
                              refs)]
     full-query))
 

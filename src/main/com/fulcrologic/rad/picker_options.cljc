@@ -27,11 +27,12 @@
 
 (defn load-options!
   "Load picker options into the options cache."
-  [form-instance {:com.fulcrologic.rad.attributes/keys [qualified-key]
-                  ::keys                               [remote query-key query-component cache-key options-xform cache-time-ms] :as attribute}]
-  (let [cache-time-ms (or cache-time-ms 100)
-        {::app/keys [state-atom]} (comp/any->app form-instance)
-        {:com.fulcrologic.rad.form/keys [subforms]} (comp/component-options form-instance)
+  [form-instance {:com.fulcrologic.rad.attributes/keys [qualified-key] :as attribute}]
+  (let [{::app/keys [state-atom]} (comp/any->app form-instance)
+        {:com.fulcrologic.rad.form/keys [field-options]} (comp/component-options form-instance)
+        field-options (get field-options qualified-key)
+        {::keys [remote query-key query-component cache-key options-xform cache-time-ms]} (merge attribute field-options)
+        cache-time-ms (or cache-time-ms 100)
         state-map     @state-atom
         cache-key     (or cache-key query-key)
         time-path     [::options-cache cache-key :cached-at]
