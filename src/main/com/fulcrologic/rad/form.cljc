@@ -309,17 +309,17 @@
 ;; -> params/env -> middleware-in -> do-saves -> middleware-out
 #?(:clj
    (pc/defmutation save-form [env params]
-     {::pc/params #{::master-pk ::diff ::delta}}
+     {::pc/params #{::id ::master-pk ::diff ::delta}}
      (log/debug "Save invoked from client with " params)
      (let [save-middleware (::save-middleware env)
            save-env        (assoc env ::params params)
            result          (if save-middleware
                              (save-middleware save-env)
                              (throw (ex-info "form/pathom-plugin is not installed on the parser." {})))
-           {::keys [master-pk delta]} params
-           idents          (keys delta)
-           pk              (sp/select-first [sp/ALL #(= master-pk (first %)) sp/LAST] idents)]
-       (merge result {master-pk pk})))
+           {::keys [id master-pk]} params
+           {:keys [tempids]} result
+           id              (get tempids id id)]
+       (merge result {master-pk id})))
    :cljs
    (m/defmutation save-form [_]
      (action [_] :noop)))
@@ -662,6 +662,7 @@
                                     (merge params
                                       {::uism/error-event :event/save-failed
                                        ::master-pk        master-pk
+                                       ::id               (second form-ident)
                                        ::m/returning      form-class
                                        ::uism/ok-event    :event/saved}))
                                   (uism/activate :state/saving)))
@@ -806,10 +807,10 @@
   (let [{::keys [form-instance]} form-env
         k           (::attr/qualified-key attribute)
         options     (comp/component-options form-instance)
-        field-label (or
-                      (get-in options [::field-labels k])
-                      (::field-label attribute)
-                      (some-> k name str/capitalize))]
+        field-label (?! (or
+                          (get-in options [::field-labels k])
+                          (::field-label attribute)
+                          (some-> k name str/capitalize)))]
     field-label))
 
 (defn invalid?

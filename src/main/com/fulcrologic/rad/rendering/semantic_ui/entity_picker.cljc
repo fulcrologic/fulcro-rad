@@ -18,8 +18,7 @@
                           (picker-options/load-options! (::form/form-instance env) attr)))}
   (let [{::form/keys [form-instance]} env
         {::form/keys [attributes field-options]} (comp/component-options form-instance)
-        {::form/keys [field-label]
-         ::attr/keys [qualified-key]} attr
+        {::attr/keys [qualified-key]} attr
         field-options (get field-options qualified-key)
         target-id-key (first (keep (fn [{k ::attr/qualified-key ::attr/keys [target]}]
                                      (when (= k qualified-key) target)) attributes))
@@ -29,6 +28,7 @@
         props         (comp/props form-instance)
         options       (get-in props [::picker-options/options-cache cache-key :options])
         value         [target-id-key (get-in props [qualified-key target-id-key])]
+        field-label   (form/field-label env attr)
         invalid?      (validation/invalid-attribute-value? env attr)
         onSelect      (fn [v] (m/set-value! form-instance qualified-key v))]
     (div :.ui.field {:classes [(when invalid? "error")]}

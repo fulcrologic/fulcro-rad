@@ -52,7 +52,7 @@
         (cond-> {:target      target-path
                  :post-action (fn [{:keys [state result] :as env}]
                                 (let [query-result (get-in @state target-path)
-                                      raw-result   (get result query-key)
+                                      raw-result   (get-in result [:body query-key])
                                       options      (vec
                                                      (cond-> query-result
                                                        options-xform (options-xform raw-result)))]
