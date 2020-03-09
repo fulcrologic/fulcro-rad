@@ -1849,7 +1849,7 @@ with other facets of the file you've set up, such as user-specified filename).
 The permanent store is configured to understand how to provide a URL (properly protected) to serve the file content,
 allowing the form, reports, and other features of your application to provide the file content on demand.
 
-[ditaa]
+[ditaa,target=file-upload-operation]
 -----
 
                    Temporary
