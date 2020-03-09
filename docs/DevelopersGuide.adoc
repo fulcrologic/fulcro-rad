@@ -1502,39 +1502,42 @@ Datomic marker indicating that it is a component, so we've already _inferred_ th
 it might also be possible that the line item _could be allowed_ to create new ones. We just don't know for sure
 unless we provide more context.
 
-In RAD we do that at the form layer.
+In RAD we do that at the form layer:
 
 [source]
 -----
 (form/defsc-form LineItemForm [this props]
-  {::form/id           line-item/id
-   ::form/attributes   [line-item/item line-item/quantity]
-   ::form/cancel-route ["landing-page"]
-   ::form/route-prefix "line-item"
-   ::form/layout       [[:line-item/item :line-item/quantity]]
-   ::form/subforms     {:line-item/item {::form/ui       form/ToOneEntityPicker
-                                         ::form/pick-one {:options/query-key :item/all-items
-                                                          :options/subquery  [:item/id :item/name :item/price]
-                                                          :options/transform (fn [{:item/keys [id name price]}]
-                                                                               {:text (str name " - " (math/numeric->currency-str price)) :value [:item/id id]})}}}})
+  {::form/id            line-item/id
+   ::form/attributes    [line-item/item line-item/quantity]
+
+   ;; Picker-related rendering
+   ::form/field-styles  {:line-item/item :pick-one}
+   ::form/field-options {:line-item/item {::picker-options/query-key       :item/all-items
+                                          ::picker-options/query-component item-forms/ItemForm
+                                          ::picker-options/options-xform   (fn [normalized-result raw-response]
+                                                                             (mapv
+                                                                               (fn [{:item/keys [id name price]}]
+                                                                                 {:text (str name " - " (math/numeric->currency-str price)) :value [:item/id id]})
+                                                                               (sort-by :item/name raw-response)))
+                                          ::picker-options/cache-time-ms   60000}}})
 -----
 
 Here we've generated a normal form. We've included the `line-item/item` attribute, and since that is a ref we must
-also include subform configuration. For this use-case we need two things for the reference field:
+normally include subform configuration; however, we do not intend to render a subform. We can use `::form/field-styles`
+to indicate to RAD that a reference attribute will be rendered as a field. In this case the `:pick-one` field type
+will look in `field-options` for additional information. This field type, of course, could also just be set as
+`::form/field-style` on the attribute itself.
 
-* `::form/ui` -  The UI to use for the subform. In this case we use a pre-generated Fulcro component called `form/ToOneEntityPicker`.
-That UI will look for additional configuration options under the `::form/pick-one` key.
-* `::form/pick-one` - A map of configuration options that tell the entity picker how to find the items to choose
-from, and how to format them for the user. These must include:
-** `:options/query-key` - A pathom global resolver output key that can obtain the list of options.
-** `:options/subquery` - The list of sub-attributes that the query should include so that sufficient information
-is available to build the options to choose from.
-** `:options/transform` - A function that can take each result from the options query and turn it into a labelled
-selection. The function must output a map that contains `:text` as the label, and `:value` with the correct ident of
-the entity being selected.
+The `::form/field-options` map should contain an entry for each `:pick-one` field style. The options are:
 
-NOTE: More options should soon be available for this configuration. Things like caching, sorting, debounced server
-search and more are coming soon.
+`::picker-options/query-key`:: A top-level EDN query key that can return the entities you want to choose from.
+`::picker-options/cache-key`:: (optional) A key under which to cache the options. If not supplied this assumes query key.
+`::picker-options/query-component`:: (optional) A UI component that can be used for the subquery. This allows the picker options
+to be normalized into your normal database. If not supplied then the options will stored purely in the options cache.
+`::picker-options/options-xform`:: a `(fn [normalized-result raw-result] picker-options)`. This function, if supplied,
+is given both the raw and normalized result. It must return a vector of `{:text "" :value v}` that will be used
+as the picker's options.
+`::picker-options/cache-time-ms`:: How long, in ms, should the options be cached at the cache key? Defaults to 100ms.
 
 At this point you can use the `LineItemForm` and it will allow you to pick from the existing items in your
 database as long as you have a resolver. Something like this on the server would fit the bill:
@@ -1548,8 +1551,6 @@ database as long as you have a resolver. Something like this on the server would
                       #?(:clj
                          {:item/all-items (queries/get-all-items env query-params)}))})
 -----
-
-The normal item resolvers will be able to resolve the name and price of the item from there.
 
 === To-Many Relationships, Owned by Parent
 
