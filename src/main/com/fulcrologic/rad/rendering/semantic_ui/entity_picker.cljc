@@ -30,7 +30,8 @@
         value         [target-id-key (get-in props [qualified-key target-id-key])]
         field-label   (form/field-label env attr)
         invalid?      (validation/invalid-attribute-value? env attr)
-        onSelect      (fn [v] (m/set-value! form-instance qualified-key v))]
+        onSelect      (fn [v]
+                        (form/input-changed! env qualified-key v))]
     (div :.ui.field {:classes [(when invalid? "error")]}
       (dom/label (str field-label (when invalid? " (Required)")))
       (ui-wrapped-dropdown (cond->
