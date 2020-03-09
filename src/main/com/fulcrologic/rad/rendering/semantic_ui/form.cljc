@@ -1,6 +1,5 @@
 (ns com.fulcrologic.rad.rendering.semantic-ui.form
   (:require
-    [clojure.string :as str]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.ui-validation :as validation]
@@ -10,8 +9,6 @@
     [com.fulcrologic.fulcro-i18n.i18n :as i18n :refer [tr]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
-    [com.fulcrologic.fulcro.mutations :as m]
     #?(:cljs [com.fulcrologic.fulcro.dom :as dom :refer [div h3 button i span]]
        :clj  [com.fulcrologic.fulcro.dom-server :as dom :refer [div h3 button i span]])
     [com.fulcrologic.fulcro.dom.html-entities :as ent]
@@ -72,8 +69,7 @@
       (when (= :bottom add-position) add))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
-  (let [{::form/keys [ui can-delete? title pick-one label] :as subform-options} (get subforms k)
-        picker?    (boolean pick-one)
+  (let [{::form/keys [ui can-delete? title]} (get subforms k)
         parent     (comp/props form-instance)
         form-props (comp/props form-instance)
         props      (get form-props k)
@@ -86,16 +82,6 @@
                                              (partial can-delete? parent)
                                              false)}]
     (cond
-      picker?
-      (let [selected-option props
-            picker-key      (form/picker-join-key k)
-            picker-props    (get form-props picker-key)]
-        (ui-factory picker-props
-          (merge env std-props subform-options {::form/env                env
-                                                ::attr/attribute          attr
-                                                :currently-selected-value selected-option
-                                                :onSelect                 (fn [v] (form/input-changed! env k v))})))
-
       props
       (div {:key (str k)}
         (h3 :.ui.header title)
@@ -193,7 +179,7 @@
           items))
       (when (= :bottom add-position) add))))
 
-(def ui-many-files (comp/factory ManyFiles {:keyfn :id}))
+(def ui-many-files (comp/factory ManyFiles {:keyfn (fn [{:keys [attribute]}] (::attr/qualified-key attribute))}))
 
 (defn file-ref-container
   [env {::attr/keys [cardinality] :as attr} options]
@@ -275,21 +261,6 @@
 
 (def ui-tabbed-layout (comp/computed-factory TabbedLayout))
 
-(defn ui-render-entity-picker [{::form/keys [picker-instance] :as env} attribute]
-  (let [k        (::attr/qualified-key attribute)
-        {:keys [currently-selected-value onSearchChange onSelect]} (comp/get-computed picker-instance)
-        {:ui/keys [options]} (comp/props picker-instance)
-        invalid? (validation/invalid-attribute-value? env attribute)
-        {::form/keys [field-label]} attribute]
-    (div :.ui.field {:key (str k) :classes [(when invalid? "error")]}
-      (dom/label (str (or field-label (some-> k name str/capitalize))
-                   (when invalid? " (Required)")))
-      (ui-wrapped-dropdown (cond->
-                             {:onChange (fn [v] (onSelect v))
-                              :value    currently-selected-value
-                              :options  options}
-                             onSearchChange (assoc :onSearchChange onSearchChange))))))
-
 (declare standard-form-layout-renderer)
 
 (defn standard-form-container [{::form/keys [props computed-props form-instance master-form] :as env}]
@@ -304,7 +275,8 @@
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
       (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
     (if nested?
-      (div :.ui.form {:classes [(when invalid? "error")]}
+      (div :.ui.form {:classes [(when invalid? "error")]
+                      :key     (str (comp/get-ident form-instance))}
         (div :.ui.segment
           (when can-delete?
             (button :.ui.icon.primary.right.floated.button {:disabled (not (?! can-delete? props))
@@ -312,7 +284,7 @@
                                                                         (form/delete-child! env))}
               (i :.times.icon)))
           (render-fields env)))
-      (div :.ui.container
+      (div :.ui.container {:key (str (comp/get-ident form-instance))}
         (div :.ui.form {:classes [(when invalid? "error")]}
           (div :.ui.top.menu
             (div :.header.item
@@ -353,7 +325,7 @@
         sha       (get props sha-key)
         url       (get props url-key)]
     (if (blob/uploading? props sha-key)
-      (dom/span :.item
+      (dom/span :.item {:key (str sha)}
         (dom/div :.ui.tiny.image
           (dom/i :.huge.file.icon)
           (dom/div :.ui.active.red.loader {:style {:marginLeft "-10px"}})
@@ -367,9 +339,9 @@
                                                      (app/abort! form-instance sha)
                                                      (form/delete-child! env))}
           (dom/i :.times.icon)))
-
       ((if dirty? dom/span dom/a) :.item
        {:target  "_blank"
+        :key     (str sha)
         :href    (str url "?filename=" filename)
         :onClick (fn [evt]
                    #?(:cljs (when-not (or (not (blob/blob-downloadable? props sha-key))

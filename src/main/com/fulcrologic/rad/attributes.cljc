@@ -162,9 +162,9 @@
         (valid-value? (get attribute-map k) (get form k))))))
 
 (defn pathom-plugin [all-attributes]
-  (p/env-wrap-plugin
-    (fn [env]
-      (let [attribute-map (into {}
-                            (map (fn [{::keys [qualified-key] :as attr}] [qualified-key attr]))
-                            all-attributes)]
+  (let [attribute-map (into {}
+                        (map (fn [{::keys [qualified-key] :as attr}] [qualified-key attr]))
+                        all-attributes)]
+    (p/env-wrap-plugin
+      (fn [env]
         (assoc env ::key->attribute attribute-map)))))
