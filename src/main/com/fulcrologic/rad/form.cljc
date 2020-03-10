@@ -4,6 +4,7 @@
     [clojure.spec.alpha :as s]
     [clojure.set :as set]
     [clojure.string :as str]
+    [com.fulcrologic.fulcro.algorithms.tx-processing :as txn]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
     [com.fulcrologic.fulcro.algorithms.denormalize :as fdn]
@@ -23,6 +24,7 @@
     [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
+    [taoensso.tufte :refer [p profile]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
     #?(:clj [cljs.analyzer :as ana])
@@ -234,7 +236,9 @@
   (required! location options ::id attr/attribute?)
   (let [{::keys [id attributes route-prefix query-inclusion]} options
         id-key                     (::attr/qualified-key id)
-        form-field?                (fn [{::attr/keys [identity?]}] (not identity?))
+        form-field?                (fn [{::attr/keys [identity? computed-value]}] (and
+                                                                                    (not computed-value)
+                                                                                    (not identity?)))
         attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
         base-options               (merge
                                      {::validator (attr/make-attribute-validator attributes)}
@@ -539,6 +543,30 @@
       env
       attrs-to-create)))
 
+(defn update-tree*
+  "Run the given `(xform ui-props)` against the current ui props of `component-class`'s instance at `component-ident`
+  in `state-map`. Returns an updated state map with the transformed ui-props re-normalized and merged back into app state."
+  [state-map xform component-class component-ident]
+  (p ::update-tree*
+    (if (and xform component-class component-ident)
+      (let [ui-props      (fns/ui->props state-map component-class component-ident)
+            new-ui-props  (xform ui-props)
+            new-state-map (merge/merge-component state-map component-class new-ui-props)]
+        new-state-map)
+      state-map)))
+
+(defn apply-derived-calculations [{::uism/keys [event-data] :as env}]
+  (p ::apply-derived-calculations
+    (let [{:keys [form-key form-ident]} event-data
+          form-class        (some-> form-key (comp/registry-key->class))
+          master-form-class (uism/actor-class env :actor/form)
+          master-form-ident (uism/actor->ident env :actor/form)
+          {{master-derive-fields :derive-fields} ::triggers} (comp/component-options master-form-class)
+          {{:keys [derive-fields]} ::triggers} (some-> form-class (comp/component-options))]
+      (cond-> env
+        derive-fields (uism/apply-action update-tree* derive-fields form-class form-ident)
+        master-derive-fields (uism/apply-action update-tree* master-derive-fields master-form-class master-form-ident)))))
+
 (defstatemachine form-machine
   {::uism/actors
    #{:actor/form}
@@ -609,17 +637,31 @@
            ;; NOTE: value at this layer is ALWAYS typed to the attribute.
            ;; The rendering layer is responsible for converting the value to/from
            ;; the representation needed by the UI component (e.g. string)
-           (let [{:keys       [value form-ident]
-                  ::attr/keys [qualified-key]} event-data
-                 path           (when (and form-ident qualified-key)
-                                  (conj form-ident qualified-key))
-                 ;; TODO: Decide when to properly set the field to marked
-                 mark-complete? true]
-             (when-not path
-               (log/error "Unable to record attribute change. Path cannot be calculated."))
-             (cond-> env
-               mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
-               path (uism/apply-action assoc-in path value))))}
+           (profile {}
+             (p :event/attribute-changed
+               (let [{:keys       [old-value form-key value form-ident]
+                      ::attr/keys [qualified-key]} event-data
+                     form-class          (some-> form-key (comp/registry-key->class))
+                     {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
+                     protected-on-change (fn [env]
+                                           (let [new-env (on-change env form-ident qualified-key old-value value)]
+                                             (if (or (nil? new-env) (contains? new-env ::uism/state-map))
+                                               new-env
+                                               (do
+                                                 (log/error "Invalid on-change handler! It MUST return an updated env!")
+                                                 env))))
+                     path                (when (and form-ident qualified-key)
+                                           (conj form-ident qualified-key))
+                     ;; TODO: Decide when to properly set the field to marked
+                     mark-complete?      true]
+                 (when-not path
+                   (log/error "Unable to record attribute change. Path cannot be calculated."))
+                 (-> env
+                   (cond->
+                     mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
+                     path (uism/apply-action assoc-in path value)
+                     on-change (protected-on-change))
+                   (apply-derived-calculations))))))}
 
         :event/blur
         {::uism/handler (fn [env] env)}
@@ -632,13 +674,15 @@
                                 ;; TODO: initialize all fields...use get-initial-state perhaps?
                                 new-child   (default-state child-class (tempid/tempid))
                                 child-ident (comp/get-ident child-class new-child)]
-                            (uism/apply-action env
-                              (fn [s]
-                                (-> s
-                                  (merge/merge-component child-class new-child
-                                    :append target-path)
-                                  ;; TODO: mark default fields complete...
-                                  (fs/add-form-config* child-class child-ident))))))}
+                            (-> env
+                              (uism/apply-action
+                                (fn [s]
+                                  (-> s
+                                    (merge/merge-component child-class new-child
+                                      :append target-path)
+                                    ;; TODO: mark default fields complete...
+                                    (fs/add-form-config* child-class child-ident))))
+                              (apply-derived-calculations))))}
 
         :event/delete-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
@@ -646,7 +690,9 @@
                                 child-ident (comp/get-ident form-instance)
                                 path        (and parent (conj (comp/get-ident parent) parent-relation))]
                             (when path
-                              (uism/apply-action env fns/remove-ident child-ident path))))}
+                              (-> env
+                                (uism/apply-action fns/remove-ident child-ident path)
+                                (apply-derived-calculations)))))}
 
         :event/save
         {::uism/handler (fn [{::uism/keys [state-map event-data] :as env}]
@@ -711,13 +757,14 @@
     (uism/trigger! master-form asm-id :event/delete-row env)))
 
 (>defn read-only?
-  [form-instance {::attr/keys [qualified-key identity? read-only?] :as attr}]
+  [form-instance {::attr/keys [qualified-key identity? read-only? computed-value] :as attr}]
   [comp/component? ::attr/attribute => boolean?]
   (let [read-only-fields (comp/component-options form-instance ::read-only-fields)]
     (boolean
       (or
         identity?
         read-only?
+        computed-value
         (and (set? read-only-fields) (contains? read-only-fields qualified-key))))))
 
 (defn edit!
@@ -780,17 +827,29 @@
        :form-ident          form-ident
        :value               value})))
 
+(defmutation exec [_]
+  (action [{::txn/keys [options] :as env}]
+    (when-let [{:keys [lambda]} options]
+      (lambda))))
+
 (defn input-changed! [{::keys [form-instance master-form] :as env} k value]
   (let [form-ident (comp/get-ident form-instance)
-        on-change  (comp/component-options form-instance ::triggers :on-change)
         old-value  (get (comp/props form-instance) k)
         asm-id     (comp/get-ident master-form)]
     (uism/trigger! form-instance asm-id :event/attribute-changed
       {::attr/qualified-key k
        :form-ident          form-ident
+       :form-key            (comp/class->registry-key (comp/react-type form-instance))
+       :old-value           old-value
        :value               value})
-    (when on-change
-      (on-change env k old-value value))))
+    #_(when on-change
+        (comp/transact! form-instance [(exec)] {:lambda #(on-change env k old-value value)}))))
+
+(defn computed-value
+  "Returns the computed value of the given attribute on the form from `env` (if it is a computed attribute)"
+  [env {::attr/keys [computed-value] :as attr}]
+  (when computed-value
+    (computed-value env attr)))
 
 (defn install-ui-controls!
   "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting
@@ -830,10 +889,19 @@
          props (comp/props form-instance)]
      (valid? form-instance props)))
   ([form-class-or-instance props]
-   (let [validator (comp/component-options form-class-or-instance ::validator)]
-     (or
-       (not validator)
-       (and validator (= :valid (validator props)))))))
+   (let [{::keys [attributes validator]} (comp/component-options form-class-or-instance)
+         required-attributes   (into #{}
+                                 (comp
+                                   (filter ::attr/required?)
+                                   (map ::attr/qualified-key)) attributes)
+         all-required-present? (or
+                                 (empty? required-attributes)
+                                 (every? #(not (nil? (get props %))) required-attributes))]
+     (and
+       all-required-present?
+       (or
+         (not validator)
+         (and validator (= :valid (validator props))))))))
 
 (>defn field-style-config
   "Get the value of an overridable field-style-config option. If both the form and attribute set these

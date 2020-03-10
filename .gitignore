@@ -22,3 +22,5 @@ target
 .shadow-cljs
 .clj-kondo/.cache
 DevelopersGuide.html
+docs/assets
+docs/.asciidoctor
