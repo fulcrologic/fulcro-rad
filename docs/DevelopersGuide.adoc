@@ -1712,6 +1712,15 @@ this:
 Now an attribute change of the item on a line item will first trigger the derived field update of
 subtotal on the `LineItemForm`, and then the master form's derived field update will fix the total.
 
+WARNING: It may be tempting to use this mechanism to invent values that are unrelated to the form and put them
+into the state. This is legal, but placing data in Fulcro's state database does *not* guarantee they will show up in
+rendered props. Fulcro pulls props from the database according to the component's query, and forms only place the
+listed attributes in that query. This means if you put an arbitrary key into the state of your form it will not show
+up unless you also add it to the `::form/query-inclusion` of that form. Of course, auto-rendering will also know nothing about it unless it is listed
+as some kind of attribute. You can define a no-op attribute (at attribute with nothing more than a type) as a way to
+render such on-the-fly values, but you should also be careful about how such props might interact with form loads and
+saves.
+
 === Form Change and I/O
 
 The next dynamic support feature is the `:on-change` trigger. This trigger happens due to a *user-driven* change
