@@ -8,7 +8,8 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.fulcro.dom.html-entities :as ent]
     [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.rad.ui-validation :as validation]))
+    [com.fulcrologic.rad.ui-validation :as validation]
+    [taoensso.timbre :as log]))
 
 (defn render-field-factory
   "Create a general field factory using the given input factory as the function to call to draw an input."
@@ -17,7 +18,8 @@
   ([addl-props input-factory]
    (fn [{::form/keys [form-instance] :as env} {::attr/keys [type qualified-key] :as attribute}]
      (let [props              (comp/props form-instance)
-           value              (and attribute (get props qualified-key))
+           value              (or (form/computed-value env attribute)
+                                (and attribute (get props qualified-key)))
            invalid?           (validation/invalid-attribute-value? env attribute)
            validation-message (when invalid? (validation/validation-error-message env attribute))
            user-props         (form/field-style-config env attribute :input/props)

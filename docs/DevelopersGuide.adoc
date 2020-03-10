@@ -341,6 +341,13 @@ a key by which a distinct entity/row/document can be found).
   {::attr/identity?                                      true})
 -----
 
+== Computed Attributes (may be renamed...)
+
+An attribute can be marked as `::attr/computed? true`, indicating that it is purely a UI concern that is computed from
+other values at render time. Such an attribute needs to be declared for form rendering, but this marker indicates that
+the attribute should not participate in any other I/O. That is to say that it will be rendered as read-only, and
+will not be included in form validation, queries, or saves.
+
 == Scalar Attributes
 
 Many attributes are simple containers for scalar values (strings, numbers, etc.). RAD itself does not
@@ -1611,6 +1618,159 @@ adding more than 2.
 === To-Many, Selected From Pre-existing
 
 NOTE: This use-case is not yet implemented.
+
+== Dynamic Forms
+
+There are currently 3 kinds of dynamism supported by RAD:
+
+. The ability for a field to be a completely computed bit of UI based on the current form, with no stored state.
+. The ability to derive one or more *stored* fields, spreadsheet-style, where the values are computed from user-input
+fields, the where the results of the computation *are* stored in the model.
+. The ability to hook into the UI state machine of the form in order to drive dependent field changes and also
+drive I/O for things like cascading dropdowns and dynamically loading information
+of interest to the user about the form in progress (username already in use, current list price of an item, etc.).
+
+=== Purely Computed UI Fields
+
+A purely computational (display-only) attribute is simple enough to declare:
+
+[source]
+-----
+(defattr subtotal :line-item/subtotal :decimal
+  {::attr/computed-value (fn [{::form/keys [props] :as form-env} attr]
+                           (let [{:line-item/keys [quantity quoted-price]} props]
+                             (math/round (math/* quantity quoted-price) 2)))})
+-----
+
+Such a field will show as a read-only field (formatted according to the field style you select). The function is
+supplied with the form rendering env (which includes the current form props) and the attribute definition of the
+field that is changing. The return value will be the displayed value, and *must* match the declared type of the field.
+
+These attributes will *never* appear in Fulcro state. They are pure UI artifacts, and recompute their value when the
+form renders.
+
+You actually have access to the entire set of props in the form, but you should note that other computed fields are
+not in the data model. So if you have data dependencies across computed fields you'll end up re-computing intermediate
+results.
+
+=== Derived, Stored Fields
+
+Derived fields are attributes that are meant to actually appear in Fulcro state, and can also (optionally) participate in Form I/O
+(i.e. be saved to your server database). Derived fields are meant to be very easy to reason over in a full-form sense,
+and are meant to be an easy way to manage interdependencies of calculated data.
+
+Each form can set up a derived field calculation by adding a `:derive-fields` trigger to the form:
+
+[source]
+-----
+(defn add-subtotal* [{:line-item/keys [quantity quoted-price] :as item}]
+  (assoc item :line-item/subtotal (math/* quantity quoted-price)))
+
+(form/defsc-form LineItemForm [this props]
+  {::form/id            line-item/id
+   ::form/attributes    [line-item/item line-item/quantity line-item/quoted-price line-item/subtotal]
+   ::form/triggers      {:derive-fields (fn [new-form-tree] (add-subtotal* new-form-tree))}
+-----
+
+A `derive-fields` trigger is a referentially-transparent function that will receive the *tree* of denormalized
+form props for the form, and must return an optionally-updated version of that same tree. Since it is a tree it
+is very easy to reason over, even when there is nested data that is to be changed.
+
+If a master form *and* child form both have `derive-fields` triggers, then the behavior is well-defined:
+
+. An attribute change will *always* trigger the `:derive-fields` on the form where the attribute lives, if defined.
+.. The *master* form's `:derive-fields` will be triggered on each attribute change, and is guaranteed to run *after*
+the nested one.
+. A row add/delete will *always* trigger the *master* form's `:derive-fields`, if defined.
+
+Note: Deeply nested forms do *not* run `:derive-fields` for forms *between* the master and the form on which the
+attribute changed.
+
+Assume you have an invoice that contains line item's that use the above form. The `:invoice/total` is clearly a
+sum of the line item's subtotals. Therefore the invoice (which in this example is the master form) would look like
+this:
+
+[source]
+-----
+(defn sum-subtotals* [{:invoice/keys [line-items] :as invoice}]
+  (assoc invoice :invoice/total
+                 (reduce
+                   (fn [t {:line-item/keys [subtotal]}]
+                     (math/+ t subtotal))
+                   (math/zero)
+                   line-items)))
+
+(form/defsc-form InvoiceForm [this props]
+  {::form/id            invoice/id
+   ::form/attributes    [invoice/customer invoice/date invoice/line-items invoice/total]
+   ...
+   ::form/subforms      {:invoice/line-items {::form/ui            LineItemForm}}
+   ::form/triggers      {:derive-fields (fn [new-form-tree] (sum-subtotals* new-form-tree))}
+   ...})
+-----
+
+Now an attribute change of the item on a line item will first trigger the derived field update of
+subtotal on the `LineItemForm`, and then the master form's derived field update will fix the total.
+
+=== Form Change and I/O
+
+The next dynamic support feature is the `:on-change` trigger. This trigger happens due to a *user-driven* change
+of an attribute on the form. Such triggers do *not* cascade.
+This trigger is ultimately driven by the `form/input-changed!` function (which is used by all pre-built form fields
+to indicate changes).
+
+The `:on-change` trigger is implemented as a hook into the Fulcro UI State Machine that is controlling the form, and *must* be
+coded using that API. The Fulcro Developer's Guide covers the full API in detail. The most important aspect of this
+API is that it is side-effect free. You are passed an immutable UISM environment, and *thread* any number of `uism` functions
+together against that `env` to evolve it into a new desired env, which you return. This is then processed by the state machine
+system to cause the desired effects.
+
+Code for UISM handlers generally looks something like this:
+
+[source]
+-----
+(fn [env]
+  (-> env
+     (uism/apply-action ...)
+     (some-helper-you-wrote)
+     (cond->
+       condition? (optional-thing))))
+-----
+
+IMPORTANT: Handlers *must* either return an updated `env` or `nil` (which means "do nothing"). Returning anything else
+is an error. There are checks in the internals that try to detect if you make a mistake and will show an error in the
+console.
+
+In RAD Forms, the `on-change` handler is passed the UI State machine environment, along with some other convenient
+values: the ident of the form being modified, the keyword name of the attribute that changed, along with that attribute's
+old and new value.
+
+In our Line Item example we allow a user to pick an item from inventory, which has a pre-defined price. Users
+of the invoice form might need to override this price to give a discount or correct an error in pricing. Therefore, each
+line item will have a `:line-item/quoted-price`. Every time the user selects an item to sell on a line item we want
+push the inventory price of the item into the item's quoted-price. We cannot do this with the `derived-fields` trigger because that
+trigger does not know *what* changed, and we *only* want to push the item price into quoted price on item change (not
+every time the form changes). This is a prime use-case for an `:on-change`, and can be coded like this:
+
+[source]
+-----
+(form/defsc-form LineItemForm [this props]
+  {::form/id            line-item/id
+   ::form/attributes    [line-item/item line-item/quantity line-item/quoted-price line-item/subtotal]
+   ::form/triggers      {:on-change     (fn [{::uism/keys [state-map] :as uism-env} form-ident k old-value new-value]
+                                          (case k
+                                            ;; In this example items are normalized, so `new-value` will be the ident
+                                            ;; of an item in the database, which in turn has an :item/price field.
+                                            :line-item/item
+                                            (let [item-price  (get-in state-map (conj new-value :item/price))
+                                                  target-path (conj form-ident :line-item/quoted-price)]
+                                              ;; apply-action allows you to update the Fulcro state database. It works
+                                              ;; as-if you were doing an `update` on `state-map`.
+                                              (uism/apply-action uism-env assoc-in target-path item-price))
+-----
+
+The `:on-change` triggers *always* precede `:derive-fields` triggers, so that the global derivation can depend upon
+values pushed from one field to another.
 
 == Extended Data Type Support
 
