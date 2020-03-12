@@ -482,9 +482,11 @@
     (when-not cancel-route
       (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form."))
     ;; TODO: Should allow the store of an override to this declared route.
-    (-> env
-      (uism/activate :state/abandoned)
-      (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1))))
+    (let [form-ident (uism/actor->ident env :actor/form)]
+      (-> env
+        (uism/apply-action fs/pristine->entity* form-ident)
+        (uism/activate :state/abandoned)
+        (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))))
 
 (defn ask-before-leaving [env]
   (if (confirm-exit? env)
