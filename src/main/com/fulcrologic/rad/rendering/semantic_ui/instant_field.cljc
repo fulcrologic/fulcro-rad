@@ -14,7 +14,7 @@
   (comp/factory (inputs/StringBufferedInput ::DateTimeInput
                   {:model->string (fn [tm]
                                     (if tm
-                                      (datetime/inst->html-datetime-string (or tm (datetime/now)))
+                                      (datetime/inst->html-datetime-string tm)
                                       ""))
                    :string->model (fn [s] (some-> s (datetime/html-datetime-string->inst)))})))
 
