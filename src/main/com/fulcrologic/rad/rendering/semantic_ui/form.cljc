@@ -20,12 +20,10 @@
 
 (defn render-to-many [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
   (let [{:semantic-ui/keys [add-position]
-         ::form/keys       [ui title can-delete? can-add? added-via-upload? sort-children]} (get subforms k)
+         ::form/keys       [ui title can-delete? can-add? added-via-upload?]} (get subforms k)
         parent      (comp/props form-instance)
         can-delete? (fn [item] (?! can-delete? parent item))
-        items       (-> form-instance comp/props k
-                      (cond->
-                        sort-children sort-children))
+        items       (get parent k)
         title       (or
                       title
                       (some-> ui (comp/component-options ::form/title)) "")
