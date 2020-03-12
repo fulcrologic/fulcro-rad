@@ -229,6 +229,24 @@
       #?(:clj true :cljs (js/confirm "Unsaved changed. Are you sure?"))
       true)))
 
+(defn form-pre-merge
+  "Generate a pre-merge for a component that has the given for attribute map. Returns a proper
+  pre-merge fn, or `nil` if none is needed"
+  [{::keys [subforms]} key->attribute]
+  (let [sorters-by-k (into {}
+                       (keep (fn [k]
+                               (when-let [sorter (get-in subforms [k ::sort-children])]
+                                 [k sorter])) (keys key->attribute)))]
+    (when (seq sorters-by-k)
+      (fn [{:keys [data-tree]}]
+        (let [ks (keys sorters-by-k)]
+          (log/debug "Form system sorting data tree children for keys " ks)
+          (reduce
+            (fn [tree k]
+              (update tree k (comp vec (get sorters-by-k k))))
+            data-tree
+            ks))))))
+
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
   [get-class location options]
@@ -240,16 +258,20 @@
                                                                                     (not computed-value)
                                                                                     (not identity?)))
         attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
+        attribute-map              (attr/attribute-map attributes)
+        pre-merge                  (form-pre-merge options attribute-map)
         base-options               (merge
                                      {::validator (attr/make-attribute-validator attributes)}
                                      options
                                      (cond->
-                                       {:ident       (fn [_ props] [id-key (get props id-key)])
-                                        :form-fields (into #{}
-                                                       (comp
-                                                         (filter form-field?)
-                                                         (map ::attr/qualified-key))
-                                                       attributes)}
+                                       {:ident           (fn [_ props] [id-key (get props id-key)])
+                                        ::key->attribute attribute-map
+                                        :form-fields     (into #{}
+                                                           (comp
+                                                             (filter form-field?)
+                                                             (map ::attr/qualified-key))
+                                                           attributes)}
+                                       pre-merge (assoc :pre-merge pre-merge)
                                        route-prefix (merge {:route-segment [route-prefix :action :id]
                                                             :will-leave    form-will-leave
                                                             :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
@@ -670,7 +692,7 @@
 
         :event/add-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                          (let [{::keys [parent-relation parent child-class]} event-data
+                          (let [{::keys [order parent-relation parent child-class]} event-data
                                 id-key      (some-> child-class comp/component-options ::id ::attr/qualified-key)
                                 target-path (conj (comp/get-ident parent) parent-relation)
                                 ;; TODO: initialize all fields...use get-initial-state perhaps?
@@ -681,7 +703,7 @@
                                 (fn [s]
                                   (-> s
                                     (merge/merge-component child-class new-child
-                                      :append target-path)
+                                      (or order :append) target-path)
                                     ;; TODO: mark default fields complete...
                                     (fs/add-form-config* child-class child-ident))))
                               (apply-derived-calculations))))}

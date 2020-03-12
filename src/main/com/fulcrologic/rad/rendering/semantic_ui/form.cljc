@@ -28,30 +28,33 @@
                       title
                       (some-> ui (comp/component-options ::form/title)) "")
         add         (when (or (nil? can-add?) (?! can-add? parent))
-                      (if (?! added-via-upload? env)
-                        (dom/input {:type     "file"
-                                    :onChange (fn [evt]
-                                                (log/info "UPLOAD FILE!!!")
-                                                (let [new-id     (tempid/tempid)
-                                                      js-file    (-> evt blob/evt->js-files first)
-                                                      attributes (comp/component-options ui ::form/attributes)
-                                                      id-attr    (comp/component-options ui ::form/id)
-                                                      id-key     (::attr/qualified-key id-attr)
-                                                      {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
-                                                                                                          attributes))
-                                                      target     (conj (comp/get-ident form-instance) k)
-                                                      new-entity (fs/add-form-config ui
-                                                                   {id-key        new-id
-                                                                    qualified-key ""})]
-                                                  (merge/merge-component! form-instance ui new-entity :append target)
-                                                  (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})
-                        (button :.ui.tiny.icon.button
-                          {:onClick (fn [_]
-                                      (form/add-child! (assoc env
-                                                         ::form/parent-relation k
-                                                         ::form/parent form-instance
-                                                         ::form/child-class ui)))}
-                          (i :.plus.icon))))
+                      (let [add?  (?! can-add? parent)
+                            order (if (keyword? add?) add? :append)]
+                        (if (?! added-via-upload? env)
+                          (dom/input {:type     "file"
+                                      :onChange (fn [evt]
+                                                  (log/info "UPLOAD FILE!!!")
+                                                  (let [new-id     (tempid/tempid)
+                                                        js-file    (-> evt blob/evt->js-files first)
+                                                        attributes (comp/component-options ui ::form/attributes)
+                                                        id-attr    (comp/component-options ui ::form/id)
+                                                        id-key     (::attr/qualified-key id-attr)
+                                                        {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
+                                                                                                            attributes))
+                                                        target     (conj (comp/get-ident form-instance) k)
+                                                        new-entity (fs/add-form-config ui
+                                                                     {id-key        new-id
+                                                                      qualified-key ""})]
+                                                    (merge/merge-component! form-instance ui new-entity order target)
+                                                    (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})
+                          (button :.ui.tiny.icon.button
+                            {:onClick (fn [_]
+                                        (form/add-child! (assoc env
+                                                           ::form/order order
+                                                           ::form/parent-relation k
+                                                           ::form/parent form-instance
+                                                           ::form/child-class ui)))}
+                            (i :.plus.icon)))))
         ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
       (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))

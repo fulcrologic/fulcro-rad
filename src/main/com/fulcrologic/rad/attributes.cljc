@@ -148,23 +148,25 @@
       (valid? value)
       (or (not required?) non-empty-value?))))
 
+(defn attribute-map
+  "Returns a map of qualified key -> attribute for the given attributes"
+  [attributes]
+  (into {}
+    (map (fn [{::keys [qualified-key] :as a}]
+           [qualified-key a])
+      attributes)))
+
 (defn make-attribute-validator
   "Creates a function that can be used as a form validator for any form that contains the given `attributes`.  If the
   form asks for validation on an attribute that isn't listed or has no `::attr/valid?` function then it will consider
   that attribute valid."
   [attributes]
-  (let [attribute-map (into {}
-                        (map (fn [{::keys [qualified-key] :as a}]
-                               [qualified-key a])
-                          attributes))]
+  (let [attribute-map (attribute-map attributes)]
     (fs/make-validator
       (fn [form k]
         (valid-value? (get attribute-map k) (get form k))))))
 
 (defn pathom-plugin [all-attributes]
-  (let [attribute-map (into {}
-                        (map (fn [{::keys [qualified-key] :as attr}] [qualified-key attr]))
-                        all-attributes)]
-    (p/env-wrap-plugin
-      (fn [env]
-        (assoc env ::key->attribute attribute-map)))))
+  (p/env-wrap-plugin
+    (fn [env]
+      (assoc env ::key->attribute (attribute-map all-attributes)))))
