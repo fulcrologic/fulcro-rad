@@ -21,43 +21,48 @@
 (defn render-to-many [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
   (let [{:semantic-ui/keys [add-position]
          ::form/keys       [ui title can-delete? can-add? added-via-upload?]} (get subforms k)
-        parent      (comp/props form-instance)
-        can-delete? (fn [item] (?! can-delete? parent item))
-        items       (get parent k)
-        title       (or
-                      title
-                      (some-> ui (comp/component-options ::form/title)) "")
-        add         (when (or (nil? can-add?) (?! can-add? parent))
-                      (let [add?  (?! can-add? parent)
-                            order (if (keyword? add?) add? :append)]
-                        (if (?! added-via-upload? env)
-                          (dom/input {:type     "file"
-                                      :onChange (fn [evt]
-                                                  (log/info "UPLOAD FILE!!!")
-                                                  (let [new-id     (tempid/tempid)
-                                                        js-file    (-> evt blob/evt->js-files first)
-                                                        attributes (comp/component-options ui ::form/attributes)
-                                                        id-attr    (comp/component-options ui ::form/id)
-                                                        id-key     (::attr/qualified-key id-attr)
-                                                        {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
-                                                                                                            attributes))
-                                                        target     (conj (comp/get-ident form-instance) k)
-                                                        new-entity (fs/add-form-config ui
-                                                                     {id-key        new-id
-                                                                      qualified-key ""})]
-                                                    (merge/merge-component! form-instance ui new-entity order target)
-                                                    (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})
-                          (button :.ui.tiny.icon.button
-                            {:onClick (fn [_]
-                                        (form/add-child! (assoc env
-                                                           ::form/order order
-                                                           ::form/parent-relation k
-                                                           ::form/parent form-instance
-                                                           ::form/child-class ui)))}
-                            (i :.plus.icon)))))
-        ui-factory  (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
+        parent             (comp/props form-instance)
+        can-delete?        (fn [item] (?! can-delete? parent item))
+        items              (get parent k)
+        title              (or
+                             title
+                             (some-> ui (comp/component-options ::form/title)) "")
+        invalid?           (validation/invalid-attribute-value? env attr)
+        validation-message (validation/validation-error-message env attr)
+        add                (when (or (nil? can-add?) (?! can-add? parent))
+                             (let [add?  (?! can-add? parent)
+                                   order (if (keyword? add?) add? :append)]
+                               (if (?! added-via-upload? env)
+                                 (dom/input {:type     "file"
+                                             :onChange (fn [evt]
+                                                         (log/info "UPLOAD FILE!!!")
+                                                         (let [new-id     (tempid/tempid)
+                                                               js-file    (-> evt blob/evt->js-files first)
+                                                               attributes (comp/component-options ui ::form/attributes)
+                                                               id-attr    (comp/component-options ui ::form/id)
+                                                               id-key     (::attr/qualified-key id-attr)
+                                                               {::attr/keys [qualified-key] :as sha-attr} (first (filter ::blob/store
+                                                                                                                   attributes))
+                                                               target     (conj (comp/get-ident form-instance) k)
+                                                               new-entity (fs/add-form-config ui
+                                                                            {id-key        new-id
+                                                                             qualified-key ""})]
+                                                           (merge/merge-component! form-instance ui new-entity order target)
+                                                           (blob/upload-file! form-instance sha-attr js-file {:file-ident [id-key new-id]})))})
+                                 (button :.ui.tiny.icon.button
+                                   {:onClick (fn [_]
+                                               (form/add-child! (assoc env
+                                                                  ::form/order order
+                                                                  ::form/parent-relation k
+                                                                  ::form/parent form-instance
+                                                                  ::form/child-class ui)))}
+                                   (i :.plus.icon)))))
+        ui-factory         (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
     (div :.ui.basic.segment {:key (str k)}
       (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
+      (when invalid?
+        (div :.ui.error.message
+          validation-message))
       (mapv
         (fn [props]
           (ui-factory props
@@ -71,21 +76,25 @@
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
   (let [{::form/keys [ui can-delete? title]} (get subforms k)
-        parent     (comp/props form-instance)
-        form-props (comp/props form-instance)
-        props      (get form-props k)
-        title      (or title (some-> ui (comp/component-options ::form/title)) "")
-        ui-factory (comp/computed-factory ui)
-        std-props  {::form/nested?         true
-                    ::form/parent          form-instance
-                    ::form/parent-relation k
-                    ::form/can-delete?     (if can-delete?
-                                             (partial can-delete? parent)
-                                             false)}]
+        parent             (comp/props form-instance)
+        form-props         (comp/props form-instance)
+        props              (get form-props k)
+        title              (or title (some-> ui (comp/component-options ::form/title)) "")
+        ui-factory         (comp/computed-factory ui)
+        invalid?           (validation/invalid-attribute-value? env attr)
+        validation-message (validation/validation-error-message env attr)
+        std-props          {::form/nested?         true
+                            ::form/parent          form-instance
+                            ::form/parent-relation k
+                            ::form/can-delete?     (if can-delete?
+                                                     (partial can-delete? parent)
+                                                     false)}]
     (cond
       props
       (div {:key (str k)}
         (h3 :.ui.header title)
+        (when invalid?
+          (div :.ui.error.message validation-message))
         (ui-factory props (merge env std-props)))
 
       :else
