@@ -243,7 +243,9 @@
           (log/debug "Form system sorting data tree children for keys " ks)
           (reduce
             (fn [tree k]
-              (update tree k (comp vec (get sorters-by-k k))))
+              (if (vector? (get tree k))
+                (update tree k (comp vec (get sorters-by-k k)))
+                tree))
             data-tree
             ks))))))
 
