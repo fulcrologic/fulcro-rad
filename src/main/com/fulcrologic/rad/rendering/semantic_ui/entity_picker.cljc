@@ -10,6 +10,7 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.rad.ui-validation :as validation]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [taoensso.timbre :as log]))
 
 (defsc ToOnePicker [this {:keys [env attr]}]
@@ -26,7 +27,7 @@
         target-id-key (first (keep (fn [{k ::attr/qualified-key ::attr/keys [target]}]
                                      (when (= k qualified-key) target)) attributes))
         {::picker-options/keys [cache-key query-key]} (merge attr field-options)
-        cache-key     (or cache-key query-key)
+        cache-key     (or (?! cache-key (comp/react-type form-instance) (comp/props form-instance)) query-key)
         cache-key     (or cache-key query-key (log/error "Ref field MUST have either a ::picker-options/cache-key or ::picker-options/query-key in attribute " qualified-key))
         props         (comp/props form-instance)
         options       (get-in props [::picker-options/options-cache cache-key :options])

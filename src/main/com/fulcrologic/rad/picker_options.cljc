@@ -37,7 +37,7 @@
          params        (or (?! query-parameters app form-class props) {})
          cache-time-ms (or cache-time-ms 100)
          state-map     @state-atom
-         cache-key     (or cache-key query-key)
+         cache-key     (or (?! cache-key form-class props) query-key)
          time-path     [::options-cache cache-key :cached-at]
          target-path   [::options-cache cache-key :query-result]
          options-path  [::options-cache cache-key :options]
