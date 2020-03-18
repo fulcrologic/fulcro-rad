@@ -7,6 +7,7 @@
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.rad.type-support.date-time :as dt]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.application :as app]))
 
@@ -27,12 +28,13 @@
 
 (defn load-options!
   "Load picker options into the options cache."
-  ([form-instance attribute] (load-options! form-instance attribute {}))
-  ([form-instance {:com.fulcrologic.rad.attributes/keys [qualified-key] :as attribute} load-options]
-   (let [{::app/keys [state-atom]} (comp/any->app form-instance)
-         {:com.fulcrologic.rad.form/keys [field-options]} (comp/component-options form-instance)
+  ([app-ish form-class props attribute] (load-options! app-ish form-class props attribute {}))
+  ([app-ish form-class props {:com.fulcrologic.rad.attributes/keys [qualified-key] :as attribute} load-options]
+   (let [{::app/keys [state-atom] :as app} (comp/any->app app-ish)
+         {:com.fulcrologic.rad.form/keys [field-options]} (comp/component-options form-class)
          field-options (get field-options qualified-key)
-         {::keys [remote query-key query-component cache-key options-xform cache-time-ms]} (merge attribute field-options)
+         {::keys [remote query-key query-component cache-key options-xform cache-time-ms query-parameters]} (merge attribute field-options)
+         params        (or (?! query-parameters app form-class props) {})
          cache-time-ms (or cache-time-ms 100)
          state-map     @state-atom
          cache-key     (or cache-key query-key)
@@ -49,9 +51,10 @@
      ;; prevent a screen that has many of the same pickers on it from issuing more than one load per cache timeout
      (swap! state-atom assoc-in time-path now)
      (when reload?
-       (df/load! form-instance query-key query-component
+       (df/load! app-ish query-key query-component
          (cond-> (merge load-options
                    {:target      target-path
+                    :params      params
                     :post-action (fn [{:keys [state result] :as env}]
                                    (let [query-result (get-in @state target-path)
                                          raw-result   (get-in result [:body query-key])

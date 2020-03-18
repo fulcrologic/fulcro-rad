@@ -14,8 +14,11 @@
 
 (defsc ToOnePicker [this {:keys [env attr]}]
   {:componentDidMount (fn [this]
-                        (let [{:keys [env attr]} (comp/props this)]
-                          (picker-options/load-options! (::form/form-instance env) attr)))}
+                        (let [{:keys [env attr]} (comp/props this)
+                              form-instance (::form/form-instance env)
+                              props         (comp/props form-instance)
+                              form-class    (comp/react-type form-instance)]
+                          (picker-options/load-options! form-instance form-class props attr)))}
   (let [{::form/keys [form-instance]} env
         {::form/keys [attributes field-options]} (comp/component-options form-instance)
         {::attr/keys [qualified-key]} attr
