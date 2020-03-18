@@ -61,10 +61,13 @@
   "
   [{::keys [form-instance] :as form-env} element]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        style-path   [::layout-styles element]
-        layout-style (or (some-> form-instance comp/component-options (get-in style-path)) :default)
-        render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
-                       (get element) (get layout-style))]
+        style-path             [::layout-styles element]
+        layout-style           (or (some-> form-instance comp/component-options (get-in style-path)) :default)
+        element->style->layout (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout)
+        render-fn              (some-> element->style->layout (get element) (get layout-style))]
+    (cond
+      (not runtime-atom) (log/error "Form instance was not in the rendering environment. This means the form did not mount properly")
+      (not render-fn) (log/error "No renderer was installed for layout style" layout-style "for UI element" element))
     render-fn))
 
 (defn form-container-renderer
@@ -140,13 +143,13 @@
        ::computed-props cprops})))
 
 (defn render-layout [form-instance props]
+  (when-not (comp/component? form-instance)
+    (throw (ex-info "Invalid form instance propagated to render layout." {:form-instance form-instance})))
   (let [env    (rendering-env form-instance props)
         render (form-container-renderer env)]
     (if render
       (render env)
-      (do
-        (log/error "No container layout rendering defined. Cannot render form " (comp/component-name form-instance))
-        nil))))
+      nil)))
 
 #?(:clj
    (s/def ::defsc-form-args (s/cat
@@ -302,6 +305,8 @@
            render-form  (#'comp/build-render sym thissym propsym computedsym extra-args body)
            options-expr `(let [get-class# (fn [] ~sym)]
                            (assoc (convert-options get-class# ~location ~options) :render ~render-form))]
+       (when (some #(= '_ %) arglist)
+         (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
        (if (comp/cljs? env)
          `(do
             (declare ~sym)
@@ -502,15 +507,17 @@
   "Discard all changes and change route."
   [env]
   (let [Form         (uism/actor-class env :actor/form)
+        ;; TODO: Should allow the store of an override to this declared route.
         cancel-route (some-> Form comp/component-options ::cancel-route)]
-    (when-not cancel-route
-      (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form."))
-    ;; TODO: Should allow the store of an override to this declared route.
-    (let [form-ident (uism/actor->ident env :actor/form)]
-      (-> env
-        (uism/apply-action fs/pristine->entity* form-ident)
-        (uism/activate :state/abandoned)
-        (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))))
+    (if cancel-route
+      (let [form-ident (uism/actor->ident env :actor/form)]
+        (-> env
+          (uism/apply-action fs/pristine->entity* form-ident)
+          (uism/activate :state/abandoned)
+          (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))
+      (do
+        (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form.")
+        env))))
 
 (defn ask-before-leaving [env]
   (if (confirm-exit? env)
