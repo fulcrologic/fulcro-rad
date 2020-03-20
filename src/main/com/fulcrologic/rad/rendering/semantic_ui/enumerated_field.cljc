@@ -5,13 +5,18 @@
          [com.fulcrologic.semantic-ui.modules.dropdown.ui-dropdown :refer [ui-dropdown]]]
         :clj
         [[com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]]])
+    [com.fulcrologic.rad.ids :as ids]
     [com.fulcrologic.rad.ui-validation :as validation]
+    [com.fulcrologic.fulcro.rendering.multiple-roots-renderer :as mroot]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
+    [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
     [com.fulcrologic.rad.attributes :as attr]
     [clojure.string :as str]
     [taoensso.timbre :as log]
-    [com.fulcrologic.rad.form :as form]))
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]))
 
 (defn enumerated-options [{::form/keys [form-instance] :as env} {::attr/keys [qualified-key] :as attribute}]
   (let [{::attr/keys [enumerated-values]} attribute
@@ -73,16 +78,40 @@
     (render-to-many env attribute)
     (render-to-one env attribute)))
 
-;; TODO: Make floating root, so that we can use Fulcro state without having to be composed in state/query/initial-state
-(defsc AutocompleteField [this {:keys [env attribute] :as props}]
-  {}
-  (let []
+(defsc AutocompleteField [this {:ui/keys [search-string options] :as props}]
+  {:query [::autocomplete-id :ui/search-string :ui/options]
+   :ident ::autocomplete-id}
+  (dom/div))
+
+(def ui-autocomplete-field (comp/factory AutocompleteField {:keyfn :id}))
+
+(defmutation gc-autocomplete [{:keys [id]}]
+  (action [{:keys [state]}]
+    (when id
+      (swap! state fns/remove-entity [::autocomplete-id id]))))
+
+(defsc AutocompleteFieldRoot [this props {:keys [env attribute]}]
+  {:initLocalState        (fn [this] {:field-id (ids/new-uuid)})
+   :componentDidMount     (fn [this]
+                            (let [id (comp/get-state this :field-id)]
+                              (merge/merge-component! this AutocompleteField {::autocomplete-id id
+                                                                              :ui/search-string ""
+                                                                              :ui/options       []}))
+                            (mroot/register-root! this {:initialize? false}))
+   :shouldComponentUpdate (fn [_ _] true)
+   :componentWillUnmount  (fn [this]
+                            (comp/transact! this [(gc-autocomplete {:id (comp/get-state this :field-id)})])
+                            (mroot/deregister-root! this))
+   :query                 [::autocomplete-id]}
+  (let [{::attr/keys [qualified-key]} attribute]
+    (log/info "autocomplete " qualified-key)
     (dom/div "TODO")))
 
-(def ui-autocomplete-field (comp/factory AutocompleteField))
+(def ui-autocomplete-field-root (mroot/floating-root-factory AutocompleteFieldRoot
+                                  {:keyfn (fn [props] (-> props :attribute ::attr/qualified-key))}))
 
 (defn render-autocomplete-field [env {::attr/keys [cardinality] :or {cardinality :one} :as attribute}]
   (if (= :many cardinality)
     (log/error "Cannot autocomplete to-many attributes with renderer" `render-autocomplete-field)
-    (ui-autocomplete-field {:env env :attribute attribute})))
+    (ui-autocomplete-field-root {:env env :attribute attribute})))
 

@@ -1,7 +1,7 @@
 (ns com.fulcrologic.rad.application
   (:require
     [com.example.ui.login-dialog :refer [LoginForm]]
-    [com.fulcrologic.fulcro.rendering.keyframe-render2 :as kr2]
+    [com.fulcrologic.fulcro.rendering.multiple-roots-renderer :as mroot]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.data-fetch :as df]
@@ -89,5 +89,5 @@
                 {:remotes {:remote (net/fulcro-http-remote {:url                "/api"
                                                             :request-middleware (secured-request-middleware {:csrf-token token})})}}))
       {:global-eql-transform (global-eql-transform (elision-predicate default-network-blacklist))
-       :optimized-render!    kr2/render!}
+       :optimized-render!    mroot/render!}
       options)))

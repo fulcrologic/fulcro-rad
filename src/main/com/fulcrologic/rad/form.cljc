@@ -226,8 +226,8 @@
   [app {:keys [action id]} form-class]
   (let [{::attr/keys [qualified-key type] :as id-attr} (comp/component-options form-class ::id)
         new?       (= create-action action)
-        id         (id-string->id type new? id)
-        form-ident [qualified-key id]]
+        coerced-id (id-string->id type new? id)
+        form-ident [qualified-key coerced-id]]
     (when-not (keyword? qualified-key)
       (log/error "Form " (comp/component-name form-class) " does not have a ::form/id that is an attr/attribute."))
     (when (and new? (not (valid-uuid-string? id)))
