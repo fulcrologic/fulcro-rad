@@ -202,19 +202,34 @@
              (string? s)
              (re-matches #"^........-....-....-....-............$" s))))
 
+#?(:cljs
+   (defn parse-int [v]
+     (let [rv (js/parseInt v)]
+       (if (js/isNaN rv) 0 rv)))
+   :clj
+   (defn parse-int [v] (Integer/parseInt v)))
+
+
+(defn- id-string->id [type new? id]
+  (if new?
+    (tempid/tempid)
+    (case type
+      :uuid (new-uuid id)
+      :int (parse-int id)
+      :long (parse-int id)
+      id)))
+
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter."
   [app {:keys [action id]} form-class]
-  (let [new?       (= create-action action)
-        uuid       (if new?
-                     (tempid/tempid (new-uuid id))
-                     (new-uuid id))
-        id-prop    (comp/component-options form-class ::id ::attr/qualified-key)
-        form-ident [id-prop uuid]]
-    (when-not (keyword? id-prop)
+  (let [{::attr/keys [qualified-key type] :as id-attr} (comp/component-options form-class ::id)
+        new?       (= create-action action)
+        id         (id-string->id type new? id)
+        form-ident [qualified-key id]]
+    (when-not (keyword? qualified-key)
       (log/error "Form " (comp/component-name form-class) " does not have a ::form/id that is an attr/attribute."))
-    (when (and new? (not (valid-uuid-string? id)))
-      (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route. The form may misbehave."))
+    #_(when (and new? (not (valid-uuid-string? id)))
+        (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route. The form may misbehave."))
     (dr/route-deferred form-ident
       (fn []
         (uism/begin! app form-machine
