@@ -27,7 +27,8 @@
 
    :com.fulcrologic.rad.form/type->style->control
    {:text    {:default text-field/render-field}
-    :enum    {:default enumerated-field/render-field}
+    :enum    {:default      enumerated-field/render-field
+              :autocomplete enumerated-field/render-autocomplete-field}
     :string  {:default                              text-field/render-field
               :viewable-password                    text-field/render-viewable-password
               :password                             text-field/render-password

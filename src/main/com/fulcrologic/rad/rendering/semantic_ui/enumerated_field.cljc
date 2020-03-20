@@ -73,3 +73,16 @@
     (render-to-many env attribute)
     (render-to-one env attribute)))
 
+;; TODO: Make floating root, so that we can use Fulcro state without having to be composed in state/query/initial-state
+(defsc AutocompleteField [this {:keys [env attribute] :as props}]
+  {}
+  (let []
+    (dom/div "TODO")))
+
+(def ui-autocomplete-field (comp/factory AutocompleteField))
+
+(defn render-autocomplete-field [env {::attr/keys [cardinality] :or {cardinality :one} :as attribute}]
+  (if (= :many cardinality)
+    (log/error "Cannot autocomplete to-many attributes with renderer" `render-autocomplete-field)
+    (ui-autocomplete-field {:env env :attribute attribute})))
+
