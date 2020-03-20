@@ -58,20 +58,21 @@
                                                                   ::form/child-class ui)))}
                                    (i :.plus.icon)))))
         ui-factory         (comp/computed-factory ui {:keyfn (fn [item] (-> ui (comp/get-ident item) second str))})]
-    (div :.ui.basic.segment {:key (str k)}
+    (div :.ui.container {:key (str k)}
       (h3 title (span ent/nbsp ent/nbsp) (when (or (nil? add-position) (= :top add-position)) add))
       (when invalid?
         (div :.ui.error.message
           validation-message))
-      (mapv
-        (fn [props]
-          (ui-factory props
-            (merge
-              env
-              {::form/parent          form-instance
-               ::form/parent-relation k
-               ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
-        items)
+      (div :.ui.segments
+        (mapv
+          (fn [props]
+            (ui-factory props
+              (merge
+                env
+                {::form/parent          form-instance
+                 ::form/parent-relation k
+                 ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
+          items))
       (when (= :bottom add-position) add))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
@@ -285,9 +286,9 @@
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
       (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
     (if nested?
-      (div :.ui.form {:classes [(when invalid? "error")]
-                      :key     (str (comp/get-ident form-instance))}
-        (div :.ui.segment
+      (div :.ui.segment
+        (div :.ui.form {:classes [(when invalid? "error")]
+                        :key     (str (comp/get-ident form-instance))}
           (when can-delete?
             (button :.ui.icon.primary.right.floated.button {:disabled (not (?! can-delete? props))
                                                             :onClick  (fn []

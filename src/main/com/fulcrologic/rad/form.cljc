@@ -212,12 +212,14 @@
 
 (defn- id-string->id [type new? id]
   (if new?
-    (tempid/tempid)
+    (tempid/tempid id)
     (case type
       :uuid (new-uuid id)
       :int (parse-int id)
       :long (parse-int id)
-      id)))
+      (do
+        (log/error "Unsupported ID type" type)
+        id))))
 
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter."
@@ -228,8 +230,8 @@
         form-ident [qualified-key id]]
     (when-not (keyword? qualified-key)
       (log/error "Form " (comp/component-name form-class) " does not have a ::form/id that is an attr/attribute."))
-    #_(when (and new? (not (valid-uuid-string? id)))
-        (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route. The form may misbehave."))
+    (when (and new? (not (valid-uuid-string? id)))
+      (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route for new entity. The form may misbehave."))
     (dr/route-deferred form-ident
       (fn []
         (uism/begin! app form-machine
@@ -837,6 +839,8 @@
    - options map:
    -- `:router` The router that contains the form, if not root."
   ([app-ish form-class]
+   ;; This function uses UUIDs for all ID types, since they will end up being tempids
+   ;; which are UUID-based.
    (dr/change-route app-ish (dr/path-to form-class {:action create-action
                                                     :id     (str (new-uuid))})))
   ([app-ish form-class {:keys [router] :as options}]

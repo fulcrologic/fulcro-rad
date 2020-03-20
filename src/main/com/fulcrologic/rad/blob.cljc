@@ -183,8 +183,7 @@
          (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
          (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
          :else (storage/save-blob! temporary-store file-sha file)))
-     ;; TASK: Remove...I think this no longer needed
-     {:tempids {id file-sha}}))
+     {}))
 
 #?(:clj
    (defn wrap-persist-images
