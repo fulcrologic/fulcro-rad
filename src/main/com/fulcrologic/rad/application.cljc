@@ -1,6 +1,5 @@
 (ns com.fulcrologic.rad.application
   (:require
-    [com.example.ui.login-dialog :refer [LoginForm]]
     [com.fulcrologic.fulcro.rendering.multiple-roots-renderer :as mroot]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.application :as app]
