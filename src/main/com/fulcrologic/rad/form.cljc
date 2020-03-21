@@ -813,9 +813,21 @@
     (boolean
       (or
         identity?
-        read-only?
+        (?! read-only? form-instance attr)
         computed-value
         (and (set? read-only-fields) (contains? read-only-fields qualified-key))))))
+
+(>defn field-visible?
+  [form-instance {::keys [field-visible]
+                  ::attr/keys [qualified-key] :as attr}]
+  [comp/component? ::attr/attribute => boolean?]
+  (let [form-field-visible? (?! (comp/component-options form-instance ::fields-visible qualified-key) form-instance attr)
+        field-visible?      (?! field-visible form-instance attr)]
+    (boolean
+      (or
+        (true? form-field-visible?)
+        (and (nil? form-field-visible?) (true? field-visible?))
+        (and (nil? form-field-visible?) (nil? field-visible?))))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
