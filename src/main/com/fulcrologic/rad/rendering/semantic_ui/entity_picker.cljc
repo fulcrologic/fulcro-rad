@@ -97,7 +97,7 @@
                             :onChange #(if-not checked?
                                          (form/input-changed! env qualified-key (vec (conj current-selection value)))
                                          (form/input-changed! env qualified-key (vec (disj current-selection value))))})
-                         (com.fulcrologic.fulcro.dom/label text))))))
+                         (dom/label text))))))
             options))))))
 
 (def ui-to-many-picker (comp/factory ToManyPicker {:keyfn :id}))
