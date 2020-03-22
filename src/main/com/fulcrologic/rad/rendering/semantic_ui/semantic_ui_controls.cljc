@@ -41,7 +41,8 @@
     :boolean {:default boolean-field/render-field}
     :instant {:default      instant/render-field
               :date-at-noon instant/render-date-at-noon-field}
-    :ref     {:pick-one entity-picker/to-one-picker}}
+    :ref     {:pick-one entity-picker/to-one-picker
+              :pick-many entity-picker/to-many-picker}}
 
    ;; Report-related controls
    :com.fulcrologic.rad.report/style->layout
