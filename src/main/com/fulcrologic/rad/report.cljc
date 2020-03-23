@@ -170,6 +170,7 @@
                       :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
                       :will-leave `report-will-leave
                       :query query
+                      :initial-state {source-attribute {}}
                       :ident (list 'fn [] [:component/id (keyword sym)]))
            body     (if (seq (rest args))
                       (rest args)

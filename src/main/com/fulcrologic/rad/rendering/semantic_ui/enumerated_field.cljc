@@ -2,6 +2,7 @@
   (:require
     #?@(:cljs
         [[com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
+         [cljs.reader :refer [read-string]]
          [com.fulcrologic.semantic-ui.modules.dropdown.ui-dropdown :refer [ui-dropdown]]]
         :clj
         [[com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]]])
@@ -10,7 +11,6 @@
     [com.fulcrologic.rad.rendering.semantic-ui.components :refer [ui-wrapped-dropdown]]
     [com.fulcrologic.rad.attributes :as attr]
     [clojure.string :as str]
-    [taoensso.timbre :as log]
     [com.fulcrologic.rad.form :as form]))
 
 (defn enumerated-options [{::form/keys [form-instance] :as env} {::attr/keys [qualified-key] :as attribute}]
@@ -72,4 +72,3 @@
   (if (= :many cardinality)
     (render-to-many env attribute)
     (render-to-one env attribute)))
-

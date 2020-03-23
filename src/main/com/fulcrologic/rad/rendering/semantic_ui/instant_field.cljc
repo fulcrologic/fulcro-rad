@@ -12,12 +12,18 @@
 
 (def ui-datetime-input
   (comp/factory (inputs/StringBufferedInput ::DateTimeInput
-                  {:model->string (fn [tm] (datetime/inst->html-datetime-string (or tm (datetime/now))))
+                  {:model->string (fn [tm]
+                                    (if tm
+                                      (datetime/inst->html-datetime-string tm)
+                                      ""))
                    :string->model (fn [s] (some-> s (datetime/html-datetime-string->inst)))})))
 
 (def ui-date-noon-input
   (comp/factory (inputs/StringBufferedInput ::DateTimeInput
-                  {:model->string (fn [tm] (str/replace (datetime/inst->html-datetime-string (or tm (datetime/now))) #"T.*$" ""))
+                  {:model->string (fn [tm]
+                                    (if tm
+                                      (str/replace (datetime/inst->html-datetime-string tm) #"T.*$" "")
+                                      ""))
                    :string->model (fn [s] (some-> s (str "T12:00") (datetime/html-datetime-string->inst)))})))
 
 (def render-field

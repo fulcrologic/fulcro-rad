@@ -60,23 +60,26 @@
            userOnChange onChange
            options      (get-options props)
            value        (format-value props value)
-           props        #js {:search             true
-                             :selection          true
-                             :closeOnBlur        true
-                             :openOnFocus        true
-                             :selectOnBlur       true
-                             :selectOnNavigation true
-                             :value              value
-                             :options            options
-                             :onChange           (fn [e v]
-                                                   (try
-                                                     (let [value (if multiple
-                                                                   (mapv #(ftransit/transit-str->clj %) (.-value v))
-                                                                   (ftransit/transit-str->clj (.-value v)))]
-                                                       (when (and (or value (boolean? value)) userOnChange)
-                                                         (userOnChange value)))
-                                                     (catch :default e
-                                                       (log/error "Unable to read dropdown value " e (when v (.-value v))))))}]
+           props        (merge
+                          {:search             true
+                           :selection          true
+                           :closeOnBlur        true
+                           :openOnFocus        true
+                           :selectOnBlur       true
+                           :selectOnNavigation true
+                           :multiple           (boolean multiple)}
+                          props
+                          {:value    value
+                           :options  options
+                           :onChange (fn [e v]
+                                       (try
+                                         (let [value (if multiple
+                                                       (mapv #(ftransit/transit-str->clj %) (.-value v))
+                                                       (ftransit/transit-str->clj (.-value v)))]
+                                           (when (and (or value (boolean? value)) userOnChange)
+                                             (userOnChange value)))
+                                         (catch :default e
+                                           (log/error "Unable to read dropdown value " e (when v (.-value v))))))})]
        (ui-dropdown props))
      :clj
      (dom/div :.ui.selection.dropdown

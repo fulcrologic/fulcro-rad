@@ -10,12 +10,16 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.rad.ui-validation :as validation]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [taoensso.timbre :as log]))
 
 (defsc ToOnePicker [this {:keys [env attr]}]
   {:componentDidMount (fn [this]
-                        (let [{:keys [env attr]} (comp/props this)]
-                          (picker-options/load-options! (::form/form-instance env) attr)))}
+                        (let [{:keys [env attr]} (comp/props this)
+                              form-instance (::form/form-instance env)
+                              props         (comp/props form-instance)
+                              form-class    (comp/react-type form-instance)]
+                          (picker-options/load-options! form-instance form-class props attr)))}
   (let [{::form/keys [form-instance]} env
         {::form/keys [attributes field-options]} (comp/component-options form-instance)
         {::attr/keys [qualified-key]} attr
@@ -23,7 +27,7 @@
         target-id-key (first (keep (fn [{k ::attr/qualified-key ::attr/keys [target]}]
                                      (when (= k qualified-key) target)) attributes))
         {::picker-options/keys [cache-key query-key]} (merge attr field-options)
-        cache-key     (or cache-key query-key)
+        cache-key     (or (?! cache-key (comp/react-type form-instance) (comp/props form-instance)) query-key)
         cache-key     (or cache-key query-key (log/error "Ref field MUST have either a ::picker-options/cache-key or ::picker-options/query-key in attribute " qualified-key))
         props         (comp/props form-instance)
         options       (get-in props [::picker-options/options-cache cache-key :options])
@@ -43,3 +47,61 @@
   (defn to-one-picker [env attribute]
     (ui-to-one-picker {:env  env
                        :attr attribute})))
+
+(defsc ToManyPicker [this {:keys [env attr]}]
+  {:componentDidMount (fn [this]
+                        (let [{:keys [env attr]} (comp/props this)
+                              form-instance (::form/form-instance env)
+                              props         (comp/props form-instance)
+                              form-class    (comp/react-type form-instance)]
+                          (picker-options/load-options! form-instance form-class props attr)))}
+  (let [{::form/keys [form-instance]} env
+        {::form/keys [attributes field-options]} (comp/component-options form-instance)
+        {attr-field-options ::form/field-options
+         ::attr/keys        [qualified-key]} attr
+        field-options      (get field-options qualified-key)
+        target-id-key      (first (keep (fn [{k ::attr/qualified-key ::attr/keys [target]}]
+                                          (when (= k qualified-key) target)) attributes))
+        {:keys                 [style]
+         ::picker-options/keys [cache-key query-key]} (merge attr-field-options field-options)
+        cache-key          (or (?! cache-key (comp/react-type form-instance) (comp/props form-instance)) query-key)
+        cache-key          (or cache-key query-key (log/error "Ref field MUST have either a ::picker-options/cache-key or ::picker-options/query-key in attribute " qualified-key))
+        props              (comp/props form-instance)
+        options            (get-in props [::picker-options/options-cache cache-key :options])
+        current-selection  (into #{}
+                             (keep (fn [entity]
+                                     (when-let [id (get entity target-id-key)]
+                                       [target-id-key id])))
+                             (get props qualified-key))
+        field-label        (form/field-label env attr)
+        invalid?           (validation/invalid-attribute-value? env attr)
+        validation-message (when invalid? (validation/validation-error-message env attr))]
+    (div :.ui.field {:classes [(when invalid? "error")]}
+      (dom/label (str field-label " " (when invalid? validation-message)))
+      (div :.ui.middle.aligned.celled.list.big
+        {:style {:marginTop "0"}}
+        (if (= style :dropdown)
+          (ui-wrapped-dropdown
+            {:value    current-selection
+             :multiple true
+             :options  options
+             :onChange (fn [v] (form/input-changed! env qualified-key v))})
+          (map (fn [{:keys [text value]}]
+                 (let [checked? (contains? current-selection value)]
+                   (div :.item {:key value}
+                     (div :.content {}
+                       (div :.ui.toggle.checkbox {:style {:marginTop "0"}}
+                         (dom/input
+                           {:type     "checkbox"
+                            :checked  checked?
+                            :onChange #(if-not checked?
+                                         (form/input-changed! env qualified-key (vec (conj current-selection value)))
+                                         (form/input-changed! env qualified-key (vec (disj current-selection value))))})
+                         (dom/label text))))))
+            options))))))
+
+(def ui-to-many-picker (comp/factory ToManyPicker {:keyfn :id}))
+(let [ui-to-many-picker (comp/factory ToManyPicker {:keyfn (fn [{:keys [attr]}] (::attr/qualified-key attr))})]
+  (defn to-many-picker [env attribute]
+    (ui-to-many-picker {:env  env
+                        :attr attribute})))

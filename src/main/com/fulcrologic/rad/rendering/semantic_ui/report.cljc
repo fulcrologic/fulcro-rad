@@ -13,7 +13,7 @@
     [com.fulcrologic.rad.form :as form]))
 
 (defn ui-render-layout [this]
-  (let [{::report/keys [source-attribute BodyItem parameters run-on-mount?]} (comp/component-options this)
+  (let [{::report/keys [source-attribute BodyItem parameters run-on-mount? create-form]} (comp/component-options this)
         {::report/keys [columns column-headings edit-form]} (comp/component-options BodyItem)
         id-key   (some-> edit-form comp/component-options ::form/id ::attr/qualified-key)
         props    (comp/props this)
@@ -23,6 +23,9 @@
       (dom/div :.ui.top.attached.segment
         (dom/h3 :.ui.header
           (or (some-> this comp/component-options ::report/title) "Report")
+          (when create-form
+            (dom/button :.ui.tiny.right.floated.primary.button
+              {:onClick (fn [] (form/create! this create-form))} "New"))
           (dom/button :.ui.tiny.right.floated.primary.button
             {:classes [(when loading? "loading")]
              :onClick (fn [] (report/run-report! this))} (if run-on-mount? "Refresh" "Run")))
@@ -62,7 +65,7 @@
                                            (dom/a {:onClick (fn [] (form/edit! this edit-form (get row id-key)))} label)
                                            label))))
                                    columns))) rows)))
-            (let [factory (comp/factory BodyItem)]
+            (let [factory (comp/factory BodyItem {:keyfn (fn [props] (second (comp/get-ident BodyItem props)))})]
               (dom/div :.ui.list
                 (mapv factory rows)))))))))
 

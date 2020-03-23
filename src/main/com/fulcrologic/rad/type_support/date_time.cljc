@@ -176,11 +176,14 @@
    (html-datetime-string->inst nil date-time-string))
   ([zone-name date-time-string]
    [(? ::zone-name) string? => inst?]
-   (let [z   (get-zone-id zone-name)
-         dt  (ldt/parse date-time-string)
-         zdt (ldt/at-zone dt z)
-         i   (zdt/to-instant zdt)]
-     (new-date (instant/to-epoch-milli i)))))
+   (try
+     (let [z   (get-zone-id zone-name)
+           dt  (ldt/parse date-time-string)
+           zdt (ldt/at-zone dt z)
+           i   (zdt/to-instant zdt)]
+       (new-date (instant/to-epoch-milli i)))
+     (catch #?(:cljs :default :clj Exception) e
+       nil))))
 
 (>defn inst->html-datetime-string
   ([inst]
@@ -188,7 +191,10 @@
    (inst->html-datetime-string nil inst))
   ([zone-name inst]
    [(? ::zone-name) inst? => string?]
-   (let [z         (get-zone-id zone-name)
-         ldt       (ldt/of-instant (inst->instant inst) z)
-         formatter cljc.java-time.format.date-time-formatter/iso-local-date-time]
-     (ldt/format ldt formatter))))
+   (try
+     (let [z         (get-zone-id zone-name)
+           ldt       (ldt/of-instant (inst->instant inst) z)
+           formatter cljc.java-time.format.date-time-formatter/iso-local-date-time]
+       (ldt/format ldt formatter))
+     (catch #?(:cljs :default :clj Exception) e
+       nil))))

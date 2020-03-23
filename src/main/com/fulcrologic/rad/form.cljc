@@ -27,8 +27,9 @@
     [taoensso.tufte :refer [p profile]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
-    #?(:clj [cljs.analyzer :as ana])
-    #?(:cljs [goog.object])
+    #?@(:clj  [[cljs.analyzer :as ana]]
+        :cljs [[cognitect.transit :as ct]
+               [goog.object :as gobj]])
     [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
@@ -61,10 +62,13 @@
   "
   [{::keys [form-instance] :as form-env} element]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        style-path   [::layout-styles element]
-        layout-style (or (some-> form-instance comp/component-options (get-in style-path)) :default)
-        render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
-                       (get element) (get layout-style))]
+        style-path             [::layout-styles element]
+        layout-style           (or (some-> form-instance comp/component-options (get-in style-path)) :default)
+        element->style->layout (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout)
+        render-fn              (some-> element->style->layout (get element) (get layout-style))]
+    (cond
+      (not runtime-atom) (log/error "Form instance was not in the rendering environment. This means the form did not mount properly")
+      (not render-fn) (log/error "No renderer was installed for layout style" layout-style "for UI element" element))
     render-fn))
 
 (defn form-container-renderer
@@ -140,13 +144,13 @@
        ::computed-props cprops})))
 
 (defn render-layout [form-instance props]
+  (when-not (comp/component? form-instance)
+    (throw (ex-info "Invalid form instance propagated to render layout." {:form-instance form-instance})))
   (let [env    (rendering-env form-instance props)
         render (form-container-renderer env)]
     (if render
       (render env)
-      (do
-        (log/error "No container layout rendering defined. Cannot render form " (comp/component-name form-instance))
-        nil))))
+      nil)))
 
 #?(:clj
    (s/def ::defsc-form-args (s/cat
@@ -199,19 +203,35 @@
              (string? s)
              (re-matches #"^........-....-....-....-............$" s))))
 
+#?(:cljs
+   (defn parse-long
+     "Note: in CLJS this can return a Number or a goog.math.Long if it would overflow a js Number."
+     [v] (ct/integer v))
+   :clj
+   (defn parse-long [v] (Long/parseLong v)))
+
+(defn- id-string->id [type new? id]
+  (if new?
+    (tempid/tempid id)
+    (case type
+      :uuid (new-uuid id)
+      :int (parse-long id)
+      :long (parse-long id)
+      (do
+        (log/error "Unsupported ID type" type)
+        id))))
+
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter."
   [app {:keys [action id]} form-class]
-  (let [new?       (= create-action action)
-        uuid       (if new?
-                     (tempid/tempid (new-uuid id))
-                     (new-uuid id))
-        id-prop    (comp/component-options form-class ::id ::attr/qualified-key)
-        form-ident [id-prop uuid]]
-    (when-not (keyword? id-prop)
+  (let [{::attr/keys [qualified-key type] :as id-attr} (comp/component-options form-class ::id)
+        new?       (= create-action action)
+        coerced-id (id-string->id type new? id)
+        form-ident [qualified-key coerced-id]]
+    (when-not (keyword? qualified-key)
       (log/error "Form " (comp/component-name form-class) " does not have a ::form/id that is an attr/attribute."))
     (when (and new? (not (valid-uuid-string? id)))
-      (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route. The form may misbehave."))
+      (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route for new entity. The form may misbehave."))
     (dr/route-deferred form-ident
       (fn []
         (uism/begin! app form-machine
@@ -229,6 +249,26 @@
       #?(:clj true :cljs (js/confirm "Unsaved changed. Are you sure?"))
       true)))
 
+(defn form-pre-merge
+  "Generate a pre-merge for a component that has the given for attribute map. Returns a proper
+  pre-merge fn, or `nil` if none is needed"
+  [{::keys [subforms]} key->attribute]
+  (let [sorters-by-k (into {}
+                       (keep (fn [k]
+                               (when-let [sorter (get-in subforms [k ::sort-children])]
+                                 [k sorter])) (keys key->attribute)))]
+    (when (seq sorters-by-k)
+      (fn [{:keys [data-tree]}]
+        (let [ks (keys sorters-by-k)]
+          (log/debug "Form system sorting data tree children for keys " ks)
+          (reduce
+            (fn [tree k]
+              (if (vector? (get tree k))
+                (update tree k (comp vec (get sorters-by-k k)))
+                tree))
+            data-tree
+            ks))))))
+
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
   [get-class location options]
@@ -240,16 +280,20 @@
                                                                                     (not computed-value)
                                                                                     (not identity?)))
         attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
+        attribute-map              (attr/attribute-map attributes)
+        pre-merge                  (form-pre-merge options attribute-map)
         base-options               (merge
                                      {::validator (attr/make-attribute-validator attributes)}
                                      options
                                      (cond->
-                                       {:ident       (fn [_ props] [id-key (get props id-key)])
-                                        :form-fields (into #{}
-                                                       (comp
-                                                         (filter form-field?)
-                                                         (map ::attr/qualified-key))
-                                                       attributes)}
+                                       {:ident           (fn [_ props] [id-key (get props id-key)])
+                                        ::key->attribute attribute-map
+                                        :form-fields     (into #{}
+                                                           (comp
+                                                             (filter form-field?)
+                                                             (map ::attr/qualified-key))
+                                                           attributes)}
+                                       pre-merge (assoc :pre-merge pre-merge)
                                        route-prefix (merge {:route-segment [route-prefix :action :id]
                                                             :will-leave    form-will-leave
                                                             :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
@@ -278,6 +322,8 @@
            render-form  (#'comp/build-render sym thissym propsym computedsym extra-args body)
            options-expr `(let [get-class# (fn [] ~sym)]
                            (assoc (convert-options get-class# ~location ~options) :render ~render-form))]
+       (when (some #(= '_ %) arglist)
+         (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
        (if (comp/cljs? env)
          `(do
             (declare ~sym)
@@ -478,13 +524,17 @@
   "Discard all changes and change route."
   [env]
   (let [Form         (uism/actor-class env :actor/form)
+        ;; TODO: Should allow the store of an override to this declared route.
         cancel-route (some-> Form comp/component-options ::cancel-route)]
-    (when-not cancel-route
-      (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form."))
-    ;; TODO: Should allow the store of an override to this declared route.
-    (-> env
-      (uism/activate :state/abandoned)
-      (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1))))
+    (if cancel-route
+      (let [form-ident (uism/actor->ident env :actor/form)]
+        (-> env
+          (uism/apply-action fs/pristine->entity* form-ident)
+          (uism/activate :state/abandoned)
+          (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))
+      (do
+        (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form.")
+        env))))
 
 (defn ask-before-leaving [env]
   (if (confirm-exit? env)
@@ -668,7 +718,7 @@
 
         :event/add-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                          (let [{::keys [parent-relation parent child-class]} event-data
+                          (let [{::keys [order parent-relation parent child-class]} event-data
                                 id-key      (some-> child-class comp/component-options ::id ::attr/qualified-key)
                                 target-path (conj (comp/get-ident parent) parent-relation)
                                 ;; TODO: initialize all fields...use get-initial-state perhaps?
@@ -679,7 +729,7 @@
                                 (fn [s]
                                   (-> s
                                     (merge/merge-component child-class new-child
-                                      :append target-path)
+                                      (or order :append) target-path)
                                     ;; TODO: mark default fields complete...
                                     (fs/add-form-config* child-class child-ident))))
                               (apply-derived-calculations))))}
@@ -763,9 +813,21 @@
     (boolean
       (or
         identity?
-        read-only?
+        (?! read-only? form-instance attr)
         computed-value
         (and (set? read-only-fields) (contains? read-only-fields qualified-key))))))
+
+(>defn field-visible?
+  [form-instance {::keys      [field-visible]
+                  ::attr/keys [qualified-key] :as attr}]
+  [comp/component? ::attr/attribute => boolean?]
+  (let [form-field-visible? (?! (comp/component-options form-instance ::fields-visible qualified-key) form-instance attr)
+        field-visible?      (?! field-visible form-instance attr)]
+    (boolean
+      (or
+        (true? form-field-visible?)
+        (and (nil? form-field-visible?) (true? field-visible?))
+        (and (nil? form-field-visible?) (nil? field-visible?))))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
@@ -789,6 +851,8 @@
    - options map:
    -- `:router` The router that contains the form, if not root."
   ([app-ish form-class]
+   ;; This function uses UUIDs for all ID types, since they will end up being tempids
+   ;; which are UUID-based.
    (dr/change-route app-ish (dr/path-to form-class {:action create-action
                                                     :id     (str (new-uuid))})))
   ([app-ish form-class {:keys [router] :as options}]

@@ -12,6 +12,7 @@
     [com.fulcrologic.rad.rendering.semantic-ui.instant-field :as instant]
     [com.fulcrologic.rad.rendering.semantic-ui.enumerated-field :as enumerated-field]
     [com.fulcrologic.rad.rendering.semantic-ui.blob-field :as blob-field]
+    [com.fulcrologic.rad.rendering.semantic-ui.autocomplete :as autocomplete]
     [com.fulcrologic.rad.rendering.semantic-ui.text-field :as text-field]))
 
 (def all-controls
@@ -27,8 +28,10 @@
 
    :com.fulcrologic.rad.form/type->style->control
    {:text    {:default text-field/render-field}
-    :enum    {:default enumerated-field/render-field}
+    :enum    {:default      enumerated-field/render-field
+              :autocomplete autocomplete/render-autocomplete-field}
     :string  {:default                              text-field/render-field
+              :autocomplete                         autocomplete/render-autocomplete-field
               :viewable-password                    text-field/render-viewable-password
               :password                             text-field/render-password
               :sorted-set                           text-field/render-dropdown
@@ -38,7 +41,8 @@
     :boolean {:default boolean-field/render-field}
     :instant {:default      instant/render-field
               :date-at-noon instant/render-date-at-noon-field}
-    :ref     {:pick-one entity-picker/to-one-picker}}
+    :ref     {:pick-one entity-picker/to-one-picker
+              :pick-many entity-picker/to-many-picker}}
 
    ;; Report-related controls
    :com.fulcrologic.rad.report/style->layout
