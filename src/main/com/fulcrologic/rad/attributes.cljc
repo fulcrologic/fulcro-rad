@@ -148,9 +148,10 @@
       (valid? value)
       (or (not required?) non-empty-value?))))
 
-(defn attribute-map
+(>defn attribute-map
   "Returns a map of qualified key -> attribute for the given attributes"
   [attributes]
+  [::attributes => (s/map-of qualified-keyword? ::attribute)]
   (into {}
     (map (fn [{::keys [qualified-key] :as a}]
            [qualified-key a])
