@@ -27,8 +27,9 @@
     [taoensso.tufte :refer [p profile]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
-    #?(:clj [cljs.analyzer :as ana])
-    #?(:cljs [goog.object])
+    #?@(:clj  [[cljs.analyzer :as ana]]
+        :cljs [[cognitect.transit :as ct]
+               [goog.object :as gobj]])
     [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
@@ -203,20 +204,19 @@
              (re-matches #"^........-....-....-....-............$" s))))
 
 #?(:cljs
-   (defn parse-int [v]
-     (let [rv (js/parseInt v)]
-       (if (js/isNaN rv) 0 rv)))
+   (defn parse-long
+     "Note: in CLJS this can return a Number or a goog.math.Long if it would overflow a js Number."
+     [v] (ct/integer v))
    :clj
-   (defn parse-int [v] (Integer/parseInt v)))
-
+   (defn parse-long [v] (Long/parseLong v)))
 
 (defn- id-string->id [type new? id]
   (if new?
     (tempid/tempid id)
     (case type
       :uuid (new-uuid id)
-      :int (parse-int id)
-      :long (parse-int id)
+      :int (parse-long id)
+      :long (parse-long id)
       (do
         (log/error "Unsupported ID type" type)
         id))))
@@ -818,7 +818,7 @@
         (and (set? read-only-fields) (contains? read-only-fields qualified-key))))))
 
 (>defn field-visible?
-  [form-instance {::keys [field-visible]
+  [form-instance {::keys      [field-visible]
                   ::attr/keys [qualified-key] :as attr}]
   [comp/component? ::attr/attribute => boolean?]
   (let [form-field-visible? (?! (comp/component-options form-instance ::fields-visible qualified-key) form-instance attr)
