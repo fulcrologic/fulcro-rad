@@ -264,7 +264,11 @@
           (reduce
             (fn [tree k]
               (if (vector? (get tree k))
-                (update tree k (comp vec (get sorters-by-k k)))
+                (try
+                  (update tree k (comp vec (get sorters-by-k k)))
+                  (catch #?(:clj Exception :cljs :default) e
+                    (log/error "Sort failed: " (str e))
+                    tree))
                 tree))
             data-tree
             ks))))))
