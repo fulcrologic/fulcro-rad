@@ -44,7 +44,8 @@
           id-key    (::attr/qualified-key column-key)]
       (dom/tr {}
         (map-indexed
-          (fn [idx {::attr/keys [qualified-key field-formatter]}]
+          (fn [idx {::report/keys [field-formatter]
+                    ::attr/keys   [qualified-key]}]
             (dom/td {:key (str "col-" idx)}
               (let [value           (get props qualified-key)
                     formatted-value (or
@@ -77,7 +78,8 @@
       (dom/div :.item
         (dom/div :.content
           (map-indexed
-            (fn [idx {::attr/keys [qualified-key field-formatter]}]
+            (fn [idx {::report/keys [field-formatter]
+                      ::attr/keys   [qualified-key]}]
               (dom/div {:key (str "col-" idx)}
                 (let [{::report/keys [field-formatter]} (?! key->attribute qualified-key)
                       value           (get props qualified-key)
@@ -153,9 +155,8 @@
    :shouldComponentUpdate (fn [_ _ _] true)}
   (let [props           (comp/props report-instance)
         {report-column-headings ::report/column-headings
-         ::report/keys          [source-attribute BodyItem]} (comp/component-options report-instance)
-        {item-column-headings ::report/column-headings
-         ::report/keys        [columns]} (comp/component-options BodyItem)
+         ::report/keys          [columns source-attribute BodyItem]} (comp/component-options report-instance)
+        {item-column-headings ::report/column-headings} (comp/component-options BodyItem)
         render-row      ((comp/get-state this :row-factory) BodyItem)
         column-headings (mapv (fn [{::report/keys [column-heading]
                                     ::attr/keys   [qualified-key] :as attr}]
