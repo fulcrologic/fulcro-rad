@@ -1,6 +1,6 @@
 = Fulcro RAD Developer's Guide
 :author: Tony Kay
-:revdate: March 1, 2020
+:revdate: March 23, 2020
 :lang: en
 :encoding: UTF-8
 :doctype: book
@@ -71,6 +71,11 @@ endif::[]
 * TODO: :semantic-ui/add-position
 
 = Introduction
+
+BREAKING CHANGES (March 23rd): The following keywords were renamed recently: `::datomic/entities-ids` to `::attr/identities` and
+`::sql/schema` and `::datomic/schema` were both folded into the name `::attr/schema`.  The `::sql/table-names` was
+replaced by giving the table name on the identity attribute as `::sql/table string`, and the `::attr/identities` is
+enough information from there to get the proper table name(s) for an attribute.
 
 WARNING: Fulcro RAD is in early stages of development. The documented features are somewhat stable
 and should not change much over time; however, until RAD reaches a formal release (beyond an alpha)

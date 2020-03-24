@@ -1,15 +1,19 @@
 (ns com.fulcrologic.rad.report
   #?(:cljs (:require-macros com.fulcrologic.rad.report))
   (:require
+    #?(:clj [cljs.analyzer :as ana])
     [com.fulcrologic.rad.options-util :refer [?! debounce]]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [taoensso.timbre :as log]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [clojure.spec.alpha :as s]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
@@ -23,6 +27,28 @@
       (layout report-instance)
       (do
         (log/error "No layout function found for form layout style" layout-style)
+        nil))))
+
+(defn render-row [report-instance row-class row-props]
+  (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
+        layout-style (or (some-> report-instance comp/component-options ::row-style) :default)
+        render       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::row-style->row-layout layout-style)]
+    (if render
+      (render report-instance row-class row-props)
+      (do
+        (log/error "No layout function found for form layout style" layout-style)
+        nil))))
+
+(defn control-renderer
+  "Get the report controls renderer for the given report instance."
+  [report-instance]
+  (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
+        control-style (or (some-> report-instance comp/component-options ::control-style) :default)
+        control       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::control-style->control control-style)]
+    (if control
+      control
+      (do
+        (log/error "No layout function found for form layout style" control-style)
         nil))))
 
 (defn render-parameter-input [report-instance parameter-key]
@@ -116,18 +142,14 @@
   [this]
   (uism/trigger! this (comp/get-ident this) :event/run))
 
-(defn req!
-  ([sym options k pred?]
-   (when-not (and (contains? options k) (pred? (get options k)))
-     (throw (ex-info (str "defsc-report " sym " is missing or invalid option " k) {}))))
-  ([sym options k]
-   (when-not (contains? options k)
-     (throw (ex-info (str "defsc-report " sym " is missing option " k) {})))))
-
-(defn opt!
-  [sym options k pred?]
-  (when-not (pred? (get options k))
-    (throw (ex-info (str "defsc-report " sym " has an invalid option " k) {}))))
+#?(:clj
+   (defn req!
+     ([env sym options k pred?]
+      (when-not (and (contains? options k) (pred? (get options k)))
+        (throw (ana/error env (str "defsc-report " sym " is missing or invalid option " k)))))
+     ([env sym options k]
+      (when-not (contains? options k)
+        (throw (ana/error env (str "defsc-report " sym " is missing option " k)))))))
 
 (defn report-will-enter [app route-params report-class]
   (let [report-ident (comp/get-ident report-class {})]
@@ -146,8 +168,8 @@
      Instead:
 
      ::report/BodyItem FulcroClass?
-     ::report/columns (every? keyword? :kind vector?)
-     ::report/column-headings (every? string? :kind vector?)
+     ::report/columns (every? attribute? :kind vector?)
+     ::report/column-key attribute?
      ::report/source-attribute keyword?
      ::report/route string?
      ::report/parameters (map-of ui-keyword? rad-data-type?)
@@ -158,26 +180,45 @@
      "
      [sym arglist & args]
      (let [this-sym (first arglist)
-           {::keys [BodyItem columns source-attribute route parameters] :as options} (first args)
-           subquery (cond
-                      BodyItem `(comp/get-query ~BodyItem)
-                      (seq columns) columns
-                      :else (throw (ex-info "Reports must have columns or a BodyItem" {})))
-           query    (into [{source-attribute subquery} [df/marker-table '(quote _)]]
-                      (keys parameters))
-           options  (assoc options
-                      :route-segment (if (vector? route) route [route])
-                      :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
-                      :will-leave `report-will-leave
-                      :query query
-                      :initial-state {source-attribute {}}
-                      :ident (list 'fn [] [:component/id (keyword sym)]))
-           body     (if (seq (rest args))
-                      (rest args)
-                      [`(render-layout ~this-sym)])]
-       (req! sym options ::BodyItem)
-       (req! sym options ::source-attribute keyword?)
-       `(comp/defsc ~sym ~arglist ~options ~@body))))
+           {::keys [BodyItem edit-form columns column-key row-actions source-attribute route parameters] :as options} (first args)]
+       (req! &env sym options ::columns #(every? symbol? %))
+       (req! &env sym options ::column-key #(symbol? %))
+       (req! &env sym options ::source-attribute keyword?)
+       (let
+         [generated-row-sym (symbol (str (name sym) "-Row"))
+          ItemClass         (or BodyItem generated-row-sym)
+          subquery          `(comp/get-query ~ItemClass)
+          query             (into [{source-attribute subquery} [df/marker-table '(quote _)]] (keys parameters))
+          options           (assoc options
+                              :route-segment (if (vector? route) route [route])
+                              :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
+                              :will-leave `report-will-leave
+                              ::BodyItem ItemClass
+                              :query query
+                              :initial-state {source-attribute {}}
+                              :ident (list 'fn [] [:component/id (keyword sym)]))
+          body              (if (seq (rest args))
+                              (rest args)
+                              [`(render-layout ~this-sym)])
+          row-query         (list 'fn [] `(into [(::attr/qualified-key ~column-key)] (map ::attr/qualified-key) ~columns))
+          props-sym         (gensym "props")
+          row-ident         (list 'fn []
+                              `(let [k# (::attr/qualified-key ~column-key)]
+                                 [k# (get ~props-sym k#)]))
+          row-actions       (or row-actions [])
+          body-options      (cond-> {:query        row-query
+                                     :ident        row-ident
+                                     ::row-actions row-actions
+                                     ::columns     columns}
+                              edit-form (assoc ::edit-form edit-form))
+          defs              (if-not BodyItem
+                              [`(comp/defsc ~generated-row-sym [this# ~props-sym computed#]
+                                  ~body-options
+                                  (render-row (:report-instance computed#) ~generated-row-sym ~props-sym))
+                               `(comp/defsc ~sym ~arglist ~options ~@body)]
+                              [`(comp/defsc ~sym ~arglist ~options ~@body)])]
+         `(do
+            ~@defs)))))
 
 (def reload!
   (debounce
