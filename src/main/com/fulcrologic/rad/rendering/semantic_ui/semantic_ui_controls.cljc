@@ -41,12 +41,20 @@
     :boolean {:default boolean-field/render-field}
     :instant {:default      instant/render-field
               :date-at-noon instant/render-date-at-noon-field}
-    :ref     {:pick-one entity-picker/to-one-picker
+    :ref     {:pick-one  entity-picker/to-one-picker
               :pick-many entity-picker/to-many-picker}}
 
    ;; Report-related controls
    :com.fulcrologic.rad.report/style->layout
-   {:default sui-report/ui-render-layout}
+   {:default sui-report/render-table-report-layout
+    :list    sui-report/render-list-report-layout}
+
+   :com.fulcrologic.rad.report/control-style->control
+   {:default sui-report/render-standard-controls}
+
+   :com.fulcrologic.rad.report/row-style->row-layout
+   {:default sui-report/render-table-row
+    :list    sui-report/render-list-row}
 
    :com.fulcrologic.rad.report/parameter-type->style->input
    {:boolean {:default boolean-input/render-input}}})
