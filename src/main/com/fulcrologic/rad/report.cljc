@@ -154,12 +154,19 @@
       (when-not (contains? options k)
         (throw (ana/error env (str "defsc-report " sym " is missing option " k)))))))
 
+(defn start-report!
+  "Start a report. Not normally needed, since a report is started when it is routed to; however, if you put
+  a report on-screen initially (or don't use dynamic router), then you must call this to start your report."
+  ([app report-class]
+   (start-report! app report-class {}))
+  ([app report-class options]
+   (uism/begin! app report-machine (comp/ident report-class {}) {:actor/report report-class} options)))
+
 (defn report-will-enter [app route-params report-class]
   (let [report-ident (comp/get-ident report-class {})]
     (dr/route-deferred report-ident
       (fn []
-        (uism/begin! app report-machine report-ident {:actor/report report-class}
-          {:route-params route-params})
+        (start-report! app report-class {:route-params route-params})
         (comp/transact! app [(dr/target-ready {:target report-ident})])))))
 
 (defn report-will-leave [_ _] true)
