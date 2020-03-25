@@ -3,8 +3,12 @@
   (:require
     [clojure.string]
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn =>]]
-    #?(:cljs [goog.functions :as gf])))
+    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
+    #?(:cljs [goog.functions :as gf])
+    [com.fulcrologic.fulcro.components :as comp]
+    [taoensso.encore :as enc]
+    #?(:clj [cljs.analyzer :as ana])
+    [taoensso.timbre :as log]))
 
 (defn ?!
   "Run if the argument is a fn. This function can accept a value or function. If it is a
@@ -15,8 +19,73 @@
     (apply v args)
     v))
 
+(>defn qkey
+  "Ensure that the argument, which can be the qualified key of an attribute or the attribute itself, is a keyword.
+
+  Returns the value if is passed unless it is a map, in which case it returns the value at ::attr/qualified-key."
+  [attr-or-keyword]
+  [(s/or :k keyword :attr (s/keys :req [:com.fulcrologic.rad.attributes/qualified-key])) => (? keyword?)]
+  (cond-> attr-or-keyword
+    (and
+      (map? attr-or-keyword)
+      (contains? attr-or-keyword :com.fulcrologic.rad.attributes/qualified-key)) (get :com.fulcrologic.rad.attributes/qualified-key)))
+
+(let [p! persistent!, t transient]
+  (defn transform-entries
+    "Convert all of the entries in the given map such that `{k v}` => `{(kf k) (vf v)}`"
+    [m kf vf] (p! (reduce-kv (fn [m k v] (assoc! m (kf k) (vf v))) (t {}) m))))
+
+(defn ?fix-keys
+  "In RAD component options that are maps: the map keys *always* support keywords, but SHOULD allow attributes
+   to be used for convenience. Therefore macros can transform any map keys that are attributes into their
+   qualified key. This function takes a value that can be of any type. IF it detects that it is a map, then
+   it will transform the map keys such that any attributes become their keywords, and any other kind of key is
+   left alone."
+  [v]
+  (if (map? v)
+    (enc/map-keys qkey v)
+    v))
+
+#?(:clj
+   (>defn macro-optimize-options
+     "Applies standard RAD optimizations to a macro's options map (where things may be symbolic). Returns an updated
+      options map that contains new syntax that must be evaluated.
+
+      Fixes anything listed in `keys-to-fix` by applying `opts/?fix-keys`, and anything in `key-transform`.
+
+      The returned option map will change the values for keys in the `keys-to-fix`:
+
+      * If there is an entry in `key-transforms` {k (fn [v] ...)} then it will use that (the fn should return syntax, since
+        v may be symbolic)
+      * Otherwise it will apply opts/?fix-keys iff the value is a map or is symbolic.
+      "
+     [env options keys-to-fix key-transforms]
+     [any? map? (s/coll-of keyword? :kind set?) (s/map-of keyword? fn?) => map?]
+     (try
+       (reduce-kv
+         (fn [new-options k v]
+           (assoc new-options
+             k (if-let [xform (get key-transforms k)]
+                 (xform v)
+                 (if (and (contains? keys-to-fix k) (or (map? v) (symbol? v)))
+                   `(com.fulcrologic.rad.options-util/?fix-keys ~v)
+                   v))))
+         {}
+         options)
+       (catch Exception e
+         (throw (ana/error env (str "Cannot transform macro options map: " (.getMessage e))))))))
+
+(>defn form-class
+  "Attempt to coerce into a Fulcro component class. If the argument is a keyword it will look it up in Fulcro's
+  component registry, otherwise the argument is return unmodified. May return nil if it is passed nil or the
+  component is not registered at the provided key."
+  [registry-key-or-component-class]
+  [(? (s/or :registry-key keyword? :fulcro-class comp/component-class?)) => (? comp/component-class?)]
+  (cond-> registry-key-or-component-class
+    (keyword? registry-key-or-component-class) (comp/registry-key->class)))
+
 (defn debounce
-  "Debounce calls to f to at-most every tm ms. Trailing edge wins."
+  "Debounce calls to f to at-most every tm ms. Trailing edge wins. In CLJ this just calls `f` immediately on the calling thread."
   [f tm]
   #?(:clj  f
      :cljs (gf/debounce f tm)))

@@ -32,7 +32,8 @@
                [goog.object :as gobj]])
     [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]))
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.rad.options-util :as opts]))
 
 (def create-action "create")
 (def edit-action "edit")
@@ -318,6 +319,7 @@
    (defn defsc-form*
      [env args]
      (let [{:keys [sym doc arglist options body]} (s/conform ::defsc-form-args args)
+           options      (opts/macro-optimize-options env options #{::subforms ::validation-messages ::field-styles} {})
            nspc         (if (comp/cljs? env) (-> env :ns :name str) (name (ns-name *ns*)))
            fqkw         (keyword (str nspc) (name sym))
            body         (form-body arglist body)
@@ -359,12 +361,23 @@
 ;; LOGIC
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; do-saves! params/env => return value
-;; -> params/env -> middleware-in -> do-saves -> middleware-out
 #?(:clj
-   (pc/defmutation save-form [env params]
-     {::pc/params #{::id ::master-pk ::diff ::delta}}
-     (log/debug "Save invoked from client with " params)
+   (defn save-form*
+     "Internal implementation of clj-side form save. Can be used in your own mutations to accomplish writes through
+      the save middleware.
+
+      params MUST contain:
+
+      * `::form/delta` - The data to save. Map keyed by ident whose values are maps with `:before` and `:after` values.
+      * `::form/id` - The actual ID of the entity being changed.
+      * `::form/master-pk` - The keyword representing the form's ID in your RAD model's attributes.
+
+      Returns:
+
+      {:tempid {} ; tempid remaps
+       master-pk id} ; the k/id of the entity saved. The id here will be remapped already if it was a tempid.
+      "
+     [env params]
      (let [save-middleware (::save-middleware env)
            save-env        (assoc env ::params params)
            result          (if save-middleware
@@ -373,7 +386,15 @@
            {::keys [id master-pk]} params
            {:keys [tempids]} result
            id              (get tempids id id)]
-       (merge result {master-pk id})))
+       (merge result {master-pk id}))))
+
+;; do-saves! params/env => return value
+;; -> params/env -> middleware-in -> do-saves -> middleware-out
+#?(:clj
+   (pc/defmutation save-form [env params]
+     {::pc/params #{::id ::master-pk ::diff ::delta}}
+     (log/debug "Save invoked from client with " params)
+     (save-form* env params))
    :cljs
    (m/defmutation save-form [_]
      (action [_] :noop)))

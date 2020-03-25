@@ -1,8 +1,11 @@
 (ns com.fulcrologic.rad.report
   #?(:cljs (:require-macros com.fulcrologic.rad.report))
   (:require
-    #?(:clj [cljs.analyzer :as ana])
-    [com.fulcrologic.rad.options-util :refer [?! debounce]]
+    #?@(:clj
+        [[clojure.pprint :refer [pprint]]
+         [cljs.analyzer :as ana]])
+    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.type-support.decimal :as math]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
@@ -180,12 +183,15 @@
      "
      [sym arglist & args]
      (let [this-sym (first arglist)
-           {::keys [BodyItem edit-form columns row-pk row-actions source-attribute route parameters] :as options} (first args)]
+           options  (first args)]
        (req! &env sym options ::columns #(every? symbol? %))
        (req! &env sym options ::row-pk #(symbol? %))
        (req! &env sym options ::source-attribute keyword?)
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
+          options           (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})
+          {::keys [BodyItem edit-form columns row-pk form-links row-actions source-attribute route parameters] :as options} options
+          _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
           query             (into [{source-attribute subquery} [df/marker-table '(quote _)]] (keys parameters))
@@ -200,7 +206,11 @@
           body              (if (seq (rest args))
                               (rest args)
                               [`(render-layout ~this-sym)])
-          row-query         (list 'fn [] `(into [(::attr/qualified-key ~row-pk)] (map ::attr/qualified-key) ~columns))
+          row-query         (list 'fn [] `(let [forms#    ~(::form-links options)
+                                                id-attrs# (keep #(comp/component-options % ::form/id) (vals forms#))]
+                                            (mapv ::attr/qualified-key (conj
+                                                                         (set (concat id-attrs# ~columns))
+                                                                         ~row-pk))))
           props-sym         (gensym "props")
           row-ident         (list 'fn []
                               `(let [k# (::attr/qualified-key ~row-pk)]
@@ -210,7 +220,7 @@
                                      :ident        row-ident
                                      ::row-actions row-actions
                                      ::columns     columns}
-                              edit-form (assoc ::edit-form edit-form))
+                              form-links (assoc ::form-links form-links))
           defs              (if-not BodyItem
                               [`(comp/defsc ~generated-row-sym [this# ~props-sym computed#]
                                   ~body-options
@@ -233,3 +243,52 @@
     (comp/transact! report-instance `[(m/set-props ~{parameter-name new-value})])
     (when reload?
       (reload! report-instance))))
+
+(defn form-link
+  "Get the form link info for a given (column) key.
+
+  Returns nil if there is no link info, otherwise retuns:
+
+  ```
+  {:edit-form FormClass
+   :entity-id id-of-entity-to-edit}
+  ```
+  "
+  [report-instance row-props column-key]
+  (let [{::keys [form-links]} (comp/component-options report-instance)
+        cls    (get form-links column-key)
+        id-key (some-> cls (comp/component-options ::form/id ::attr/qualified-key))]
+    (when cls
+      {:edit-form cls
+       :entity-id (get row-props id-key)})))
+
+;; TASK: More default type formatters
+(defn inst->human-readable-date
+  "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string."
+  ([inst]
+   #?(:cljs
+      (when (inst? inst)
+        (.toLocaleDateString ^js inst js/undefined #js {:weekday "short" :year "numeric" :month "short" :day "numeric"})))))
+
+(defn format-column [v]
+  (cond
+    (string? v) v
+    (inst? v) (str (inst->human-readable-date v))
+    (math/numeric? v) (math/numeric->str v)
+    :else (str v)))
+
+(defn formatted-column-value
+  "Given a report instance, a row of props, and a column attribute for that report:
+   returns the formatted value of that column using the field formatter(s) defined
+   on the column attribute or report. If no formatter is provided a default formatter
+   will be used."
+  [report-instance row-props {::keys      [field-formatter]
+                              ::attr/keys [qualified-key] :as column-attribute}]
+  (let [value                  (get row-props qualified-key)
+        report-field-formatter (comp/component-options report-instance ::field-formatters qualified-key)
+        formatted-value        (or
+                                 (?! report-field-formatter value)
+                                 (?! field-formatter value)
+                                 (format-column value)
+                                 (str value))]
+    formatted-value))
