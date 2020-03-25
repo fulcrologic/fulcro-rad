@@ -71,10 +71,10 @@
          ::report/keys [columns edit-form field-formatters]} (comp/component-options row-class)
         {report-field-formatters ::report/field-formatters
          report-edit-form        ::report/edit-form
-         ::report/keys           [column-key]} (comp/component-options report-instance)]
+         ::report/keys           [row-pk]} (comp/component-options report-instance)]
     (log/spy :info props)
     (let [edit-form (or report-edit-form edit-form)
-          id-key    (::attr/qualified-key column-key)]
+          id-key    (::attr/qualified-key row-pk)]
       (dom/div :.item
         (dom/div :.content
           (map-indexed

@@ -180,9 +180,9 @@
      "
      [sym arglist & args]
      (let [this-sym (first arglist)
-           {::keys [BodyItem edit-form columns column-key row-actions source-attribute route parameters] :as options} (first args)]
+           {::keys [BodyItem edit-form columns row-pk row-actions source-attribute route parameters] :as options} (first args)]
        (req! &env sym options ::columns #(every? symbol? %))
-       (req! &env sym options ::column-key #(symbol? %))
+       (req! &env sym options ::row-pk #(symbol? %))
        (req! &env sym options ::source-attribute keyword?)
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
@@ -200,10 +200,10 @@
           body              (if (seq (rest args))
                               (rest args)
                               [`(render-layout ~this-sym)])
-          row-query         (list 'fn [] `(into [(::attr/qualified-key ~column-key)] (map ::attr/qualified-key) ~columns))
+          row-query         (list 'fn [] `(into [(::attr/qualified-key ~row-pk)] (map ::attr/qualified-key) ~columns))
           props-sym         (gensym "props")
           row-ident         (list 'fn []
-                              `(let [k# (::attr/qualified-key ~column-key)]
+                              `(let [k# (::attr/qualified-key ~row-pk)]
                                  [k# (get ~props-sym k#)]))
           row-actions       (or row-actions [])
           body-options      (cond-> {:query        row-query
