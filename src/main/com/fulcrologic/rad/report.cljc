@@ -1,4 +1,15 @@
 (ns com.fulcrologic.rad.report
+  "Support for generated reports. Report rendering is pluggable, so reports can be quite varied. The general
+  definition of a report is a component that loads data and displays it, possibly paginates, sorts and
+  filters it, but for which interactions are done via custom mutations (disable, delete, sort) or reloads.
+
+  Reports can customize their layout via plugins, and the layout can then allow futher nested customization of element
+  render. For example, it is trivial to create a layout renderer that is some kind of graph, and then use loaded data
+  as the input for that display.
+
+  Customizing the report's state machine and possibly wrapping it with more complex layout controls makes it possible
+  to create UI dashboards and much more complex application features.
+  "
   #?(:cljs (:require-macros com.fulcrologic.rad.report))
   (:require
     #?@(:clj
