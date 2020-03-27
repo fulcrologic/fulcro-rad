@@ -1,7 +1,10 @@
 (ns com.fulcrologic.rad.ids
+  "Functions supporting various ID concerns."
   (:require
     [clojure.string :as str]
-    [com.fulcrologic.guardrails.core :refer [>defn =>]])
+    [com.fulcrologic.guardrails.core :refer [>defn =>]]
+    [com.fulcrologic.rad.type-support.integer :as int]
+    [taoensso.timbre :as log])
   #?(:clj
      (:import (java.util UUID))))
 
@@ -49,4 +52,16 @@
         (assoc new-map k v)
         new-map))
     {} m))
+
+(defn id-string->id
+  "When forms are routed to their ID is in the URL as a string. This converts IDs in such a string format to the
+   given type (which must be a RAD type name that supports IDs like :uuid, :int, or :long)."
+  [type id]
+  (case type
+    :uuid (new-uuid id)
+    :int (int/parse-int id)
+    :long (int/parse-long id)
+    (do
+      (log/error "Unsupported ID type" type)
+      id)))
 

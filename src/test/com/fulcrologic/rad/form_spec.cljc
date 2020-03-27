@@ -20,35 +20,28 @@
 (defattr spouse :account/spouse :ref {::attr/cardinality :one
                                       ::attr/target      :person/id})
 (defattr email :account/email :string {::attr/required?     true
-                                       ::attr/default-value default-email})
+                                       ::form/default-value default-email})
 (defattr addresses :account/addresses :ref {::attr/target      :address/id
                                             ::attr/cardinality :many})
 (defattr address-id :address/id :uuid {::attr/identity? true})
 (defattr street :address/street :string {::attr/required? true})
 
-(use-fixtures :once
-  (fn [tests]
-    (attr/clear-registry!)
-    (attr/register-attributes! [person-id person-name account-id spouse email addresses address-id street])
-    (tests)
-    (attr/clear-registry!)))
-
 (defsc AddressForm [_ _]
-  {::form/attributes [street]
-   ::form/default    {:address/street default-street}
-   ::attr/target     :address/id
-   ::form/id         address-id
-   :query            [:mocked/query]})
+  {::form/attributes     [street]
+   ::form/default-values {:address/street default-street}
+   ::attr/target         :address/id
+   ::form/id             address-id
+   :query                [:mocked/query]})
 
 (defsc PersonForm [_ _]
   {::form/attributes [person-name]
    ::form/id         person-id})
 
 (defsc AccountForm [_ _]
-  {::form/attributes [email addresses spouse]
-   ::form/id         account-id
-   ::form/default    {:account/spouse {}}
-   ::form/subforms   {:account/addresses {::form/ui AddressForm}
+  {::form/attributes     [email addresses spouse]
+   ::form/id             account-id
+   ::form/default-values {:account/spouse {}}
+   ::form/subforms       {:account/addresses {::form/ui AddressForm}
                       :account/spouse    {::form/ui PersonForm}}})
 
 (specification "attributes->form-query"

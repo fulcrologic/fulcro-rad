@@ -1,4 +1,8 @@
 (ns com.fulcrologic.rad.blob-storage
+  "The protocol and a sample implementation of binary large object storage. Blob storage is used by the file upload
+  support to first place files in a temporary holding area, and then support moving them to a more permanent store
+  if/when the form that refers to the file is saved.  Of course, storage can be persistent and just skip the
+  transient bits if you don't need to track the files in some other kind of database."
   (:require [clojure.java.io :as jio]
             [taoensso.timbre :as log]
             [com.fulcrologic.rad.type-support.date-time :as dt])
