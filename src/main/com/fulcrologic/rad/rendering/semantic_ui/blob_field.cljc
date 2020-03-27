@@ -5,7 +5,6 @@
                [goog.object :as gobj]
                [com.fulcrologic.fulcro.networking.file-upload :as file-upload]]
         :clj  [[com.fulcrologic.fulcro.dom-server :as dom :refer [div input]]])
-    [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.attributes :as attr]
     [taoensso.timbre :as log]

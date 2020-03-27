@@ -160,7 +160,8 @@
   ([app report-class]
    (start-report! app report-class {}))
   ([app report-class options]
-   (uism/begin! app report-machine (comp/ident report-class {}) {:actor/report report-class} options)))
+   (let [machine-def (or (comp/component-options report-class ::machine) report-machine)]
+     (uism/begin! app report-machine (comp/ident report-class {}) {:actor/report report-class} options))))
 
 (defn report-will-enter [app route-params report-class]
   (let [report-ident (comp/get-ident report-class {})]

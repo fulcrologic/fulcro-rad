@@ -90,3 +90,11 @@
       {:global-eql-transform (global-eql-transform (elision-predicate default-network-blacklist))
        :optimized-render!    mroot/render!}
       options)))
+
+(defn install-ui-controls!
+  "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting
+  your app. The `controls` is just a map from data type to a sub-map that contains a :default key, with optional
+  alternate renderings for that data type that can be selected with `::form/field-style {attr-key style-key}`."
+  [app controls]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc :com.fulcrologic.rad/controls controls)))

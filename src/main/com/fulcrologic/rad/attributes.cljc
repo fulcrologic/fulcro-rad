@@ -22,8 +22,6 @@
                     :opt [::target]))
 (>def ::attributes (s/every ::attribute))
 
-(declare map->Attribute)
-
 (>defn new-attribute
   "Create a new attribute, which is represented as an Attribute record.
 
@@ -46,19 +44,9 @@
   (do
     (when (and (= :ref type) (not (contains? m ::target)))
       (log/warn "Reference attribute" kw "does not list a target ID. Resolver generation will not be accurate."))
-    (map->Attribute
-      (-> m
-        (assoc ::type type)
-        (assoc ::qualified-key kw)))))
-
-#?(:clj
-   (defrecord Attribute []
-     IFn
-     (invoke [this m] (get m (::qualified-key this))))
-   :cljs
-   (defrecord Attribute []
-     IFn
-     (-invoke [this m] (get m (::qualified-key this)))))
+    (-> m
+      (assoc ::type type)
+      (assoc ::qualified-key kw))))
 
 #?(:clj
    (defmacro defattr
@@ -71,6 +59,12 @@
   [attr]
   [::attribute => boolean?]
   (= :many (::cardinality attr)))
+
+(>defn to-one?
+  "Returns true if the attribute with the given key is a to-one."
+  [attr]
+  [::attribute => boolean?]
+  (not= :many (::cardinality attr)))
 
 (>defn to-int [str]
   [string? => int?]
@@ -122,7 +116,7 @@
 (>defn attribute?
   [v]
   [any? => boolean?]
-  (instance? Attribute v))
+  (contains? v ::qualified-key))
 
 (>defn eql-query
   "Convert a query that uses attributes (records) as keys into the proper EQL query. I.e. (eql-query [account/id]) => [::account/id]

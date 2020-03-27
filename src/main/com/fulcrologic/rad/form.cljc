@@ -20,7 +20,10 @@
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.ids :refer [new-uuid]]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.application :as rapp]
+    [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
+    [com.fulcrologic.rad.type-support.integer :as int]
     [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
@@ -65,7 +68,7 @@
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         style-path             [::layout-styles element]
         layout-style           (or (some-> form-instance comp/component-options (get-in style-path)) :default)
-        element->style->layout (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout)
+        element->style->layout (some-> runtime-atom deref ::rad/controls ::element->style->layout)
         render-fn              (some-> element->style->layout (get element) (get layout-style))]
     (cond
       (not runtime-atom) (log/error "Form instance was not in the rendering environment. This means the form did not mount properly")
@@ -84,7 +87,10 @@
 (declare render-field)
 
 (defn ref-container-renderer
-  "Renderer that wraps and lays out elements of refs"
+  "Given the current rendering environment and an attribute: Returns the renderer that wraps and lays out
+   elements of refs. This function interprets the ::form/subforms settings for referenced objects that
+   will render as sub-forms, and looks for ::form/layout-style first in the subform, and next on the
+   component options of the ::form/ui class."
   [{::keys [form-instance] :as form-env} {::keys      [field-style]
                                           ::attr/keys [qualified-key] :as attr}]
   (let [{::keys [subforms field-styles] :as options} (comp/component-options form-instance)
@@ -99,7 +105,7 @@
                            (get layout-styles element)
                            (get target-styles element)
                            :default)
-            render-fn    (some-> runtime-atom deref :com.fulcrologic.rad/controls ::element->style->layout
+            render-fn    (some-> runtime-atom deref ::rad/controls ::element->style->layout
                            (get-in [element layout-style]))]
         render-fn))))
 
@@ -108,16 +114,21 @@
   [component]
   (or (some-> component comp/get-computed ::master-form) component))
 
-(def data-type->field-type {:string :text})
+(defn attr->renderer
+  "Given a form rendering environment and an attribute: returns the renderer that can render the given attribute.
 
-(defn attr->renderer [{::keys [form-instance]} {::attr/keys [type qualified-key]
-                                                ::keys      [field-style] :as attr}]
+  The attribute style of :default is the default, and can be overridden in ::form/field-styles on the form (master
+  has precedence, followed by the form it actually appears on) or
+  using ::form/field-style on the attribute itself."
+  [{::keys [form-instance master-form]} {::attr/keys [type qualified-key]
+                                         ::keys      [field-style] :as attr}]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (or
+                      (some-> master-form comp/component-options ::field-styles qualified-key)
                       (some-> form-instance comp/component-options ::field-styles qualified-key)
                       field-style
                       :default)
-        control-map (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->control)
+        control-map (some-> runtime-atom deref ::rad/controls ::type->style->control)
         control     (or
                       (get-in control-map [type field-style])
                       (do
@@ -127,7 +138,9 @@
       control
       (log/error "Unable to find control (no default) for attribute " attr))))
 
-(defn render-field [env attr]
+(defn render-field
+  "Given a form rendering environment and an attrbute: renders that attribute according to its type/style/value."
+  [env attr]
   (let [render (attr->renderer env attr)]
     (if render
       (render env attr)
@@ -135,16 +148,40 @@
         (log/error "No renderer installed to support attribute" attr)
         nil))))
 
-(defn rendering-env [form-instance props]
-  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        cprops (comp/get-computed props)]
-    (merge cprops
-      {::master-form    (master-form form-instance)
-       ::form-instance  form-instance
-       ::props          props
-       ::computed-props cprops})))
+(defn rendering-env
+  "Create a form rendering environment. `form-instance` is the react element instance of the form (typically a master form),
+   but this function can be called using an active sub-form. `props` should be the props of the `form-instance`, and are
+   allowed to be passed as an optimization when you've already got them.
 
-(defn render-layout [form-instance props]
+   NOTE: This function will automatically extract the master form from the computed props of form-instance in cases
+   where you are in the context of a sub-form."
+  ([form-instance]
+   (let [props  (comp/props form-instance)
+         cprops (comp/get-computed props)]
+     (merge cprops
+       {::master-form    (master-form form-instance)
+        ::form-instance  form-instance
+        ::props          props
+        ::computed-props cprops})))
+  ([form-instance props]
+   (let [cprops (comp/get-computed props)]
+     (merge cprops
+       {::master-form    (master-form form-instance)
+        ::form-instance  form-instance
+        ::props          props
+        ::computed-props cprops}))))
+
+(defn master-form?
+  "Returns true if the given react element `form-instance` is the master form in the supplied rendering env."
+  [rendering-env form-instance]
+  (let [master-form (::master-form rendering-env)]
+    (= form-instance master-form)))
+
+(defn render-layout
+  "Render the complete layout of a form. This is the default body of normal form classes. It will call a render factory
+   on any subforms, and they, in turn, will use this to render *their* body. Thus, any form can have a manually-overriden
+   render body."
+  [form-instance props]
   (when-not (comp/component? form-instance)
     (throw (ex-info "Invalid form instance propagated to render layout." {:form-instance form-instance})))
   (let [env    (rendering-env form-instance props)
@@ -164,13 +201,13 @@
 #?(:clj
    (s/def ::defsc-form-options (s/keys :req [::attr/attributes])))
 
-(defn sc [registry-key options]
+(defn- sc [registry-key options]
   (let [cls (fn [])]
     (comp/configure-component! cls registry-key options)))
 
 ;; NOTE: This MUST be used within a lambda in the component, not as a static bit of query at compile time.
 (defn form-options->form-query
-  "Converts form options to a proper EQL query."
+  "Converts form options to the necessary EQL query for a form class."
   [{id-attr ::id
     ::keys  [attributes field-styles subforms] :as form-options}]
   (let [id-key             (::attr/qualified-key id-attr)
@@ -199,46 +236,56 @@
                              refs)]
     full-query))
 
-(defn- valid-uuid-string? [s]
-  (boolean (and
-             (string? s)
-             (re-matches #"^........-....-....-....-............$" s))))
+(def ^:deprecated parse-long "moved to integer.cljs" int/parse-long)
 
-#?(:cljs
-   (defn parse-long
-     "Note: in CLJS this can return a Number or a goog.math.Long if it would overflow a js Number."
-     [v] (ct/integer v))
-   :clj
-   (defn parse-long [v] (Long/parseLong v)))
-
-(defn- id-string->id [type new? id]
+(defn- id-string->id
+  "When forms are routed to their ID is in the URL as a string. This converts it to the proper type."
+  [type new? id]
   (if new?
     (tempid/tempid id)
     (case type
       :uuid (new-uuid id)
-      :int (parse-long id)
-      :long (parse-long id)
+      :int (int/parse-int id)
+      :long (int/parse-long id)
       (do
         (log/error "Unsupported ID type" type)
         id))))
 
+(defn start-form!
+  "Forms use a state machine to control their behavior. Normally that state machine is started when you route to
+  it using Fulcro's dynamic router system. If you start with a form on-screen, or do not use routing, then you will
+  have to call this function when the form first appears in order to ensure it operates. Calling this function is
+  *destructive* and will re-start the form's machine and destroy any current state in that form.
+
+  * app - The app
+  * id - The ID of the form, in the correct type (i.e. int, UUID, etc.). Use a `tempid` to create something new, otherwise
+  the form will attempt to load the current value from the server.
+  * form-class - The component class that will render the form and has the form's configuration.
+
+  The state machine definition used by this method can be overridden by setting `::form/machine` in component options
+  to a different Fulcro uism state machine definition. Machines do *not* run in subforms, only in the master, which
+  is what `form-class` will become for that machine.
+  "
+  [app id form-class]
+  (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
+        machine    (or (::machine form-class) form-machine)
+        new?       (tempid/tempid? id)
+        form-ident [qualified-key id]]
+    (uism/begin! app form-machine
+      form-ident
+      {:actor/form (uism/with-actor-class form-ident form-class)}
+      {::create? new?})))
+
 (defn form-will-enter
-  "Used as the implementation and return value of a form target's will-enter."
+  "Used as the implementation and return value of a form target's will-enter dynamic routing hook."
   [app {:keys [action id]} form-class]
-  (let [{::attr/keys [qualified-key type] :as id-attr} (comp/component-options form-class ::id)
+  (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
         new?       (= create-action action)
         coerced-id (id-string->id type new? id)
         form-ident [qualified-key coerced-id]]
-    (when-not (keyword? qualified-key)
-      (log/error "Form " (comp/component-name form-class) " does not have a ::form/id that is an attr/attribute."))
-    (when (and new? (not (valid-uuid-string? id)))
+    (when (and new? (not (ids/valid-uuid-string? id)))
       (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route for new entity. The form may misbehave."))
-    (dr/route-deferred form-ident
-      (fn []
-        (uism/begin! app form-machine
-          form-ident
-          {:actor/form (uism/with-actor-class form-ident form-class)}
-          {::create? new?})))))
+    (dr/route-deferred form-ident (fn [] (start-form! app coerced-id form-class)))))
 
 (defn form-will-leave
   "Used as a form route target's will-enter."
@@ -712,31 +759,30 @@
            ;; NOTE: value at this layer is ALWAYS typed to the attribute.
            ;; The rendering layer is responsible for converting the value to/from
            ;; the representation needed by the UI component (e.g. string)
-           (profile {}
-             (p :event/attribute-changed
-               (let [{:keys       [old-value form-key value form-ident]
-                      ::attr/keys [qualified-key]} event-data
-                     form-class          (some-> form-key (comp/registry-key->class))
-                     {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
-                     protected-on-change (fn [env]
-                                           (let [new-env (on-change env form-ident qualified-key old-value value)]
-                                             (if (or (nil? new-env) (contains? new-env ::uism/state-map))
-                                               new-env
-                                               (do
-                                                 (log/error "Invalid on-change handler! It MUST return an updated env!")
-                                                 env))))
-                     path                (when (and form-ident qualified-key)
-                                           (conj form-ident qualified-key))
-                     ;; TODO: Decide when to properly set the field to marked
-                     mark-complete?      true]
-                 (when-not path
-                   (log/error "Unable to record attribute change. Path cannot be calculated."))
-                 (-> env
-                   (cond->
-                     mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
-                     path (uism/apply-action assoc-in path value)
-                     on-change (protected-on-change))
-                   (apply-derived-calculations))))))}
+           (p :event/attribute-changed
+             (let [{:keys       [old-value form-key value form-ident]
+                    ::attr/keys [qualified-key]} event-data
+                   form-class          (some-> form-key (comp/registry-key->class))
+                   {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
+                   protected-on-change (fn [env]
+                                         (let [new-env (on-change env form-ident qualified-key old-value value)]
+                                           (if (or (nil? new-env) (contains? new-env ::uism/state-map))
+                                             new-env
+                                             (do
+                                               (log/error "Invalid on-change handler! It MUST return an updated env!")
+                                               env))))
+                   path                (when (and form-ident qualified-key)
+                                         (conj form-ident qualified-key))
+                   ;; TODO: Decide when to properly set the field to marked
+                   mark-complete?      true]
+               (when-not path
+                 (log/error "Unable to record attribute change. Path cannot be calculated."))
+               (-> env
+                 (cond->
+                   mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
+                   path (uism/apply-action assoc-in path value)
+                   on-change (protected-on-change))
+                 (apply-derived-calculations)))))}
 
         :event/blur
         {::uism/handler (fn [env] env)}
@@ -940,13 +986,9 @@
   (when computed-value
     (computed-value env attr)))
 
-(defn install-ui-controls!
-  "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting
-  your app. The `controls` is just a map from data type to a sub-map that contains a :default key, with optional
-  alternate renderings for that data type that can be selected with `::form/field-style {attr-key style-key}`."
-  [app controls]
-  (let [{::app/keys [runtime-atom]} app]
-    (swap! runtime-atom assoc :com.fulcrologic.rad/controls controls)))
+(def ^:deprecated install-ui-controls!
+  "Renamed to rad-application/install-ui-controls!"
+  rapp/install-ui-controls!)
 
 (defn field-label
   "Returns a human readable label for a given attribute (which can be declared on the attribute, and overridden on the

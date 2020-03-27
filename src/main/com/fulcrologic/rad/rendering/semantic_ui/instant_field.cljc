@@ -6,9 +6,7 @@
        :clj  [com.fulcrologic.fulcro.dom-server :refer [div label input]])
     [com.fulcrologic.fulcro.dom.inputs :as inputs]
     [com.fulcrologic.rad.type-support.date-time :as datetime]
-    [com.fulcrologic.rad.rendering.semantic-ui.field :refer [render-field-factory]]
-    [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.form :as form]))
+    [com.fulcrologic.rad.rendering.semantic-ui.field :refer [render-field-factory]]))
 
 (def ui-datetime-input
   (comp/factory (inputs/StringBufferedInput ::DateTimeInput

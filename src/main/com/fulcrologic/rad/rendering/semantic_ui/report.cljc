@@ -1,7 +1,6 @@
 (ns com.fulcrologic.rad.rendering.semantic-ui.report
   (:require
     [clojure.string :as str]
-    [taoensso.timbre :as log]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.report :as report]
     [com.fulcrologic.fulcro.components :as comp]
