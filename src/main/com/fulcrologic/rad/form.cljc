@@ -945,14 +945,22 @@
   The form's options may also include `::form/read-only-fields` as a set (or a function returning a set) of the keys that should
   currently be considered read-only. If it is a function it will only be passed the form instance.
 
+  If the form has a `::form/read-only?` option that is `true` (or a `(fn [form-instance] boolean?)` that returns true) then
+  *everything* on the form will be read-only.
+
   If you use a function for read only detection it will be passed the `form-instance` and the `attribute` being
   checked. You may reach into app state to examine things, but beware that doing so may not dynamically update
   as you'd expect."
   [form-instance {::attr/keys [qualified-key identity? read-only? computed-value] :as attr}]
   [comp/component? ::attr/attribute => boolean?]
-  (let [read-only-fields (comp/component-options form-instance ::read-only-fields)]
+  (let [{::keys          [read-only-fields]
+         read-only-form? ::read-only?} (comp/component-options form-instance)
+        master-form       (comp/get-computed form-instance ::master-form)
+        master-read-only? (some-> master-form (comp/component-options ::read-only?))]
     (boolean
       (or
+        (?! read-only-form? form-instance)
+        (?! master-read-only? master-form)
         identity?
         (?! read-only? form-instance attr)
         computed-value

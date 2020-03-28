@@ -2,6 +2,7 @@
   (:require
     #?@(:cljs
         [[com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
+         [goog.object :as gobj]
          [cljs.reader :refer [read-string]]
          [com.fulcrologic.semantic-ui.modules.dropdown.ui-dropdown :refer [ui-dropdown]]]
         :clj
@@ -29,18 +30,20 @@
 
 (defmutation normalize-options [{:keys [source target]}]
   (action [{:keys [state]}]
-    (let [options            (get @state source)
-          normalized-options (to-js
-                               (mapv (fn [{:keys [text value]}]
-                                       {:text text :value (pr-str value)}) options))]
-      (fns/swap!-> state
-        (dissoc source)
-        (assoc-in target normalized-options)))))
+    #?(:clj true
+       :cljs
+            (let [options            (get @state source)
+                  normalized-options (apply array
+                                       (map (fn [{:keys [text value]}]
+                                              #js {:text text :value (pr-str value)}) options))]
+              (fns/swap!-> state
+                (dissoc source)
+                (assoc-in target normalized-options))))))
 
-(defsc AutocompleteField [this {:ui/keys [search-string options] :as props} {:keys [value onChange]}]
+(defsc AutocompleteField [this {:ui/keys [search-string options] :as props} {:keys [value label onChange read-only?]}]
   {:initLocalState    (fn [this]
                         ;; TASK: props not making it...fix that, or debounce isn't configurable.
-                        (let [{:autocomplete/keys [debounce-ms]} (log/spy :info (comp/props this))]
+                        (let [{:autocomplete/keys [debounce-ms]} (comp/props this)]
                           {:load! (opts/debounce
                                     (fn [s]
                                       (let [{id                 ::autocomplete-id
@@ -50,11 +53,11 @@
                                            :post-mutation        `normalize-options
                                            :post-mutation-params {:source search-key
                                                                   :target [::autocomplete-id id :ui/options]}})))
-                                    (or (log/spy :info debounce-ms) 200))}))
+                                    (or debounce-ms 200))}))
    :componentDidMount (fn [this]
                         (let [{id                 ::autocomplete-id
                                :autocomplete/keys [search-key]} (comp/props this)
-                              value (some-> (comp/get-computed this :value) (read-string))]
+                              value (comp/get-computed this :value)]
                           (when (and search-key value)
                             (df/load! this search-key AutocompleteQuery
                               {:params               {:only value}
@@ -68,20 +71,25 @@
     #?(:clj
        (dom/div "")
        :cljs
-       (ui-dropdown #js {:search             true
-                         :options            (if options options #js [])
-                         :value              value
-                         :selection          true
-                         :closeOnBlur        true
-                         :openOnFocus        true
-                         :selectOnBlur       true
-                         :selectOnNavigation true
-                         :onSearchChange     (fn [_ v]
-                                               (let [query (comp/isoget v "searchQuery")]
-                                                 (load! query)))
-                         :onChange           (fn [_ v]
-                                               (when onChange
-                                                 (onChange (comp/isoget v "value"))))}))))
+       (dom/div :.field
+         (dom/label label)
+         (if read-only?
+           (gobj/getValueByKeys options 0 "text")
+           (ui-dropdown #js {:search             true
+                             :options            (if options options #js [])
+                             :value              (pr-str value)
+                             :selection          true
+                             :closeOnBlur        true
+                             :openOnFocus        true
+                             :selectOnBlur       true
+                             :selectOnNavigation true
+                             :onSearchChange     (fn [_ v]
+                                                   (let [query (comp/isoget v "searchQuery")]
+                                                     (load! query)))
+                             :onChange           (fn [_ v]
+                                                   (when onChange
+                                                     (onChange (some-> (comp/isoget v "value")
+                                                                 read-string))))}))))))
 
 (def ui-autocomplete-field (comp/computed-factory AutocompleteField {:keyfn ::autocomplete-id}))
 
@@ -110,23 +118,25 @@
                             (mroot/deregister-root! this))
    :query                 [::autocomplete-id]}
   (let [{:autocomplete/keys [debounce-ms search-key]} (::form/field-options attribute)
-        k     (::attr/qualified-key attribute)
+        k          (::attr/qualified-key attribute)
         {::form/keys [form-instance]} env
-        value (-> (comp/props form-instance) (get k))
-        id    (comp/get-state this :field-id)
-        field (get-in props [::autocomplete-id id])]
+        value      (-> (comp/props form-instance) (get k))
+        id         (comp/get-state this :field-id)
+        label      (form/field-label env attribute)
+        read-only? (form/read-only? form-instance attribute)
+        field      (get-in props [::autocomplete-id id])]
     ;; Have to pass the id and debounce early since the merge in mount won't happen until after, which is too late for initial
     ;; state
     (ui-autocomplete-field (assoc field
                              ::autocomplete-id id
                              :autocomplete/search-key search-key
                              :autocomplete/debounce-ms debounce-ms)
-      {:value    (pr-str value)
-       :onChange (fn [normalized-value]
-                   #?(:cljs
-                      (form/input-changed! env k (if (string? normalized-value)
-                                                   (read-string normalized-value)
-                                                   nil))))})))
+      {:value      value
+       :label      label
+       :read-only? read-only?
+       :onChange   (fn [normalized-value]
+                     #?(:cljs
+                        (when normalized-value (form/input-changed! env k normalized-value))))})))
 
 (def ui-autocomplete-field-root (mroot/floating-root-factory AutocompleteFieldRoot
                                   {:keyfn (fn [props] (-> props :attribute ::attr/qualified-key))}))

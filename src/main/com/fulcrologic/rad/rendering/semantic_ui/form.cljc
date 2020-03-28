@@ -22,11 +22,14 @@
   (let [{:semantic-ui/keys [add-position]
          ::form/keys       [ui title can-delete? can-add? added-via-upload?]} (get subforms k)
         parent             (comp/props form-instance)
-        can-delete?        (fn [item] (?! can-delete? parent item))
+        read-only?         (form/read-only? form-instance attr)
+        can-add?           (if read-only? false can-add?)
+        can-delete?        (fn [item] (and (not read-only?) (?! can-delete? parent item)))
         items              (get parent k)
-        title              (or
-                             title
-                             (some-> ui (comp/component-options ::form/title)) "")
+        title              (?! (or
+                                 title
+                                 (some-> ui (comp/component-options ::form/title)) "")
+                             parent)
         invalid?           (validation/invalid-attribute-value? env attr)
         validation-message (validation/validation-error-message env attr)
         add                (when (or (nil? can-add?) (?! can-add? parent))
@@ -63,16 +66,18 @@
       (when invalid?
         (div :.ui.error.message
           validation-message))
-      (div :.ui.segments
-        (mapv
-          (fn [props]
-            (ui-factory props
-              (merge
-                env
-                {::form/parent          form-instance
-                 ::form/parent-relation k
-                 ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
-          items))
+      (if (seq items)
+        (div :.ui.segments
+          (mapv
+            (fn [props]
+              (ui-factory props
+                (merge
+                  env
+                  {::form/parent          form-instance
+                   ::form/parent-relation k
+                   ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
+            items))
+        (div :.ui.message "None."))
       (when (= :bottom add-position) add))))
 
 (defn render-to-one [{::form/keys [form-instance] :as env} {k ::attr/qualified-key :as attr} {::form/keys [subforms] :as options}]
@@ -80,7 +85,7 @@
         parent             (comp/props form-instance)
         form-props         (comp/props form-instance)
         props              (get form-props k)
-        title              (or title (some-> ui (comp/component-options ::form/title)) "")
+        title              (?! (or title (some-> ui (comp/component-options ::form/title)) "") form-props)
         ui-factory         (comp/computed-factory ui)
         invalid?           (validation/invalid-attribute-value? env attr)
         validation-message (validation/validation-error-message env attr)
@@ -131,14 +136,18 @@
       (div {:key (str k)}
         (div "Upload??? (TODO)")))))
 
-(defsc ManyFiles [this {{::form/keys [form-instance] :as env} :env
-                        {k ::attr/qualified-key :as attr}     :attribute
-                        {::form/keys [subforms] :as options}  :options}]
+(defsc ManyFiles [this {{::form/keys [form-instance master-form] :as env} :env
+                        {k ::attr/qualified-key :as attr}                 :attribute
+                        {::form/keys [subforms] :as options}              :options}]
   {:initLocalState (fn [this] {:input-key (str (rand-int 1000000))})}
   (let [{:semantic-ui/keys [add-position]
          ::form/keys       [ui title can-delete? can-add? sort-children]} (get subforms k)
         parent      (comp/props form-instance)
-        can-delete? (fn [item] (?! can-delete? parent item))
+        read-only?  (or
+                      (form/read-only? master-form attr)
+                      (form/read-only? form-instance attr))
+        can-add?    (if read-only? false (?! can-add? form-instance attr))
+        can-delete? (if read-only? false (fn [item] (?! can-delete? parent item)))
         items       (-> form-instance comp/props k
                       (cond->
                         sort-children sort-children))
@@ -178,16 +187,20 @@
     (div :.ui.basic.segment {:key (str k)}
       (dom/h2 :.ui.header title)
       (when (or (nil? add-position) (= :top add-position)) add)
-      (div :.ui.very.relaxed.items
-        (mapv
-          (fn [props]
-            (ui-factory props
-              (merge
-                env
-                {::form/parent          form-instance
-                 ::form/parent-relation k
-                 ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
-          items))
+      (if (seq items)
+        (div :.ui.very.relaxed.items
+          (mapv
+            (fn [props]
+              (ui-factory props
+                (merge
+                  env
+                  {::form/parent          form-instance
+                   ::form/parent-relation k
+                   ::form/can-delete?     (if can-delete? (?! can-delete?) false)})))
+            items))
+        (div :.ui.message
+          "None"))
+
       (when (= :bottom add-position) add))))
 
 (def ui-many-files (comp/factory ManyFiles {:keyfn (fn [{:keys [attribute]}] (::attr/qualified-key attribute))}))
@@ -276,12 +289,16 @@
 
 (defn standard-form-container [{::form/keys [props computed-props form-instance master-form] :as env}]
   (let [{::form/keys [can-delete?]} computed-props
-        nested?       (not= master-form form-instance)
-        valid?        (form/valid? env)
-        invalid?      (form/invalid? env)
-        dirty?        (or (:ui/new? props) (fs/dirty? props))
-        remote-busy?  (seq (::app/active-remotes props))
-        render-fields (or (form/form-layout-renderer env) standard-form-layout-renderer)]
+        nested?         (not= master-form form-instance)
+        read-only-form? (or
+                          (?! (comp/component-options form-instance ::form/read-only?) form-instance)
+                          (?! (comp/component-options master-form ::form/read-only?) master-form))
+        valid?          (if read-only-form? true (form/valid? env))
+        invalid?        (if read-only-form? false (form/invalid? env))
+        dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))
+        remote-busy?    (seq (::app/active-remotes props))
+        title           (?! (comp/component-options form-instance ::form/title) props)
+        render-fields   (or (form/form-layout-renderer env) standard-form-layout-renderer)]
     (when #?(:cljs goog.DEBUG :clj true)
       (log/debug "Form " (comp/component-name form-instance) " valid? " valid?)
       (log/debug "Form " (comp/component-name form-instance) " dirty? " dirty?))
@@ -298,18 +315,20 @@
       (div :.ui.container {:key (str (comp/get-ident form-instance))}
         (div :.ui.form {:classes [(when invalid? "error")]}
           (div :.ui.top.menu
-            (div :.header.item
-              (or (some-> form-instance comp/component-options ::form/title i18n/tr-unsafe) (tr "Edit")))
+            (when (seq title)
+              (div :.header.item (str title)))
             (div :.right.item
               (div :.ui.basic.buttons
                 (button :.ui.basic.button {:classes [(if dirty? "negative" "positive")]
                                            :onClick (fn [] (form/cancel! env))}
                   (if dirty? (tr "Cancel") (tr "Done")))
-                (button :.ui.positive.basic.button {:disabled (not dirty?)
-                                                    :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
-                (button :.ui.positive.basic.button {:disabled (or (not dirty?) remote-busy?)
-                                                    :classes  [(when remote-busy? "loading")]
-                                                    :onClick  (fn [] (form/save! env))} (tr "Save")))))
+                (when-not read-only-form?
+                  (comp/fragment
+                    (button :.ui.positive.basic.button {:disabled (not dirty?)
+                                                        :onClick  (fn [] (form/undo-all! env))} (tr "Undo"))
+                    (button :.ui.positive.basic.button {:disabled (or (not dirty?) remote-busy?)
+                                                        :classes  [(when remote-busy? "loading")]
+                                                        :onClick  (fn [] (form/save! env))} (tr "Save")))))))
           (div :.ui.error.message (tr "The form has errors and cannot be saved."))
           (div :.ui.attached.segment
             (render-fields env)))))))

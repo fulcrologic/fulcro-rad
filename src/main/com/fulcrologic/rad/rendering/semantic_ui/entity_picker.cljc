@@ -18,7 +18,7 @@
                               props         (comp/props form-instance)
                               form-class    (comp/react-type form-instance)]
                           (picker-options/load-options! form-instance form-class props attr)))}
-  (let [{::form/keys [form-instance]} env
+  (let [{::form/keys [master-form form-instance]} env
         {::form/keys [attributes field-options]} (comp/component-options form-instance)
         {::attr/keys [qualified-key]} attr
         field-options (get field-options qualified-key)
@@ -31,15 +31,20 @@
         options       (get-in props [::picker-options/options-cache cache-key :options])
         value         [target-id-key (get-in props [qualified-key target-id-key])]
         field-label   (form/field-label env attr)
-        invalid?      (validation/invalid-attribute-value? env attr)
+        read-only?    (or (form/read-only? master-form attr) (form/read-only? form-instance attr))
+        invalid?      (and (not read-only?) (validation/invalid-attribute-value? env attr))
         onSelect      (fn [v]
                         (form/input-changed! env qualified-key v))]
     (div :.ui.field {:classes [(when invalid? "error")]}
       (dom/label (str field-label (when invalid? " (Required)")))
-      (ui-wrapped-dropdown (cond->
-                             {:onChange (fn [v] (onSelect v))
-                              :value    value
-                              :options  options})))))
+      (if read-only?
+        (let [value (first (filter #(= value (:value %)) options))]
+          (:text value))
+        (ui-wrapped-dropdown (cond->
+                               {:onChange (fn [v] (onSelect v))
+                                :value    value
+                                :disabled read-only?
+                                :options  options}))))))
 
 (let [ui-to-one-picker (comp/factory ToOnePicker {:keyfn (fn [{:keys [attr]}] (::attr/qualified-key attr))})]
   (defn to-one-picker [env attribute]
@@ -73,6 +78,7 @@
                              (get props qualified-key))
         field-label        (form/field-label env attr)
         invalid?           (validation/invalid-attribute-value? env attr)
+        read-only?         (form/read-only? form-instance attr)
         validation-message (when invalid? (validation/validation-error-message env attr))]
     (div :.ui.field {:classes [(when invalid? "error")]}
       (dom/label (str field-label " " (when invalid? validation-message)))
@@ -82,6 +88,7 @@
           (ui-wrapped-dropdown
             {:value    current-selection
              :multiple true
+             :disabled read-only?
              :options  options
              :onChange (fn [v] (form/input-changed! env qualified-key v))})
           (map (fn [{:keys [text value]}]

@@ -60,13 +60,15 @@
     (div :.ui.field {:key (str qualified-key) :classes [(when invalid? "error")]}
       (label (str (or field-label (some-> qualified-key name str/capitalize))
                (when invalid? " (Required)")))
-      (ui-wrapped-dropdown (merge
-                             {:disabled read-only?
-                              :options  options
-                              :value    value
-                              :onChange (fn [v]
-                                          (form/input-changed! env qualified-key v))}
-                             user-props)))))
+      (if read-only?
+        (let [value (first (filter #(= value (:value %)) options))]
+          (:text value))
+        (ui-wrapped-dropdown (merge
+                               {:disabled read-only?
+                                :options  options
+                                :value    value
+                                :onChange (fn [v] (form/input-changed! env qualified-key v))}
+                               user-props))))))
 
 (defn render-field [env {::attr/keys [cardinality] :or {cardinality :one} :as attribute}]
   (if (= :many cardinality)
