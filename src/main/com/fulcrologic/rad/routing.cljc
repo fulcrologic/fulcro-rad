@@ -15,7 +15,7 @@
     singleton classes in the root query.
   - We can warn when the same class appears in more than one position in the query, such that we cannot find a distinct route
   for it.
-  - Elements in *containers* are never directly routeable: The container controls the sub-routes, so they can be excluded from warnings
+  - Elements in *containers* are never directly routable: The container controls the sub-routes, so they can be excluded from warnings
   -
 
 "
@@ -23,12 +23,20 @@
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.components :as comp]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.fulcro.application :as app]))
 
-(>defn absolute-path)
+(defn absolute-path
+  "Get the absolute path for the given route target."
+  [app-ish RouteTarget route-params]
+  (let [app       (comp/any->app app-ish)
+        state-map (app/current-state app)
+        app-root  (app/root-class app)]
+    (dr/resolve-path state-map app-root RouteTarget route-params)))
+
 (defn route-to!
   "Change the route the specified class, with the additional parameter map as route params"
   [app-or-component RADClass route-params]
-  (if-let [path (absolute-path RADClass)]
-    (dr/change-route! app-or-component (apply dr/path-to path route-params))
+  (if-let [path (absolute-path app-or-component RADClass route-params)]
+    (dr/change-route! app-or-component path)
     (log/error "Cannot find path for" (comp/component-name RADClass))))
