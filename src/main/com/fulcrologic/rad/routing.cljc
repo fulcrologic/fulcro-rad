@@ -32,7 +32,7 @@
   (let [app       (comp/any->app app-ish)
         state-map (app/current-state app)
         app-root  (app/root-class app)]
-    (dr/resolve-path state-map app-root RouteTarget route-params)))
+    (dr/resolve-path app-root RouteTarget route-params)))
 
 (defn route-to!
   "Change the route the specified class, with the additional parameter map as route params"
@@ -40,3 +40,9 @@
   (if-let [path (absolute-path app-or-component RADClass route-params)]
     (dr/change-route! app-or-component path)
     (log/error "Cannot find path for" (comp/component-name RADClass))))
+
+(defn push-route! [app-or-component target route-params])
+
+(defn pop-route! [app-or-component])
+
+(defn replace-route! [app-or-component target route-params])
