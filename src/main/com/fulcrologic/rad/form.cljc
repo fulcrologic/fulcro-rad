@@ -36,8 +36,12 @@
     [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.options-util :as opts]))
+    [com.fulcrologic.rad.routing :as rad-routing]
+    [com.fulcrologic.rad.options-util :as opts]
+    [com.fulcrologic.rad.routing :as routing]
+    [com.fulcrologic.rad.routing.history :as history]))
 
+(def view-action "view")
 (def create-action "create")
 (def edit-action "edit")
 (declare form-machine valid? invalid?)
@@ -797,8 +801,11 @@
                           ;; TODO: Handle failures
                           (uism/activate env :state/editing))}
         :event/saved
-        {::uism/handler (fn [env]
-                          (let [form-ident (uism/actor->ident env :actor/form)]
+        {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
+                          (let [form-ident (uism/actor->ident env :actor/form)
+                                {:keys [route params]} (history/current-route fulcro-app)
+                                new-route  (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
+                            (history/replace-route! fulcro-app new-route params)
                             (-> env
                               (uism/apply-action fs/entity->pristine* form-ident)
                               (uism/activate :state/editing))))}})}
@@ -1000,18 +1007,25 @@
         (and (nil? form-field-visible?) (true? field-visible?))
         (and (nil? form-field-visible?) (nil? field-visible?))))))
 
+(defn view!
+  "Route to the given form in read-only mode."
+  ([this form-class entity-id]
+   (rad-routing/route-to! this form-class {:action view-action
+                                           :id     entity-id}))
+  ([this form-class entity-id extra-params]
+   (rad-routing/route-to! this form-class (merge extra-params
+                                            {:action view-action
+                                             :id     entity-id}))))
+
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
   ([this form-class entity-id]
-   (dr/change-route! this (dr/path-to form-class {:action edit-action
-                                                  :id     entity-id})
-     {:deferred-timeout 16}))
-  ([this form-class entity-id {:keys [router]}]
-   (if router
-     (dr/change-route-relative! this router (dr/path-to form-class {:action edit-action
-                                                                    :id     entity-id}
-                                              {:deferred-timeout 16}))
-     (edit! this form-class entity-id))))
+   (rad-routing/route-to! this form-class {:action edit-action
+                                           :id     entity-id}))
+  ([this form-class entity-id extra-params]
+   (rad-routing/route-to! this form-class (merge extra-params
+                                            {:action edit-action
+                                             :id     entity-id}))))
 
 (defn create!
   "Create a new instance of the given form-class using the provided `entity-id` and then route
@@ -1019,19 +1033,16 @@
 
    - `app-ish`: A component instance or the app.
    - `form-class`: The form to create.
-   - options map:
-   -- `:router` The router that contains the form, if not root."
+   - options map will be passed to the form as extra options."
   ([app-ish form-class]
    ;; This function uses UUIDs for all ID types, since they will end up being tempids
    ;; which are UUID-based.
-   (dr/change-route! app-ish (dr/path-to form-class {:action create-action
-                                                     :id     (str (new-uuid))})))
-  ([app-ish form-class {:keys [router] :as options}]
-   (if router
-     (dr/change-route-relative! app-ish router
-       (dr/path-to form-class {:action create-action
-                               :id     (str (new-uuid))}))
-     (create! app-ish form-class))))
+   (rad-routing/route-to! app-ish form-class {:action create-action
+                                              :id     (str (new-uuid))}))
+  ([app-ish form-class options]
+   (rad-routing/route-to! app-ish form-class (merge options
+                                               {:action create-action
+                                                :id     (str (new-uuid))}))))
 
 #?(:clj
    (pc/defmutation delete-entity [env params]

@@ -26,8 +26,10 @@
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [taoensso.timbre :as log]
+    [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [clojure.spec.alpha :as s]))
+    [clojure.spec.alpha :as s]
+    [com.fulcrologic.rad.routing.history :as history]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
@@ -85,12 +87,7 @@
 (def global-events {})
 
 (defn exit-report [{::uism/keys [fulcro-app] :as env}]
-  (let [Report       (uism/actor-class env :actor/report)
-        ;; TODO: Rename cancel-route to common RAD ns
-        cancel-route (some-> Report comp/component-options ::cancel-route)]
-    (if cancel-route
-      (dr/change-route! fulcro-app (or cancel-route []))
-      (log/error "Don't know where to route on cancel. Add ::report/cancel-route to your form."))
+  (let [Report (uism/actor-class env :actor/report)]
     (uism/exit env)))
 
 (defn report-options
@@ -98,13 +95,14 @@
   [env & k-or-ks]
   (apply comp/component-options (uism/actor-class env :actor/report) k-or-ks))
 
-(defn initialize-parameters [env]
+(defn initialize-parameters [{::uism/keys [fulcro-app] :as env}]
   (let [report-ident       (uism/actor->ident env :actor/report)
-        initial-parameters (?! (report-options env ::initial-parameters))]
+        {history-params :params} (history/current-route fulcro-app)
+        initial-parameters (?! (report-options env ::initial-parameters) fulcro-app)]
     (cond-> env
-      report-ident (uism/apply-action update report-ident merge initial-parameters))))
+      report-ident (uism/apply-action update-in report-ident merge initial-parameters history-params))))
 
-(defn load-report! [{::uism/keys [fulcro-app state-map event-data] :as env}]
+(defn load-report! [{::uism/keys [state-map event-data] :as env}]
   (let [Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
         {::keys [parameters BodyItem source-attribute]} (comp/component-options Report)
@@ -112,7 +110,7 @@
         current-params (merge (select-keys (get-in state-map report-ident) desired-params) event-data)
         path           (conj (comp/get-ident Report {}) source-attribute)]
     (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
-    (uism/load env source-attribute BodyItem {:params current-params
+    (uism/load env source-attribute BodyItem {:params (log/spy :info current-params)
                                               :marker report-ident
                                               :target path})))
 
@@ -257,6 +255,7 @@
   [report-instance parameter-name new-value]
   (let [reload? (comp/component-options report-instance ::run-on-parameter-change?)]
     (comp/transact! report-instance `[(m/set-props ~{parameter-name new-value})])
+    (rad-routing/update-route-params! report-instance assoc parameter-name new-value)
     (when reload?
       (reload! report-instance))))
 
