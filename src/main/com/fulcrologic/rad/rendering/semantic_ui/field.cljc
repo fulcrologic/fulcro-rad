@@ -27,7 +27,8 @@
            user-props         (form/field-style-config env attribute :input/props)
            field-label        (form/field-label env attribute)
            visible?           (form/field-visible? form-instance attribute)
-           read-only?         (form/read-only? form-instance attribute)]
+           read-only?         (form/read-only? form-instance attribute)
+           addl-props         (if read-only? (assoc addl-props :readOnly "readonly"))]
        (when visible?
          (div :.ui.field {:key     (str qualified-key)
                           :classes [(when invalid? "error")]}
@@ -36,7 +37,6 @@
            (div :.ui.input {:classes [(when read-only? "transparent")]}
              (input-factory (merge addl-props
                               {:value    value
-                               :readonly (when read-only? "readonly")
                                :onBlur   (fn [v] (form/input-blur! env qualified-key v))
                                :onChange (fn [v] (form/input-changed! env qualified-key v))}
                               user-props)))

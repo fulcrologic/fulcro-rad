@@ -275,14 +275,23 @@
     (dr/route-deferred form-ident (fn [] (start-form! app coerced-id form-class)))))
 
 (defn form-will-leave
-  "Used as a form route target's will-enter."
-  [this form-props]
+  "Checks to see if the UISM is still running (indicating an exit via routing) and cleans up the machine."
+  [this]
+  (let [master-form (or (comp/get-computed this ::master-form) this)
+        state-map   (app/current-state this)
+        form-ident  (comp/get-ident master-form)
+        machine     (get-in state-map [::uism/asm-id form-ident])]
+    (when machine
+      (uism/trigger! master-form form-ident :event/exit {}))))
+
+(defn form-allow-route-change [this]
+  "Used as a form route target's :allow-route-change?"
   (let [id         (comp/get-ident this)
+        form-props (comp/props this)
+        read-only? (?! (comp/component-options this ::read-only?) this)
         abandoned? (= :state/abandoned (uism/get-active-state this id))
         dirty?     (and (not abandoned?) (fs/dirty? form-props))]
-    (if dirty?
-      #?(:clj true :cljs (js/confirm "Unsaved changed. Are you sure?"))
-      true)))
+    (or read-only? (not dirty?))))
 
 (defn form-pre-merge
   "Generate a pre-merge for a component that has the given for attribute map. Returns a proper
@@ -322,7 +331,11 @@
         attribute-map              (attr/attribute-map attributes)
         pre-merge                  (form-pre-merge options attribute-map)
         base-options               (merge
-                                     {::validator (attr/make-attribute-validator attributes)}
+                                     {::validator   (attr/make-attribute-validator attributes)
+                                      :route-denied (fn [this relative-root proposed-route]
+                                                      #?(:cljs
+                                                         (when (js/confirm "You will lose unsaved changes. Are you sure?")
+                                                           (dr/retry-route! this relative-root proposed-route))))}
                                      options
                                      (cond->
                                        {:ident           (fn [_ props] [id-key (get props id-key)])
@@ -333,9 +346,10 @@
                                                              (map ::attr/qualified-key))
                                                            attributes)}
                                        pre-merge (assoc :pre-merge pre-merge)
-                                       route-prefix (merge {:route-segment [route-prefix :action :id]
-                                                            :will-leave    form-will-leave
-                                                            :will-enter    (fn [app route-params] (form-will-enter app route-params (get-class)))})))
+                                       route-prefix (merge {:route-segment       [route-prefix :action :id]
+                                                            :allow-route-change? form-allow-route-change
+                                                            :will-leave          (fn [this props] (form-will-leave this))
+                                                            :will-enter          (fn [app route-params] (form-will-enter app route-params (get-class)))})))
         inclusions                 (set/union attribute-query-inclusions (set query-inclusion))
         query                      (cond-> (form-options->form-query base-options)
                                      (seq inclusions) (into inclusions))]
@@ -660,7 +674,7 @@
    {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                      (let [route (::new-route event-data)]
                        (when route
-                         (dr/change-route fulcro-app route))
+                         (dr/change-route! fulcro-app route))
                        (uism/exit env)))}
 
    :event/route-denied
@@ -989,14 +1003,14 @@
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
   ([this form-class entity-id]
-   (dr/change-route this (dr/path-to form-class {:action edit-action
-                                                 :id     entity-id})
+   (dr/change-route! this (dr/path-to form-class {:action edit-action
+                                                  :id     entity-id})
      {:deferred-timeout 16}))
   ([this form-class entity-id {:keys [router]}]
    (if router
-     (dr/change-route-relative this router (dr/path-to form-class {:action edit-action
-                                                                   :id     entity-id}
-                                             {:deferred-timeout 16}))
+     (dr/change-route-relative! this router (dr/path-to form-class {:action edit-action
+                                                                    :id     entity-id}
+                                              {:deferred-timeout 16}))
      (edit! this form-class entity-id))))
 
 (defn create!
@@ -1010,11 +1024,11 @@
   ([app-ish form-class]
    ;; This function uses UUIDs for all ID types, since they will end up being tempids
    ;; which are UUID-based.
-   (dr/change-route app-ish (dr/path-to form-class {:action create-action
-                                                    :id     (str (new-uuid))})))
+   (dr/change-route! app-ish (dr/path-to form-class {:action create-action
+                                                     :id     (str (new-uuid))})))
   ([app-ish form-class {:keys [router] :as options}]
    (if router
-     (dr/change-route-relative app-ish router
+     (dr/change-route-relative! app-ish router
        (dr/path-to form-class {:action create-action
                                :id     (str (new-uuid))}))
      (create! app-ish form-class))))

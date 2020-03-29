@@ -89,7 +89,7 @@
         ;; TODO: Rename cancel-route to common RAD ns
         cancel-route (some-> Report comp/component-options ::cancel-route)]
     (if cancel-route
-      (dr/change-route fulcro-app (or cancel-route []))
+      (dr/change-route! fulcro-app (or cancel-route []))
       (log/error "Don't know where to route on cancel. Add ::report/cancel-route to your form."))
     (uism/exit env)))
 
@@ -181,8 +181,6 @@
         (start-report! app report-class {:route-params route-params})
         (comp/transact! app [(dr/target-ready {:target report-ident})])))))
 
-(defn report-will-leave [_ _] true)
-
 #?(:clj
    (defmacro defsc-report
      "Define a report. Just like defsc, but you do not specify query/ident/etc.
@@ -217,7 +215,6 @@
           options           (assoc options
                               :route-segment (if (vector? route) route [route])
                               :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
-                              :will-leave `report-will-leave
                               ::BodyItem ItemClass
                               :query query
                               :initial-state {source-attribute {}}
