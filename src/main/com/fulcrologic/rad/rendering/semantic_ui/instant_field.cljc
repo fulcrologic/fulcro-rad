@@ -5,6 +5,7 @@
     #?(:cljs [com.fulcrologic.fulcro.dom :refer [div label input]]
        :clj  [com.fulcrologic.fulcro.dom-server :refer [div label input]])
     [com.fulcrologic.fulcro.dom.inputs :as inputs]
+    [taoensso.timbre :as log]
     [com.fulcrologic.rad.type-support.date-time :as datetime]
     [com.fulcrologic.rad.rendering.semantic-ui.field :refer [render-field-factory]]))
 

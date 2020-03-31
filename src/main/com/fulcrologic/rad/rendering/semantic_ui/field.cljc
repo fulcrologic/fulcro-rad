@@ -14,10 +14,8 @@
 (defn render-field-factory
   "Create a general field factory using the given input factory as the function to call to draw an input."
   ([input-factory]
-   (render-field-factory {} input-factory str))
+   (render-field-factory {} input-factory))
   ([addl-props input-factory]
-   (render-field-factory addl-props input-factory str))
-  ([addl-props input-factory model->string]
    (fn [{::form/keys [form-instance] :as env} {::attr/keys [type qualified-key] :as attribute}]
      (let [props              (comp/props form-instance)
            value              (or (form/computed-value env attribute)
@@ -28,7 +26,7 @@
            field-label        (form/field-label env attribute)
            visible?           (form/field-visible? form-instance attribute)
            read-only?         (form/read-only? form-instance attribute)
-           addl-props         (if read-only? (assoc addl-props :readOnly "readonly"))]
+           addl-props         (if read-only? (assoc addl-props :readOnly "readonly") addl-props)]
        (when visible?
          (div :.ui.field {:key     (str qualified-key)
                           :classes [(when invalid? "error")]}

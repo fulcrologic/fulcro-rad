@@ -12,4 +12,4 @@
                    :string->model (fn [s] (math/numeric s))
                    :string-filter (fn [s] (str/replace s #"[^\d.]" ""))})))
 
-(def render-field (render-field-factory {} ui-decimal-input (fn [n] (if (math/numeric? n) (math/numeric->str n) ""))))
+(def render-field (render-field-factory {} ui-decimal-input))
