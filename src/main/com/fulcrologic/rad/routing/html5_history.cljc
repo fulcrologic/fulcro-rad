@@ -68,7 +68,7 @@
                    (query-string params))]
          (log/spy :debug ["Pushing route" route params])
          (reset! current-uid (swap! generator inc))
-         (reset! prior-route (history/-current-route this))
+         (reset! prior-route {:route route :params params})
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
@@ -76,13 +76,13 @@
                    (str/join "/" (map str route))
                    (query-string params))]
          (log/spy :debug ["Replacing route" route params])
-         (reset! prior-route (history/-current-route this))
+         (reset! prior-route {:route route :params params})
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
   (-undo! [this _ {::history/keys [direction]}]
     (log/debug "Attempting to UNDO a routing request from the browser")
-    (when-let [{:keys [route params]} @prior-route]
+    (when-let [{:keys [route params]} (log/spy :debug @prior-route)]
       (reset! prior-route nil)
-      (if (= :forward (log/spy :info direction))
+      (if (= :forward direction)
         (history/-replace-route! this route params)
         (history/-push-route! this route params))))
   (-back! [_]
@@ -122,8 +122,8 @@
        (let [history            (HTML5History. (atom {}) (atom 1) (atom 1) (atom nil))
              pop-state-listener (fn [evt]
                                   (let [current-uid (-> history (:current-uid) deref)
-                                        event-uid   (gobj/getValueByKeys evt "state" "uid")
-                                        forward?    (> event-uid current-uid)
+                                        event-uid   (log/spy :info (gobj/getValueByKeys evt "state" "uid"))
+                                        forward?    (< event-uid current-uid)
                                         {:keys [route params]} (url->route)
                                         listeners   (some-> history :listeners deref vals)]
                                     (log/debug "Got pop state event." evt)
