@@ -205,7 +205,9 @@
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
           options           (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})
-          {::keys [BodyItem edit-form columns row-pk form-links row-actions source-attribute route parameters] :as options} options
+          {::keys [BodyItem edit-form columns row-pk form-links
+                   row-query-inclusion
+                   row-actions source-attribute route parameters] :as options} options
           _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
@@ -222,9 +224,9 @@
                               [`(render-layout ~this-sym)])
           row-query         (list 'fn [] `(let [forms#    ~(::form-links options)
                                                 id-attrs# (keep #(comp/component-options % ::form/id) (vals forms#))]
-                                            (mapv ::attr/qualified-key (conj
-                                                                         (set (concat id-attrs# ~columns))
-                                                                         ~row-pk))))
+                                            (vec
+                                              (into #{~@row-query-inclusion}
+                                                (map ::attr/qualified-key (conj (set (concat id-attrs# ~columns)) ~row-pk))))))
           props-sym         (gensym "props")
           row-ident         (list 'fn []
                               `(let [k# (::attr/qualified-key ~row-pk)]
@@ -262,7 +264,25 @@
 (defn form-link
   "Get the form link info for a given (column) key.
 
-  Returns nil if there is no link info, otherwise retuns:
+  Returns nil if there is no link info, otherwise returns:
+
+  ```
+  {:edit-form FormClass
+   :entity-id id-of-entity-to-edit}
+  ```
+  "
+  [report-instance row-props column-key]
+  (let [{::keys [form-links]} (comp/component-options report-instance)
+        cls    (get form-links column-key)
+        id-key (some-> cls (comp/component-options ::form/id ::attr/qualified-key))]
+    (when cls
+      {:edit-form cls
+       :entity-id (get row-props id-key)})))
+
+(defn link
+  "Get a regular lambda link for a given (column) key.
+
+  Returns nil if there is no link info, otherwise returns:
 
   ```
   {:edit-form FormClass

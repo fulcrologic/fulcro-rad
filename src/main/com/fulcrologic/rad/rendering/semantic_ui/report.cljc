@@ -31,7 +31,7 @@
 
 (comp/defsc TableRowLayout [_ {:keys [report-instance props]}]
   {}
-  (let [{::report/keys [columns]} (comp/component-options report-instance)
+  (let [{::report/keys [columns link]} (comp/component-options report-instance)
         action-buttons (row-action-buttons report-instance props)]
     (dom/tr {}
       (map
@@ -39,10 +39,12 @@
               ::attr/keys   [qualified-key] :as column}]
           (dom/td {:key (str "col-" qualified-key)}
             (let [{:keys [edit-form entity-id]} (report/form-link report-instance props qualified-key)
-                  label (report/formatted-column-value report-instance props column)]
-              (if edit-form
-                (dom/a {:onClick (fn [] (form/edit! report-instance edit-form entity-id))} label)
-                label))))
+                  link-fn (get link qualified-key)
+                  label   (report/formatted-column-value report-instance props column)]
+              (cond
+                edit-form (dom/a {:onClick (fn [] (form/edit! report-instance edit-form entity-id))} label)
+                (fn? link-fn) (dom/a {:onClick (fn [] (link-fn report-instance props))} label)
+                :else label))))
         columns)
       (when action-buttons
         (dom/td :.collapsing {:key "actions"}
