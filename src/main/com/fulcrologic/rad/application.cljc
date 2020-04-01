@@ -30,7 +30,7 @@
     ::fs/config})
 
 (defn elision-predicate
-  "Returns an elision predicate that will return false if the keyword k is in the blacklist or has the namespace
+  "Returns an elision predicate that will return true if the keyword k is in the blacklist or has the namespace
   `ui`."
   [blacklist]
   (fn [k]
