@@ -1,9 +1,5 @@
 (ns com.fulcrologic.rad.rendering.semantic-ui.decimal-field
   (:require
-    #?(:cljs
-       [com.fulcrologic.fulcro.dom :as dom :refer [div label input]]
-       :clj
-       [com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]])
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.dom.inputs :as inputs]
     [clojure.string :as str]
@@ -16,4 +12,4 @@
                    :string->model (fn [s] (math/numeric s))
                    :string-filter (fn [s] (str/replace s #"[^\d.]" ""))})))
 
-(def render-field (render-field-factory ui-decimal-input))
+(def render-field (render-field-factory {} ui-decimal-input))

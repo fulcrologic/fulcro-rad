@@ -1,4 +1,22 @@
 (ns com.fulcrologic.rad.resolvers
+  "Support for allowing resolvers to be declared on attributes via ::pc/input ::pc/output and ::pc/resolve. This is
+  useful because it allows custom resolution of an attribute that then has all of the RAD abilities attributes have.
+
+  ```
+  (defattr server-time :server/time :inst
+    {::pc/output [:server/time]
+     ::pc/resolver (fn [_ _] (java.util.Date.))
+     ::form/label \"Current Server Time\"
+     ::form/field-style :some-custom-style
+     ...})
+  ```
+
+  Then install them in your parser as a list of resolvers you can obtain from `(resolvers/generate-resolvers all-attributes)`.
+
+  You may also, of course, define resolvers using `defresolver` and other pathom functions, but you must install those
+  separately.
+
+  "
   (:require
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
@@ -7,6 +25,8 @@
     [com.wsscode.pathom.connect :as pc :refer [defresolver defmutation]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
+
+;; TASK: Add read middleware for things like security and such
 
 (defn just-pc-keys [m]
   (into {}

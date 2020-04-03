@@ -3,7 +3,7 @@
  :deps    {edn-query-language/eql      {:mvn/version "0.0.9"}
            com.taoensso/timbre         {:mvn/version "4.10.0"}
            com.taoensso/encore         {:mvn/version "2.119.0"}
-           com.fulcrologic/fulcro      {:mvn/version "3.1.20"}
+           com.fulcrologic/fulcro      {:mvn/version "3.2.0"}
            com.fulcrologic/fulcro-i18n {:mvn/version "0.0.1-alpha-1"}
            com.fulcrologic/guardrails  {:mvn/version "0.0.12"}
            com.wsscode/pathom          {:mvn/version "2.2.30"}
@@ -16,14 +16,14 @@
            com.taoensso/tufte          {:mvn/version "2.1.0"}}
 
  :aliases {:tests     {:extra-paths ["src/test"]
-                       :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.4"}}}
+                       :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.5"}}}
 
            :clj-tests {:extra-paths ["src/test"]
                        :main-opts   ["-m" "kaocha.runner"]
-                       :extra-deps  {lambdaisland/kaocha {:mvn/version "0.0-554"}}}
+                       :extra-deps  {lambdaisland/kaocha {:mvn/version "1.0-612"}}}
 
            :dev       {:extra-paths ["src/dev" "resources"]
-                       :extra-deps  {thheller/shadow-cljs                {:mvn/version "2.8.69"}
+                       :extra-deps  {thheller/shadow-cljs                {:mvn/version "2.8.94"}
                                      com.fulcrologic/semantic-ui-wrapper {:mvn/version "1.0.0"}
                                      mount                               {:mvn/version "0.1.12"}
 

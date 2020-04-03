@@ -30,7 +30,7 @@
     ::fs/config})
 
 (defn elision-predicate
-  "Returns an elision predicate that will return false if the keyword k is in the blacklist or has the namespace
+  "Returns an elision predicate that will return true if the keyword k is in the blacklist or has the namespace
   `ui`."
   [blacklist]
   (fn [k]
@@ -83,10 +83,18 @@
     (merge
       #?(:clj {}
          :cljs
-              (let [token (when-not (undefined? js/fulcro_network_csrf_token)
+              (let [token (when (exists? js/fulcro_network_csrf_token)
                             js/fulcro_network_csrf_token)]
                 {:remotes {:remote (net/fulcro-http-remote {:url                "/api"
                                                             :request-middleware (secured-request-middleware {:csrf-token token})})}}))
       {:global-eql-transform (global-eql-transform (elision-predicate default-network-blacklist))
        :optimized-render!    mroot/render!}
       options)))
+
+(defn install-ui-controls!
+  "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting
+  your app. The `controls` is just a map from data type to a sub-map that contains a :default key, with optional
+  alternate renderings for that data type that can be selected with `::form/field-style {attr-key style-key}`."
+  [app controls]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc :com.fulcrologic.rad/controls controls)))

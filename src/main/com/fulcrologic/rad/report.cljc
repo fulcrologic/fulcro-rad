@@ -1,8 +1,22 @@
 (ns com.fulcrologic.rad.report
+  "Support for generated reports. Report rendering is pluggable, so reports can be quite varied. The general
+  definition of a report is a component that loads data and displays it, possibly paginates, sorts and
+  filters it, but for which interactions are done via custom mutations (disable, delete, sort) or reloads.
+
+  Reports can customize their layout via plugins, and the layout can then allow futher nested customization of element
+  render. For example, it is trivial to create a layout renderer that is some kind of graph, and then use loaded data
+  as the input for that display.
+
+  Customizing the report's state machine and possibly wrapping it with more complex layout controls makes it possible
+  to create UI dashboards and much more complex application features.
+  "
   #?(:cljs (:require-macros com.fulcrologic.rad.report))
   (:require
-    #?(:clj [cljs.analyzer :as ana])
-    [com.fulcrologic.rad.options-util :refer [?! debounce]]
+    #?@(:clj
+        [[clojure.pprint :refer [pprint]]
+         [cljs.analyzer :as ana]])
+    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.type-support.decimal :as math]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
@@ -12,8 +26,10 @@
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [taoensso.timbre :as log]
+    [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [clojure.spec.alpha :as s]))
+    [clojure.spec.alpha :as s]
+    [com.fulcrologic.rad.routing.history :as history]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
@@ -71,12 +87,7 @@
 (def global-events {})
 
 (defn exit-report [{::uism/keys [fulcro-app] :as env}]
-  (let [Report       (uism/actor-class env :actor/report)
-        ;; TODO: Rename cancel-route to common RAD ns
-        cancel-route (some-> Report comp/component-options ::cancel-route)]
-    (if cancel-route
-      (dr/change-route fulcro-app (or cancel-route []))
-      (log/error "Don't know where to route on cancel. Add ::report/cancel-route to your form."))
+  (let [Report (uism/actor-class env :actor/report)]
     (uism/exit env)))
 
 (defn report-options
@@ -84,13 +95,14 @@
   [env & k-or-ks]
   (apply comp/component-options (uism/actor-class env :actor/report) k-or-ks))
 
-(defn initialize-parameters [env]
+(defn initialize-parameters [{::uism/keys [fulcro-app] :as env}]
   (let [report-ident       (uism/actor->ident env :actor/report)
-        initial-parameters (?! (report-options env ::initial-parameters))]
+        {history-params :params} (history/current-route fulcro-app)
+        initial-parameters (?! (report-options env ::initial-parameters) fulcro-app)]
     (cond-> env
-      report-ident (uism/apply-action update report-ident merge initial-parameters))))
+      report-ident (uism/apply-action update-in report-ident merge initial-parameters history-params))))
 
-(defn load-report! [{::uism/keys [fulcro-app state-map event-data] :as env}]
+(defn load-report! [{::uism/keys [state-map event-data] :as env}]
   (let [Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
         {::keys [parameters BodyItem source-attribute]} (comp/component-options Report)
@@ -98,7 +110,7 @@
         current-params (merge (select-keys (get-in state-map report-ident) desired-params) event-data)
         path           (conj (comp/get-ident Report {}) source-attribute)]
     (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
-    (uism/load env source-attribute BodyItem {:params current-params
+    (uism/load env source-attribute BodyItem {:params (log/spy :info current-params)
                                               :marker report-ident
                                               :target path})))
 
@@ -151,15 +163,21 @@
       (when-not (contains? options k)
         (throw (ana/error env (str "defsc-report " sym " is missing option " k)))))))
 
+(defn start-report!
+  "Start a report. Not normally needed, since a report is started when it is routed to; however, if you put
+  a report on-screen initially (or don't use dynamic router), then you must call this to start your report."
+  ([app report-class]
+   (start-report! app report-class {}))
+  ([app report-class options]
+   (let [machine-def (or (comp/component-options report-class ::machine) report-machine)]
+     (uism/begin! app report-machine (comp/ident report-class {}) {:actor/report report-class} options))))
+
 (defn report-will-enter [app route-params report-class]
   (let [report-ident (comp/get-ident report-class {})]
     (dr/route-deferred report-ident
       (fn []
-        (uism/begin! app report-machine report-ident {:actor/report report-class}
-          {:route-params route-params})
+        (start-report! app report-class {:route-params route-params})
         (comp/transact! app [(dr/target-ready {:target report-ident})])))))
-
-(defn report-will-leave [_ _] true)
 
 #?(:clj
    (defmacro defsc-report
@@ -180,19 +198,23 @@
      "
      [sym arglist & args]
      (let [this-sym (first arglist)
-           {::keys [BodyItem edit-form columns column-key row-actions source-attribute route parameters] :as options} (first args)]
+           options  (first args)]
        (req! &env sym options ::columns #(every? symbol? %))
-       (req! &env sym options ::column-key #(symbol? %))
+       (req! &env sym options ::row-pk #(symbol? %))
        (req! &env sym options ::source-attribute keyword?)
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
+          options           (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})
+          {::keys [BodyItem edit-form columns row-pk form-links
+                   row-query-inclusion
+                   row-actions source-attribute route parameters] :as options} options
+          _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
           query             (into [{source-attribute subquery} [df/marker-table '(quote _)]] (keys parameters))
           options           (assoc options
                               :route-segment (if (vector? route) route [route])
                               :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
-                              :will-leave `report-will-leave
                               ::BodyItem ItemClass
                               :query query
                               :initial-state {source-attribute {}}
@@ -200,17 +222,21 @@
           body              (if (seq (rest args))
                               (rest args)
                               [`(render-layout ~this-sym)])
-          row-query         (list 'fn [] `(into [(::attr/qualified-key ~column-key)] (map ::attr/qualified-key) ~columns))
+          row-query         (list 'fn [] `(let [forms#    ~(::form-links options)
+                                                id-attrs# (keep #(comp/component-options % ::form/id) (vals forms#))]
+                                            (vec
+                                              (into #{~@row-query-inclusion}
+                                                (map ::attr/qualified-key (conj (set (concat id-attrs# ~columns)) ~row-pk))))))
           props-sym         (gensym "props")
           row-ident         (list 'fn []
-                              `(let [k# (::attr/qualified-key ~column-key)]
+                              `(let [k# (::attr/qualified-key ~row-pk)]
                                  [k# (get ~props-sym k#)]))
           row-actions       (or row-actions [])
           body-options      (cond-> {:query        row-query
                                      :ident        row-ident
                                      ::row-actions row-actions
                                      ::columns     columns}
-                              edit-form (assoc ::edit-form edit-form))
+                              form-links (assoc ::form-links form-links))
           defs              (if-not BodyItem
                               [`(comp/defsc ~generated-row-sym [this# ~props-sym computed#]
                                   ~body-options
@@ -231,5 +257,73 @@
   [report-instance parameter-name new-value]
   (let [reload? (comp/component-options report-instance ::run-on-parameter-change?)]
     (comp/transact! report-instance `[(m/set-props ~{parameter-name new-value})])
+    (rad-routing/update-route-params! report-instance assoc parameter-name new-value)
     (when reload?
       (reload! report-instance))))
+
+(defn form-link
+  "Get the form link info for a given (column) key.
+
+  Returns nil if there is no link info, otherwise returns:
+
+  ```
+  {:edit-form FormClass
+   :entity-id id-of-entity-to-edit}
+  ```
+  "
+  [report-instance row-props column-key]
+  (let [{::keys [form-links]} (comp/component-options report-instance)
+        cls    (get form-links column-key)
+        id-key (some-> cls (comp/component-options ::form/id ::attr/qualified-key))]
+    (when cls
+      {:edit-form cls
+       :entity-id (get row-props id-key)})))
+
+(defn link
+  "Get a regular lambda link for a given (column) key.
+
+  Returns nil if there is no link info, otherwise returns:
+
+  ```
+  {:edit-form FormClass
+   :entity-id id-of-entity-to-edit}
+  ```
+  "
+  [report-instance row-props column-key]
+  (let [{::keys [form-links]} (comp/component-options report-instance)
+        cls    (get form-links column-key)
+        id-key (some-> cls (comp/component-options ::form/id ::attr/qualified-key))]
+    (when cls
+      {:edit-form cls
+       :entity-id (get row-props id-key)})))
+
+;; TASK: More default type formatters
+(defn inst->human-readable-date
+  "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string."
+  ([inst]
+   #?(:cljs
+      (when (inst? inst)
+        (.toLocaleDateString ^js inst js/undefined #js {:weekday "short" :year "numeric" :month "short" :day "numeric"})))))
+
+(defn format-column [v]
+  (cond
+    (string? v) v
+    (inst? v) (str (inst->human-readable-date v))
+    (math/numeric? v) (math/numeric->str v)
+    :else (str v)))
+
+(defn formatted-column-value
+  "Given a report instance, a row of props, and a column attribute for that report:
+   returns the formatted value of that column using the field formatter(s) defined
+   on the column attribute or report. If no formatter is provided a default formatter
+   will be used."
+  [report-instance row-props {::keys      [field-formatter]
+                              ::attr/keys [qualified-key] :as column-attribute}]
+  (let [value                  (get row-props qualified-key)
+        report-field-formatter (comp/component-options report-instance ::field-formatters qualified-key)
+        formatted-value        (or
+                                 (?! report-field-formatter value)
+                                 (?! field-formatter value)
+                                 (format-column value)
+                                 (str value))]
+    formatted-value))

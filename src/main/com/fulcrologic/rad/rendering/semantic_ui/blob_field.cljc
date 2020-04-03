@@ -5,7 +5,6 @@
                [goog.object :as gobj]
                [com.fulcrologic.fulcro.networking.file-upload :as file-upload]]
         :clj  [[com.fulcrologic.fulcro.dom-server :as dom :refer [div input]]])
-    [com.fulcrologic.fulcro.dom.events :as evt]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.attributes :as attr]
     [taoensso.timbre :as log]
@@ -70,7 +69,7 @@
     (ui-image-upload-field env attribute))
 
 (defsc FileUploadField [this
-                        {::form/keys [form-instance] :as env}
+                        {::form/keys [form-instance master-form] :as env}
                         {::blob/keys [accept-file-types can-change?]
                          ::attr/keys [qualified-key] :as attribute}]
   {:componentDidMount (fn [this]
@@ -86,7 +85,10 @@
                                                file      (-> evt evt->js-files first)]
                                            (blob/upload-file! this attribute file {:file-ident []})))}))}
   (let [props              (comp/props form-instance)
-        can-change?        (?! can-change? env attribute)
+        read-only?         (or
+                             (form/read-only? master-form attribute)
+                             (form/read-only? form-instance attribute))
+        can-change?        (if read-only? false (?! can-change? env attribute))
         url-key            (blob/url-key qualified-key)
         name-key           (blob/filename-key qualified-key)
         current-sha        (get props qualified-key)
@@ -95,9 +97,9 @@
         pct                (blob/upload-percentage props qualified-key)
         has-current-value? (seq current-sha)
         {:keys [save-ref on-change on-click]} (comp/get-state this)
-        dirty?             (fs/dirty? props qualified-key)
+        dirty?             (if read-only? false (fs/dirty? props qualified-key))
         label              (form/field-label env attribute)
-        invalid?           (validation/invalid-attribute-value? env attribute)
+        invalid?           (if read-only? false (validation/invalid-attribute-value? env attribute))
         validation-message (when invalid? (validation/validation-error-message env attribute))]
     (div :.field {:key (str qualified-key)}
       (dom/label label)

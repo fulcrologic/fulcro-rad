@@ -1,5 +1,8 @@
 (ns com.fulcrologic.rad.picker-options
-  "Utilities to help support entity/enumeration pickers in the UI, along with loading/normalizing/caching the options."
+  "Utilities to help support entity/enumeration pickers in the UI, along with loading/normalizing/caching the options.
+
+  Pickers are commonly used for things like autocomplete fields and (cascading) dropdowns where the list of options must be loaded dynamically
+  due to some event in the UI."
   (:require
     [com.fulcrologic.fulcro.algorithms.denormalize :as fdn]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]

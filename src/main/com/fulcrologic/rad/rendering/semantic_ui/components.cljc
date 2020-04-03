@@ -7,12 +7,7 @@
         [[com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]]])
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.algorithms.transit :as ftransit]
-    [com.fulcrologic.rad.attributes :as attr]
-    [clojure.string :as str]
-    [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.fulcro.dom.events :as evt]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.fulcro.mutations :as m]))
+    [taoensso.timbre :as log]))
 
 (defn sui-format->user-format
   "Converts transit encoded value(s), used by Semantic UI, into CLJS datastructure."

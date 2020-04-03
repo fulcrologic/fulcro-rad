@@ -1,4 +1,6 @@
 (ns com.fulcrologic.rad.authorization
+  "A basic implementation of an user/password auth scheme, with a state machine and support for a pluggable UI
+  actor. Very Alpha."
   #?(:cljs (:require-macros com.fulcrologic.rad.authorization))
   (:require
     [clojure.set :as set]

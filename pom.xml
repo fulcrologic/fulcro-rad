@@ -4,7 +4,7 @@
   <groupId>com.fulcrologic</groupId>
   <artifactId>fulcro-rad</artifactId>
   <packaging>jar</packaging>
-  <version>0.0.1-alpha-11</version>
+  <version>0.0.1-alpha-12</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -109,7 +109,7 @@
     <dependency>
       <groupId>com.fulcrologic</groupId>
       <artifactId>fulcro</artifactId>
-      <version>3.1.20</version>
+      <version>3.2.0</version>
     </dependency>
     <dependency>
       <groupId>cljc.java-time</groupId>

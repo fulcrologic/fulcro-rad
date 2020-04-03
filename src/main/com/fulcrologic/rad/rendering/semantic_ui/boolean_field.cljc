@@ -18,15 +18,17 @@
         read-only?  (form/read-only? form-instance attribute)
         value       (get props k false)]
     (div :.ui.field {:key (str k)}
-      (div :.ui.checkbox
-        (input (merge
-                 {:checked  value
-                  :type     "checkbox"
-                  :disabled (boolean read-only?)
-                  :onChange (fn [evt]
-                              (let [v (not value)]
-                                (form/input-blur! env k v)
-                                (form/input-changed! env k v)))}
-                 user-props))
-        (label field-label)))))
+      (if read-only?
+        (str field-label " " (if value "Yes" "No"))
+        (div :.ui.checkbox
+         (input (merge
+                  {:checked  value
+                   :type     "checkbox"
+                   :disabled (boolean read-only?)
+                   :onChange (fn [evt]
+                               (let [v (not value)]
+                                 (form/input-blur! env k v)
+                                 (form/input-changed! env k v)))}
+                  user-props))
+         (label field-label))))))
 
