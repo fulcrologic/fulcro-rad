@@ -1083,7 +1083,7 @@
   (let [form-ident (comp/get-ident form-instance)
         old-value  (get (comp/props form-instance) k)
         asm-id     (comp/get-ident master-form)]
-    (uism/trigger! form-instance asm-id :event/attribute-changed
+    (uism/trigger!! form-instance asm-id :event/attribute-changed
       {::attr/qualified-key k
        :form-ident          form-ident
        :form-key            (comp/class->registry-key (comp/react-type form-instance))
