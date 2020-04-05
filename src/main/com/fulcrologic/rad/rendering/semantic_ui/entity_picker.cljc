@@ -20,7 +20,7 @@
                           (picker-options/load-options! form-instance form-class props attr)))}
   (let [{::form/keys [master-form form-instance]} env
         {::form/keys [attributes field-options]} (comp/component-options form-instance)
-        {::attr/keys [qualified-key]} attr
+        {::attr/keys [qualified-key required?]} attr
         field-options (get field-options qualified-key)
         target-id-key (first (keep (fn [{k ::attr/qualified-key ::attr/keys [target]}]
                                      (when (= k qualified-key) target)) attributes))
@@ -41,10 +41,11 @@
         (let [value (first (filter #(= value (:value %)) options))]
           (:text value))
         (ui-wrapped-dropdown (cond->
-                               {:onChange (fn [v] (onSelect v))
-                                :value    value
-                                :disabled read-only?
-                                :options  options}))))))
+                               {:onChange  (fn [v] (onSelect v))
+                                :value     value
+                                :clearable (not required?)
+                                :disabled  read-only?
+                                :options   options}))))))
 
 (let [ui-to-one-picker (comp/factory ToOnePicker {:keyfn (fn [{:keys [attr]}] (::attr/qualified-key attr))})]
   (defn to-one-picker [env attribute]

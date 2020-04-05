@@ -802,10 +802,11 @@
                           (uism/activate env :state/editing))}
         :event/saved
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (let [form-ident (uism/actor->ident env :actor/form)
-                                {:keys [route params]} (history/current-route fulcro-app)
-                                new-route  (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
-                            (history/replace-route! fulcro-app new-route params)
+                          (let [form-ident (uism/actor->ident env :actor/form)]
+                            (when (history/history-support? fulcro-app)
+                              (let [{:keys [route params]} (history/current-route fulcro-app)
+                                    new-route (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
+                                (history/replace-route! fulcro-app new-route params)))
                             (-> env
                               (uism/apply-action fs/entity->pristine* form-ident)
                               (uism/activate :state/editing))))}})}

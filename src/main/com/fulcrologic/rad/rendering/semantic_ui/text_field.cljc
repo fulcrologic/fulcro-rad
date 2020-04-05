@@ -44,7 +44,8 @@
 (def render-viewable-password (render-field-factory (comp/factory ViewablePasswordField)))
 
 (defn render-dropdown [{::form/keys [form-instance] :as env} attribute]
-  (let [{k ::attr/qualified-key} attribute
+  (let [{k           ::attr/qualified-key
+         ::attr/keys [required?]} attribute
         values             (form/field-style-config env attribute :sorted-set/valid-values)
         input-props        (form/field-style-config env attribute :input/props)
         options            (mapv (fn [v] {:text v :value v}) values)
@@ -58,9 +59,10 @@
       (label (str field-label (when invalid? (str " (" validation-message ")"))))
       (ui-wrapped-dropdown
         (merge
-          {:disabled read-only?
-           :options  options
-           :value    value
-           :onChange (fn [v] (form/input-changed! env k v))}
+          {:disabled  read-only?
+           :options   options
+           :clearable (not required?)
+           :value     value
+           :onChange  (fn [v] (form/input-changed! env k v))}
           input-props)))))
 
