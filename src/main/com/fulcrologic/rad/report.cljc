@@ -119,7 +119,8 @@
    #{:actor/report}
 
    ::uism/aliases
-   {}
+   {:sort-key      [:actor/report :ui/sort-key]
+    :sort-forward? [:actor/report :ui/sort-forward?]}
 
    ::uism/states
    {:initial
@@ -211,13 +212,17 @@
           _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
-          query             (into [{source-attribute subquery} [df/marker-table '(quote _)]] (keys parameters))
+          query             (into [:ui/sort-key
+                                   :ui/sort-forward?
+                                   {source-attribute subquery}
+                                   [df/marker-table '(quote _)]] (keys parameters))
           options           (assoc options
                               :route-segment (if (vector? route) route [route])
                               :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
                               ::BodyItem ItemClass
                               :query query
-                              :initial-state {source-attribute {}}
+                              :initial-state {:ui/sort-forward? true
+                                              source-attribute  {}}
                               :ident (list 'fn [] [:component/id (keyword sym)]))
           body              (if (seq (rest args))
                               (rest args)
@@ -327,3 +332,19 @@
                                  (format-column value)
                                  (str value))]
     formatted-value))
+
+(defn current-rows
+  "Get a vector of the current rows that should be shown by the renderer (sorted/paginated/filtered). `report-instance`
+   is available in the rendering `env`."
+
+  [report-instance]
+  (let [props (comp/props report-instance)
+        {::keys [source-attribute]} (comp/component-options report-instance)]
+    (or
+      (get props ::cached-rows)
+      (get props source-attribute []))))
+
+(defn loading?
+  "Returns true if the given report instance has an active network load in progress."
+  [report-instance]
+  (df/loading? (get-in (comp/props report-instance) [df/marker-table (comp/get-ident report-instance)])))
