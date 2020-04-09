@@ -1,6 +1,6 @@
 = Fulcro RAD Developer's Guide
 :author: Tony Kay
-:revdate: March 23, 2020
+:revdate: April 9, 2020
 :lang: en
 :encoding: UTF-8
 :doctype: book
@@ -85,7 +85,7 @@ overall central goals are well-known, and this should prevent it from being terr
 to port an existing RAD app forward to a new version.
 
 Please let someone know on the Fulcro slack channel if this document is out of date with the live implementation
-in the RAD Demo.
+in the RAD Demo, or even better: send a PR to fix it.
 
 This book covers Rapid Application Development (RAD) tools for Fulcro.  The RAD system is intended to be augmented with
 any number of plugins that can handle anything from back-end database management to front-end UI automation.
@@ -103,21 +103,32 @@ aliases we most commonly use here for easy reference:
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     #?(:clj  [com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]]
        :cljs [com.fulcrologic.fulcro.dom :as dom :refer [div label input]])
-    [com.fulcrologic.fulcro.routing.dynamic-routing :refer [defrouter]]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.form :as form :refer [defsc-form]]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
+    [com.fulcrologic.rad.routing :as rr]
+    [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.report :as report :refer [defsc-report]]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.type-support.decimal :as math]
     [com.fulcrologic.rad.type-support.date-time :as datetime]))
 -----
 
 The core system has the following general ideals:
 
+* The world of information has many sources, and those sources can all be unified under a single model.
+** Accessing and managing data from a mix of sources (both local and remote) should be as transparent as possible to the
+application code.
+** EQL is more ideally suited to this task than GraphQL, as the latter's stricter schema (which limits dynamically
+shaping the query to better fit client needs), paltry primitive data types (EQL uses EDN, which is trivially extensible
+to keep binary types in tact across platforms), and class-based model make GraphQL much less flexible as needs emerge in a data model over time.
 * Everything is optional.  Applications written using RAD should be able to choose which aspects are useful, and easily
 escape from aspects if they don't fit their needs.
 * Reasonable defaults and utilities for common needs.
+* UI Platform independent: RAD is intended to be usable for development in web and native environments. The majority of
+the namespaces are not hard-linked to a rendering/UI technology.
+** A Default UI plugin is included that targets web development with Semantic UI CSS, but it is trivial to build your
+own UI plugin.
 
 The common features that are intended to be well-supported in early versions of the library include:
 
@@ -125,9 +136,51 @@ The common features that are intended to be well-supported in early versions of 
 * Reasonable defaults for CRUD interfaces (form generation) to arbitrary graphs of that data model, including to-one
 and to-many relations.
 * Reasonable defaults for common reporting needs, especially when tabular.
-* An opt-in extensible authentication mechanism.
+* An opt-in extensible authentication mechanism (not yet fleshed out).
 
-RAD is currently of pre-alpha quality, and should be used with caution.
+== Core Elements
+
+RAD defines a few central component types, with the following generalized meaning:
+
+* Forms: A form is a (potentially recursive) UI element that loads data from any number of sources, keeps track
+of changes to that data over time (including validating it), and allows the user to save/undo their work as a unit. Note
+that a form *need not* use traditional inputs. The main purpose of a form is to load/manage a cluster of persistent data
+over a fixed time period (typically while on screen). A kanban board *could* be considered a form.
+
+* Forms:
+** Obtain data from source(s) for the primary purpose of editing that data.
+** The primary actions in a form are to save/discard changes as a unit.
+** Forms can also be used in read-only mode as a way to allow viewing of that data when editing is not allowed.
+
+* Reports
+** Obtain data from source(s) which is *often derived or read-only* (may include aggregations, inferences, etc.).
+** Display that data in a manner that is convenient to the viewer for some particular use-case.
+** Interactions commonly include specifying input parameters, filters, and possibly the ability to manage large result
+sets via subselection (e.g. pagination)
+** Reports *may* be allow interactions that change the persisted data, but those actions are targeted to subsets of items
+in the report, and therefore prefer to be modelled as targeted units of work (e.g. mutations) instead of "saves" of the
+entire data set.
+
+* Containers (not yet designed)
+** Manage groupings of UI elements.
+** Allow for shared controls. For example a report's links on the left trigger a form to update on the right.
+
+* Routing (and optionally History)
+** Allows for direct navigation to a place in the application.
+** (optionally) Keeps track of where the user has been.
+** (optionally) Exposes the application location (e.g. Browser URL)
+** (optionally) Allows UI platforms to support common navigation needs (back/forward/bookmark). For example, an HTML5 implementation of history
+keeps the current location in the browser bar, and allows the user to use the fwd/back buttons to navigate in the application
+and bookmark pages.
+
+* BLOBs (Binary Large Objects)
+** Data that is typically stored in disk files (images, PDFs, spreadsheets)
+** Can be saved into the data model via forms (or report mutations)
+** Can be previewed or downloaded
+
+As you can see there is some overlap in forms and reports.  A read-only form is very much a report that happens to
+not have derived data, and a report with sufficient "row actions" (i.e. each cell can be clicked to edit)
+can behave very much like a form.
 
 == Required Dependencies
 
@@ -151,7 +204,22 @@ best with the `shadow-cljs` build tool. It requires that you add the following j
 }
 ----
 
-None of these should impact your build size unless you use the features the provide.
+Many of these will *not* impact your build size unless you use the features they provide. For example, if you do
+not use the UI the semantic UI controls for the web, then semantic-ui-react will not be included. This is a normal
+feature of the CLJS and shadow-cljs build tools.
+
+If you use the date/time support then you will want timezone support. The `js-joda` system explicitly makes these
+optional, since the files involved can be large. Your application's main should require a timezone file for
+full support to work properly:
+
+[source]
+-----
+(:require
+  ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"]
+  ...)
+-----
+
+See the `client.cljs` file in the RAD demo for an example.
 
 == Attribute-Centric
 

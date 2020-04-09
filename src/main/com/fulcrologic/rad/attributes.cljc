@@ -51,8 +51,9 @@
 #?(:clj
    (defmacro defattr
      "Define a new attribute into a sym. Equivalent to (def sym (new-attribute k type m))."
-     [sym k type m]
-     `(def ~sym (new-attribute ~k ~type ~m))))
+     [sym & args]
+     (let [[k type m] (if (string? (first args)) (rest args) args)]
+       `(def ~sym (new-attribute ~k ~type ~m)))))
 
 (>defn to-many?
   "Returns true if the attribute with the given key is a to-many."

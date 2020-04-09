@@ -123,16 +123,16 @@
                                                   (fn [cls]
                                                     (comp/computed-factory cls
                                                       {:keyfn (fn [props] (some-> props (comp/get-computed ::report/idx)))})))})}
-  (let [props           (comp/props report-instance)
-        {::report/keys [source-attribute BodyItem]} (comp/component-options report-instance)
+  (let [{::report/keys [BodyItem]} (comp/component-options report-instance)
         render-row      ((comp/get-state this :row-factory) BodyItem)
         render-controls (report/control-renderer this)
-        rows            (get props source-attribute [])
-        loading?        (df/loading? (get-in props [df/marker-table (comp/get-ident report-instance)]))]
+        rows            (report/current-rows report-instance)
+        loading?        (report/loading? report-instance)]
     (div
       (when render-controls
         (render-controls report-instance))
       (div :.ui.attached.segment
+        (div :.ui.loader {:classes [(when loading? "active")]})
         (when (seq rows)
           (div :.ui.relaxed.divided.list
             (map-indexed (fn [idx row] (render-row row {:report-instance report-instance
@@ -148,9 +148,8 @@
                                                                         {:keyfn (fn [props]
                                                                                   (some-> props (comp/get-computed ::report/idx)))})))})
    :shouldComponentUpdate (fn [_ _ _] true)}
-  (let [props            (comp/props report-instance)
-        {report-column-headings ::report/column-headings
-         ::report/keys          [columns source-attribute row-actions BodyItem]} (comp/component-options report-instance)
+  (let [{report-column-headings ::report/column-headings
+         ::report/keys          [columns row-actions BodyItem]} (comp/component-options report-instance)
         render-row       ((comp/get-state this :row-factory) BodyItem)
         column-headings  (mapv (fn [{::report/keys [column-heading]
                                      ::attr/keys   [qualified-key] :as attr}]
@@ -161,9 +160,9 @@
                                    ""))
                            columns)
         render-controls  (report/control-renderer report-instance)
-        rows             (get props source-attribute [])
-        has-row-actions? (seq row-actions)
-        loading?         (df/loading? (get-in props [df/marker-table (comp/get-ident report-instance)]))]
+        rows             (report/current-rows report-instance)
+        loading?         (report/loading? report-instance)
+        has-row-actions? (seq row-actions)]
     (div
       (when render-controls
         (render-controls report-instance))

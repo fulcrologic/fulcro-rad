@@ -44,7 +44,7 @@
                      #?(:cljs
                         (let [xform-options (memoize (fn [options]
                                                        (clj->js (mapv (fn [{:keys [text value]}]
-                                                                        #js {:text text :value (ftransit/transit-clj->str value)})
+                                                                        #js {:text text :value (some-> value (ftransit/transit-clj->str))})
                                                                   options))))
                               xform-value   (fn [multiple? value]
                                               (user-format->sui-format {:multiple multiple?} value))]
@@ -68,10 +68,11 @@
                            :options  options
                            :onChange (fn [e v]
                                        (try
-                                         (let [value (if multiple
-                                                       (mapv #(ftransit/transit-str->clj %) (.-value v))
-                                                       (ftransit/transit-str->clj (.-value v)))]
-                                           (when (and (or value (boolean? value)) userOnChange)
+                                         (let [string-value (.-value v)
+                                               value        (if multiple
+                                                              (mapv #(when (seq %) (ftransit/transit-str->clj %)) string-value)
+                                                              (when (seq string-value) (ftransit/transit-str->clj string-value)))]
+                                           (when userOnChange
                                              (userOnChange value)))
                                          (catch :default e
                                            (log/error "Unable to read dropdown value " e (when v (.-value v))))))})]
