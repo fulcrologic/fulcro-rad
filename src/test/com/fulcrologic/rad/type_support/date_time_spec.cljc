@@ -5,7 +5,9 @@
     [cljc.java-time.local-date :as ld]
     [fulcro-spec.core :refer [assertions specification behavior]]
     #?@(:clj  []
-        :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
+        :cljs [["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"]
+               ;; ["@js-joda/locale_en-us/dist/index.js"] possibly needed once we add more stuff
+               [java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
                [goog.date.duration :as g-duration]])
     [cljc.java-time.instant :as instant]
     [com.fulcrologic.rad.type-support.date-time :as datetime])
