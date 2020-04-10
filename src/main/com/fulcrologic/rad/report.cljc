@@ -155,11 +155,14 @@
     (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
           page-size      (or (report-options uism-env ::page-size) 20)
           available-rows (uism/alias-value uism-env :sorted-rows)
-          n              (log/spy :info (count available-rows))
+          n              (count available-rows)
           stragglers?    (pos? (rem n page-size))
           pages          (cond-> (int (/ n page-size))
                            stragglers? inc)
-          rows           (into [] (take page-size (drop (* (dec current-page) page-size) available-rows)))]
+          page-start     (* (dec current-page) page-size)
+          rows           (if (= pages current-page)
+                           (subvec available-rows page-start n)
+                           (subvec available-rows page-start (+ page-start page-size)))]
       (if (and (not= 1 current-page) (empty? rows))
         (-> uism-env
           (uism/assoc-aliased :current-page 1)
