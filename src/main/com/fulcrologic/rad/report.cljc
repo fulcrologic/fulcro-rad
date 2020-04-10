@@ -146,7 +146,7 @@
                        (let [sort-params (uism/alias-value uism-env :sort-params)
                              keyfn       (if normalized? #(get-in state-map %) identity)
                              comparefn   (fn [a b] (compare-rows sort-params a b))]
-                         (sort-by keyfn comparefn all-rows))
+                         (vec (sort-by keyfn comparefn all-rows)))
                        all-rows)]
     (uism/assoc-aliased uism-env :sorted-rows sorted-rows)))
 
@@ -154,15 +154,16 @@
   (if (report-options uism-env ::paginate?)
     (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
           page-size      (or (report-options uism-env ::page-size) 20)
-          available-rows (uism/alias-value uism-env :sorted-rows)
+          available-rows (or (uism/alias-value uism-env :sorted-rows) [])
           n              (count available-rows)
           stragglers?    (pos? (rem n page-size))
           pages          (cond-> (int (/ n page-size))
                            stragglers? inc)
           page-start     (* (dec current-page) page-size)
-          rows           (if (= pages current-page)
-                           (subvec available-rows page-start n)
-                           (subvec available-rows page-start (+ page-start page-size)))]
+          rows           (cond
+                           (= pages current-page) (subvec available-rows page-start n)
+                           (> n page-size) (subvec available-rows page-start (+ page-start page-size))
+                           :else available-rows)]
       (if (and (not= 1 current-page) (empty? rows))
         (-> uism-env
           (uism/assoc-aliased :current-page 1)
@@ -235,6 +236,20 @@
                                                      (-> env
                                                        (uism/assoc-aliased :current-page (dec (max 2 page)))
                                                        (populate-current-page))))}
+
+        :event/sort              {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                                                   (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
+                                                     (let [{:keys [sort-by forward?]} (uism/alias-value env :sort-params)
+                                                           forward? (if (= qualified-key sort-by)
+                                                                      (not forward?)
+                                                                      true)]
+                                                       (-> env
+                                                         (uism/assoc-aliased :sort-params {:sort-by  qualified-key
+                                                                                           :forward? forward?})
+                                                         (sort-rows)
+                                                         (populate-current-page)))
+                                                     env))}
+
 
         :event/filter            {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    (if-let [filter-params (get event-data :filter-parameters)]

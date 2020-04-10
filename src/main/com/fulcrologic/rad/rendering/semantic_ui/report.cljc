@@ -111,12 +111,11 @@
         (when paginate?
           (let []
             #?(:cljs
-               (sui-pagination/ui-pagination {:defaultActivePage 1
-                                              :activePage        (:ui/current-page props)
-                                              :onPageChange      (fn [_ data]
-                                                                   (report/goto-page! env (comp/isoget data "activePage")))
-                                              :totalPages        (or (:ui/page-count props) 1)
-                                              :size              "tiny"}))))
+               (sui-pagination/ui-pagination {:activePage   (:ui/current-page props)
+                                              :onPageChange (fn [_ data]
+                                                              (report/goto-page! env (comp/isoget data "activePage")))
+                                              :totalPages   (or (:ui/page-count props) 1)
+                                              :size         "tiny"}))))
         (div :.ui.form
           (map-indexed
             (fn [idx k]
@@ -159,19 +158,24 @@
                                                                                   (some-> props (comp/get-computed ::report/idx)))})))})
    :shouldComponentUpdate (fn [_ _ _] true)}
   (let [{report-column-headings ::report/column-headings
-         ::report/keys          [columns row-actions BodyItem]} (comp/component-options report-instance)
+         ::report/keys          [columns row-actions BodyItem compare-rows]} (comp/component-options report-instance)
         render-row       ((comp/get-state this :row-factory) BodyItem)
         column-headings  (mapv (fn [{::report/keys [column-heading]
                                      ::attr/keys   [qualified-key] :as attr}]
-                                 (or
-                                   (?! (get report-column-headings qualified-key))
-                                   (?! column-heading)
-                                   (some-> qualified-key name str/capitalize)
-                                   ""))
+                                 {:column attr
+                                  :label  (or
+                                            (?! (get report-column-headings qualified-key))
+                                            (?! column-heading)
+                                            (some-> qualified-key name str/capitalize)
+                                            "")})
                            columns)
         render-controls  (report/control-renderer report-instance)
         rows             (report/current-rows env)
         loading?         (report/loading? env)
+        sortable?        (boolean compare-rows)
+        sort-params      (and sortable? (-> report-instance (comp/props) :ui/parameters :sort-parameters))
+        forward?         (and sortable? (:forward? sort-params))
+        sorting-by       (and sortable? (:sort-by sort-params))
         has-row-actions? (seq row-actions)]
     (div
       (when render-controls
@@ -181,7 +185,16 @@
         (dom/table :.ui.table
           (dom/thead
             (dom/tr
-              (map-indexed (fn [idx h] (dom/th {:key idx} (str h))) column-headings)
+              (map-indexed (fn [idx {:keys [label column]}]
+                             (dom/th {:key idx}
+                               (if sortable?
+                                 (dom/a {:onClick #(report/sort-rows! env column)} (str label)
+                                   (when (= sorting-by (::attr/qualified-key column))
+                                     (if forward?
+                                       (dom/i :.angle.down.icon)
+                                       (dom/i :.angle.up.icon))))
+                                 (str label))))
+                column-headings)
               (when has-row-actions? (dom/th :.collapsing ""))))
           (when (seq rows)
             (dom/tbody
