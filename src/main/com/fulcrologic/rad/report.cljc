@@ -185,7 +185,8 @@
     :raw-rows      [:actor/report :ui/loaded-data]
     :current-rows  [:actor/report :ui/current-rows]
     :current-page  [:actor/report :ui/current-page]
-    :page-count    [:actor/report :ui/page-count]}
+    :page-count    [:actor/report :ui/page-count]
+    :busy?         [:actor/report :ui/busy?]}
 
    ::uism/states
    {:initial
@@ -237,28 +238,39 @@
                                                        (uism/assoc-aliased :current-page (dec (max 2 page)))
                                                        (populate-current-page))))}
 
-        :event/sort              {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+        :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
                                                      (let [{:keys [sort-by forward?]} (uism/alias-value env :sort-params)
                                                            forward? (if (= qualified-key sort-by)
                                                                       (not forward?)
                                                                       true)]
                                                        (-> env
-                                                         (uism/assoc-aliased :sort-params {:sort-by  qualified-key
-                                                                                           :forward? forward?})
+                                                         (uism/assoc-aliased
+                                                           :busy? false
+                                                           :sort-params {:sort-by  qualified-key
+                                                                         :forward? forward?})
                                                          (sort-rows)
                                                          (populate-current-page)))
                                                      env))}
 
+        :event/sort              {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                                                   (-> env
+                                                     (uism/assoc-aliased :busy? true)
+                                                     (uism/set-timeout :status :event/do-sort event-data 20)))}
 
-        :event/filter            {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+        :event/do-filter         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    (if-let [filter-params (get event-data :filter-parameters)]
                                                      (-> env
-                                                       (uism/assoc-aliased :filter-params filter-params :current-page 1)
+                                                       (uism/assoc-aliased :filter-params filter-params :current-page 1 :busy? false)
                                                        (filter-rows)
                                                        (sort-rows)
                                                        (populate-current-page))
                                                      env))}
+
+        :event/filter            {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                                                   (-> env
+                                                     (uism/assoc-aliased :busy? true)
+                                                     (uism/set-timeout :status :event/do-filter event-data 20)))}
 
         :event/parameter-changed {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    ;; NOTE: value at this layer is ALWAYS typed to the attribute.
@@ -338,6 +350,7 @@
           subquery          `(comp/get-query ~ItemClass)
           query             (into [:ui/parameters
                                    :ui/cache
+                                   :ui/busy?
                                    :ui/page-count
                                    :ui/current-page
                                    {:ui/current-rows subquery}

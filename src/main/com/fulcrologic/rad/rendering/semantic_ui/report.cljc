@@ -172,8 +172,14 @@
         render-controls  (report/control-renderer report-instance)
         rows             (report/current-rows env)
         loading?         (report/loading? env)
-        sortable?        (boolean compare-rows)
-        sort-params      (and sortable? (-> report-instance (comp/props) :ui/parameters :sort-parameters))
+        props            (comp/props report-instance)
+        sort-params      (-> props :ui/parameters :sort-parameters)
+        sortable?        (if-not (boolean compare-rows)
+                           (constantly false)
+                           (if-let [sortable-columns (some-> sort-params :sortable-columns set)]
+                             (fn [{::attr/keys [qualified-key]}] (contains? sortable-columns qualified-key))
+                             (constantly true)))
+        busy?            (:ui/busy? props)
         forward?         (and sortable? (:forward? sort-params))
         sorting-by       (and sortable? (:sort-by sort-params))
         has-row-actions? (seq row-actions)]
@@ -181,13 +187,13 @@
       (when render-controls
         (render-controls report-instance))
       (div :.ui.attached.segment
-        (div :.ui.loader {:classes [(when loading? "active")]})
+        (div :.ui.orange.loader {:classes [(when (or busy? loading?) "active")]})
         (dom/table :.ui.table
           (dom/thead
             (dom/tr
               (map-indexed (fn [idx {:keys [label column]}]
                              (dom/th {:key idx}
-                               (if sortable?
+                               (if (sortable? column)
                                  (dom/a {:onClick #(report/sort-rows! env column)} (str label)
                                    (when (= sorting-by (::attr/qualified-key column))
                                      (if forward?
