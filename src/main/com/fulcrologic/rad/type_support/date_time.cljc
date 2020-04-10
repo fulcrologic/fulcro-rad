@@ -5,8 +5,6 @@
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
-    ;; TASK: would be nice to figure out a better way of dealing with this
-    ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"]
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [cljc.java-time.instant :as instant]
@@ -20,6 +18,8 @@
                                   november december]]
     #?@(:clj  []
         :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
+               ;; TASK: would be nice to figure out a better way of dealing with this
+               ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"]
                [goog.date.duration :as g-duration]]))
   #?(:clj (:import java.io.Writer
                    [java.util Date]
