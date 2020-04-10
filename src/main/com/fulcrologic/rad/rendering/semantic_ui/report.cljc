@@ -40,7 +40,7 @@
           (dom/td {:key (str "col-" qualified-key)}
             (let [{:keys [edit-form entity-id]} (report/form-link report-instance props qualified-key)
                   link-fn (get link qualified-key)
-                  label   (report/formatted-column-value report-instance props column)]
+                  label   (str (report/formatted-column-value report-instance props column))]
               (cond
                 edit-form (dom/a {:onClick (fn [] (form/edit! report-instance edit-form entity-id))} label)
                 (fn? link-fn) (dom/a {:onClick (fn [] (link-fn report-instance props))} label)

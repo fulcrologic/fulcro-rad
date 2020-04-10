@@ -253,10 +253,10 @@
                                                          (populate-current-page)))
                                                      env))}
 
-        :event/sort              {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                   (-> env
-                                                     (uism/assoc-aliased :busy? true)
-                                                     (uism/set-timeout :status :event/do-sort event-data 20)))}
+        :event/sort              {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
+                                                   ;; this ensures that the do sort doesn't get the CPU until the busy state is rendered
+                                                   (uism/trigger! fulcro-app (uism/asm-id env) :event/do-sort event-data)
+                                                   (uism/assoc-aliased env :busy? true))}
 
         :event/do-filter         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    (if-let [filter-params (get event-data :filter-parameters)]
@@ -267,10 +267,10 @@
                                                        (populate-current-page))
                                                      env))}
 
-        :event/filter            {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                   (-> env
-                                                     (uism/assoc-aliased :busy? true)
-                                                     (uism/set-timeout :status :event/do-filter event-data 20)))}
+        :event/filter            {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
+                                                   ;; this ensures that the do sort doesn't get the CPU until the busy state is rendered
+                                                   (uism/trigger! fulcro-app (uism/asm-id env) :event/do-filter event-data)
+                                                   (uism/assoc-aliased env :busy? true))}
 
         :event/parameter-changed {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    ;; NOTE: value at this layer is ALWAYS typed to the attribute.
