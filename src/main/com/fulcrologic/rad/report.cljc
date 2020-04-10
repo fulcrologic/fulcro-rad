@@ -16,6 +16,7 @@
         [[clojure.pprint :refer [pprint]]
          [cljs.analyzer :as ana]])
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [edn-query-language.core :as eql]
     [com.fulcrologic.rad.type-support.decimal :as math]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.application :as app]
@@ -29,7 +30,8 @@
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.rad.routing.history :as history]))
+    [com.fulcrologic.rad.routing.history :as history]
+    [taoensso.encore :as enc]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
@@ -92,8 +94,8 @@
 
 (defn report-options
   "Returns the report options from the current report actor."
-  [env & k-or-ks]
-  (apply comp/component-options (uism/actor-class env :actor/report) k-or-ks))
+  [uism-env & k-or-ks]
+  (apply comp/component-options (uism/actor-class uism-env :actor/report) k-or-ks))
 
 (defn initialize-parameters [{::uism/keys [fulcro-app] :as env}]
   (let [report-ident       (uism/actor->ident env :actor/report)
@@ -108,35 +110,139 @@
         {::keys [parameters BodyItem source-attribute]} (comp/component-options Report)
         desired-params (some-> parameters ?! keys set)
         current-params (merge (select-keys (get-in state-map report-ident) desired-params) event-data)
-        path           (conj (comp/get-ident Report {}) source-attribute)]
+        path           (conj (comp/get-ident Report {}) :ui/loaded-data)]
     (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
-    (uism/load env source-attribute BodyItem {:params (log/spy :info current-params)
-                                              :marker report-ident
-                                              :target path})))
+    (-> env
+      (uism/load source-attribute BodyItem {:params            current-params
+                                            ::uism/ok-event    :event/loaded
+                                            ::uism/error-event :event/failed
+                                            :marker            report-ident
+                                            :target            path})
+      (uism/activate :state/loading))))
+
+(defn- filter-rows
+  "Generates filtered rows, which is an intermediate cached value (not displayed)"
+  [{::uism/keys [state-map] :as uism-env}]
+  (let [all-rows      (uism/alias-value uism-env :raw-rows)
+        row-visible?  (report-options uism-env ::row-visible?)
+        normalized?   (some-> all-rows (first) (eql/ident?))
+        filtered-rows (if row-visible?
+                        (let [filter-params (uism/alias-value uism-env :filter-params)]
+                          (filterv
+                            (fn [row]
+                              (let [row (if normalized? (get-in state-map row) row)]
+                                (row-visible? filter-params row)))
+                            all-rows))
+                        all-rows)]
+    (uism/assoc-aliased uism-env :filtered-rows filtered-rows)))
+
+(defn- sort-rows
+  "Sorts the filtered rows. Input is the cached intermediate filtered rows, output is cached sorted rows (not visible)"
+  [{::uism/keys [state-map] :as uism-env}]
+  (let [all-rows     (uism/alias-value uism-env :filtered-rows)
+        compare-rows (report-options uism-env ::compare-rows)
+        normalized?  (some-> all-rows (first) (eql/ident?))
+        sorted-rows  (if compare-rows
+                       (let [sort-params (uism/alias-value uism-env :sort-params)
+                             keyfn       (if normalized? #(get-in state-map %) identity)
+                             comparefn   (fn [a b] (compare-rows sort-params a b))]
+                         (sort-by keyfn comparefn all-rows))
+                       all-rows)]
+    (uism/assoc-aliased uism-env :sorted-rows sorted-rows)))
+
+(defn- populate-current-page [{::uism/keys [state-map] :as uism-env}]
+  (if (report-options uism-env ::paginate?)
+    (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
+          page-size      (or (report-options uism-env ::page-size) 20)
+          available-rows (uism/alias-value uism-env :sorted-rows)
+          n              (log/spy :info (count available-rows))
+          stragglers?    (pos? (rem n page-size))
+          pages          (cond-> (int (/ n page-size))
+                           stragglers? inc)
+          rows           (into [] (take page-size (drop (* (dec current-page) page-size) available-rows)))]
+      (if (and (not= 1 current-page) (empty? rows))
+        (-> uism-env
+          (uism/assoc-aliased :current-page 1)
+          (populate-current-page))
+        (uism/assoc-aliased uism-env :current-rows rows :page-count pages)))
+    (uism/assoc-aliased uism-env
+      :page-count 1
+      :current-rows (uism/alias-value uism-env :sorted-rows))))
 
 (defstatemachine report-machine
   {::uism/actors
    #{:actor/report}
 
    ::uism/aliases
-   {:sort-key      [:actor/report :ui/sort-key]
-    :sort-forward? [:actor/report :ui/sort-forward?]}
+   {:sort-params   [:actor/report :ui/parameters :sort-parameters]
+    :filter-params [:actor/report :ui/parameters :filter-parameters]
+    :filtered-rows [:actor/report :ui/cache :filtered-rows]
+    :sorted-rows   [:actor/report :ui/cache :sorted-rows]
+    :raw-rows      [:actor/report :ui/loaded-data]
+    :current-rows  [:actor/report :ui/current-rows]
+    :current-page  [:actor/report :ui/current-page]
+    :page-count    [:actor/report :ui/page-count]}
 
    ::uism/states
    {:initial
     {::uism/handler (fn [env]
                       (let [{::uism/keys [event-data]} env
-                            run-on-mount? (report-options env ::run-on-mount?)]
+                            {::keys [run-on-mount? initial-sort-params
+                                     initial-filter-params]} (report-options env)]
                         (-> env
+                          (cond->
+                            initial-sort-params (uism/assoc-aliased :sort-params initial-sort-params)
+                            initial-filter-params (uism/assoc-aliased :filter-params initial-filter-params))
                           (uism/store :route-params (:route-params event-data))
+                          (uism/assoc-aliased :current-page 1)
                           (initialize-parameters)
-                          (cond-> run-on-mount? (load-report!))
-                          (uism/activate :state/gathering-parameters))))}
+                          (cond->
+                            run-on-mount? (load-report!)
+                            (not run-on-mount?) (uism/activate :state/gathering-parameters)))))}
+
+    :state/loading
+    (merge global-events
+      {::uism/events
+       {:event/loaded {::uism/handler (fn [env]
+                                        (-> env
+                                          (filter-rows)
+                                          (sort-rows)
+                                          (populate-current-page)
+                                          (uism/activate :state/gathering-parameters)))}
+        :event/failed {::uism/handler (fn [env] (log/error "Report failed to load.")
+                                        ;; TASK: need global error reporting
+                                        (uism/activate env :state/gathering-parameters))}}})
 
     :state/gathering-parameters
     (merge global-events
       {::uism/events
-       {:event/parameter-changed {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+       {:event/goto-page         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                                                   (let [{:keys [page]} event-data]
+                                                     (-> env
+                                                       (uism/assoc-aliased :current-page (max 1 page))
+                                                       (populate-current-page))))}
+        :event/next-page         {::uism/handler (fn [env]
+                                                   (let [page (uism/alias-value env :current-page)]
+                                                     (-> env
+                                                       (uism/assoc-aliased :current-page (inc (max 1 page)))
+                                                       (populate-current-page))))}
+
+        :event/prior-page        {::uism/handler (fn [env]
+                                                   (let [page (uism/alias-value env :current-page)]
+                                                     (-> env
+                                                       (uism/assoc-aliased :current-page (dec (max 2 page)))
+                                                       (populate-current-page))))}
+
+        :event/filter            {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+                                                   (if-let [filter-params (get event-data :filter-parameters)]
+                                                     (-> env
+                                                       (uism/assoc-aliased :filter-params filter-params :current-page 1)
+                                                       (filter-rows)
+                                                       (sort-rows)
+                                                       (populate-current-page))
+                                                     env))}
+
+        :event/parameter-changed {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    ;; NOTE: value at this layer is ALWAYS typed to the attribute.
                                                    ;; The rendering layer is responsible for converting the value to/from
                                                    ;; the representation needed by the UI component (e.g. string)
@@ -207,23 +313,29 @@
          [generated-row-sym (symbol (str (name sym) "-Row"))
           options           (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})
           {::keys [BodyItem edit-form columns row-pk form-links
-                   row-query-inclusion
+                   row-query-inclusion denormalize?
                    row-actions source-attribute route parameters] :as options} options
           _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
-          query             (into [:ui/sort-key
-                                   :ui/sort-forward?
-                                   {source-attribute subquery}
-                                   [df/marker-table '(quote _)]] (keys parameters))
+          query             (into [:ui/parameters
+                                   :ui/cache
+                                   :ui/page-count
+                                   :ui/current-page
+                                   {:ui/current-rows subquery}
+                                   [df/marker-table '(quote _)]]
+                              (keys parameters))
+          nspc              (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
+          fqkw              (keyword (str nspc) (name sym))
           options           (assoc options
                               :route-segment (if (vector? route) route [route])
                               :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
                               ::BodyItem ItemClass
                               :query query
-                              :initial-state {:ui/sort-forward? true
-                                              source-attribute  {}}
-                              :ident (list 'fn [] [:component/id (keyword sym)]))
+                              :initial-state {:ui/parameters   {}
+                                              :ui/cache        {}
+                                              :ui/current-rows []}
+                              :ident (list 'fn [] [::id fqkw]))
           body              (if (seq (rest args))
                               (rest args)
                               [`(render-layout ~this-sym)])
@@ -238,9 +350,9 @@
                                  [k# (get ~props-sym k#)]))
           row-actions       (or row-actions [])
           body-options      (cond-> {:query        row-query
-                                     :ident        row-ident
                                      ::row-actions row-actions
                                      ::columns     columns}
+                              (not denormalize?) (assoc :ident row-ident)
                               form-links (assoc ::form-links form-links))
           defs              (if-not BodyItem
                               [`(comp/defsc ~generated-row-sym [this# ~props-sym computed#]
@@ -327,8 +439,8 @@
   (let [value                  (get row-props qualified-key)
         report-field-formatter (comp/component-options report-instance ::field-formatters qualified-key)
         formatted-value        (or
-                                 (?! report-field-formatter value)
-                                 (?! field-formatter value)
+                                 (?! report-field-formatter report-instance value)
+                                 (?! field-formatter report-instance value)
                                  (format-column value)
                                  (str value))]
     formatted-value))
@@ -336,15 +448,38 @@
 (defn current-rows
   "Get a vector of the current rows that should be shown by the renderer (sorted/paginated/filtered). `report-instance`
    is available in the rendering `env`."
-
-  [report-instance]
-  (let [props (comp/props report-instance)
-        {::keys [source-attribute]} (comp/component-options report-instance)]
-    (or
-      (get props ::cached-rows)
-      (get props source-attribute []))))
+  [{:keys [report-instance] :as rendering-env}]
+  (let [props (comp/props report-instance)]
+    (get props :ui/current-rows [])))
 
 (defn loading?
   "Returns true if the given report instance has an active network load in progress."
-  [report-instance]
-  (df/loading? (get-in (comp/props report-instance) [df/marker-table (comp/get-ident report-instance)])))
+  [{:keys [report-instance]}]
+  (when report-instance
+    (df/loading? (get-in (comp/props report-instance) [df/marker-table (comp/get-ident report-instance)]))))
+
+(defn sort-rows!
+  "Sort the report by the given attribute. Changes direction if the report is already sorted by that attribute. The implementation
+   of sorting is built-in and uses compare, but you can override how sorting works by defining `::report/sort-rows` on your report."
+  [{this :report-instance} by-attribute]
+  (uism/trigger! this (comp/get-ident this) :event/sort {::attr/attribute by-attribute}))
+
+(defn filter-rows!
+  "Filter the report using the specified parameters, which are interpreted by the specific report's `::report/filter-rows` handler."
+  [{this :report-instance} params]
+  (uism/trigger! this (comp/get-ident this) :event/filter {:filter-parameters params}))
+
+(defn goto-page!
+  "Move to the next page (if there is one)"
+  [{this :report-instance} page-number]
+  (uism/trigger! this (comp/get-ident this) :event/goto-page {:page page-number}))
+
+(defn next-page!
+  "Move to the next page (if there is one)"
+  [{this :report-instance}]
+  (uism/trigger! this (comp/get-ident this) :event/next-page))
+
+(defn prior-page!
+  "Move to the next page (if there is one)"
+  [{this :report-instance}]
+  (uism/trigger! this (comp/get-ident this) :event/prior-page))

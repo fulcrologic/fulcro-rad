@@ -2,21 +2,11 @@
   "A common set of date/time functions for CLJC.  Libraries like `tick` are promising, and CLJC time is useful
   (and used by this ns), but cljc-time does not have an interface that is the same between the two languages,
   and tick is alpha (and often annoying).
-
-  NOTE: YOU MUST INCLUDE time zone and locale from js-joda for this ns to work properly. They are not
-  automatically included because there are options that affect build size.
-
-  The files you generally want are the time zone and locale definitions. At the moment, only time zone definitions
-  are required for tests to pass:
-
-  ```
-  (:require
-    [\"js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js\"]
-    ...)
-  ```
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
+    ;; TASK: would be nice to figure out a better way of dealing with this
+    ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"]
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [cljc.java-time.instant :as instant]
