@@ -47,18 +47,20 @@
                         (report/select-row! report-instance idx))}
       (map
         (fn [{::attr/keys [qualified-key] :as column}]
-          (dom/td {:key (str "col-" qualified-key)}
-            (let [{:keys [edit-form entity-id]} (report/form-link report-instance props qualified-key)
-                  link-fn (get link qualified-key)
-                  label   (str (report/formatted-column-value report-instance props column))]
-              (cond
-                edit-form (dom/a {:onClick (fn [evt]
-                                             (evt/stop-propagation! evt)
-                                             (form/edit! report-instance edit-form entity-id))} label)
-                (fn? link-fn) (dom/a {:onClick (fn [evt]
-                                                 (evt/stop-propagation! evt)
-                                                 (link-fn report-instance props))} label)
-                :else label))))
+          (let [column-classes (report/column-classes report-instance column)]
+            (dom/td {:key     (str "col-" qualified-key)
+                     :classes [column-classes]}
+              (let [{:keys [edit-form entity-id]} (report/form-link report-instance props qualified-key)
+                    link-fn (get link qualified-key)
+                    label   (report/formatted-column-value report-instance props column)]
+                (cond
+                  edit-form (dom/a {:onClick (fn [evt]
+                                               (evt/stop-propagation! evt)
+                                               (form/edit! report-instance edit-form entity-id))} label)
+                  (fn? link-fn) (dom/a {:onClick (fn [evt]
+                                                   (evt/stop-propagation! evt)
+                                                   (link-fn report-instance props))} label)
+                  :else label)))))
         columns)
       (when action-buttons
         (dom/td :.collapsing {:key "actions"}
@@ -166,7 +168,7 @@
                                                                                   (some-> props (comp/get-computed ::report/idx)))})))})
    :shouldComponentUpdate (fn [_ _ _] true)}
   (let [{report-column-headings ::report/column-headings
-         ::report/keys          [columns row-actions BodyItem compare-rows table-classes]} (comp/component-options report-instance)
+         ::report/keys          [columns row-actions BodyItem compare-rows table-class]} (comp/component-options report-instance)
         render-row       ((comp/get-state this :row-factory) BodyItem)
         column-headings  (mapv (fn [{::report/keys [column-heading]
                                      ::attr/keys   [qualified-key] :as attr}]
@@ -196,7 +198,7 @@
         (render-controls report-instance))
       (div :.ui.attached.segment
         (div :.ui.orange.loader {:classes [(when (or busy? loading?) "active")]})
-        (dom/table :.ui.selectable.table {:classes [(when table-classes table-classes)]}
+        (dom/table :.ui.selectable.table {:classes [table-class]}
           (dom/thead
             (dom/tr
               (map-indexed (fn [idx {:keys [label column]}]

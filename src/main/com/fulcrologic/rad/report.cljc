@@ -579,3 +579,11 @@
 
 (defn select-row! [report-instance idx]
   (uism/trigger! report-instance (comp/get-ident report-instance) :event/select-row {:row idx}))
+
+(defn column-classes
+  "Returns a string of column classes that can be defined on the attribute at ::report/column-class or on the
+   report in the ::report/column-classes map. The report map overrides the attribute"
+  [report-instance {::keys      [column-class]
+                    ::attr/keys [qualified-key] :as attr}]
+  (let [rpt-column-class (comp/component-options report-instance ::column-classes qualified-key)]
+    (or rpt-column-class column-class)))

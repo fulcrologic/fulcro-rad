@@ -655,19 +655,22 @@
 
 (defn exit-form
   "Discard all changes, and attempt to change route. Exits the state machine (cleaning it up) if the new route takes effect."
-  [uism-env]
+  [{::uism/keys [fulcro-app] :as uism-env}]
   (let [Form         (uism/actor-class uism-env :actor/form)
-        ;; TODO: Should allow the store of an override to this declared route.
         cancel-route (some-> Form comp/component-options ::cancel-route)]
-    (if cancel-route
-      (let [form-ident (uism/actor->ident uism-env :actor/form)]
-        (-> uism-env
-          (uism/apply-action fs/pristine->entity* form-ident)
-          (uism/activate :state/abandoned)
-          (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))
-      (do
-        (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form.")
-        uism-env))))
+    (cond
+      (and (= :back cancel-route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
+
+      (and (nil? cancel-route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
+
+      (vector? cancel-route) (let [form-ident (uism/actor->ident uism-env :actor/form)]
+                               (-> uism-env
+                                 (uism/apply-action fs/pristine->entity* form-ident)
+                                 (uism/activate :state/abandoned)
+                                 (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))
+      :else (do
+              (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form.")
+              uism-env))))
 
 (>defn calc-diff
   "Calculates the minimal form diff from the UISM env of the master form's state machine."
@@ -684,8 +687,8 @@
   {:event/exit
    {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                      (let [route (::new-route event-data)]
-                       (when route
-                         (dr/change-route! fulcro-app route))
+                       (cond
+                         route (dr/change-route! fulcro-app route))
                        (uism/exit env)))}
 
    :event/route-denied
