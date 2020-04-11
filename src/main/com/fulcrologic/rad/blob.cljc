@@ -25,7 +25,6 @@
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
-    [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
     [clojure.core.async :as async]
     [clojure.spec.alpha :as s]
@@ -212,7 +211,12 @@
            (when-not (seq blob-keys)
              (log/warn "wrap-persist-images is installed in form middleware, but no attributes are marked to be stored as Blobs."))
            (let [delta        (:com.fulcrologic.rad.form/delta params)
-                 pruned-delta (sp/transform [sp/MAP-VALS (sp/pred map?)] #(select-keys % blob-keys) delta)]
+                 pruned-delta (reduce-kv
+                                (fn [result k v]
+                                  (let [v (if (map? v) (select-keys v blob-keys) v)]
+                                    (assoc result k v)))
+                                {}
+                                delta)]
              (doseq [entity (vals pruned-delta)
                      [k {:keys [before after]}] entity
                      :let [{::keys [store]} (get blob-attributes k)
