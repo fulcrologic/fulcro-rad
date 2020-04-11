@@ -101,13 +101,12 @@
 
 (comp/defsc StandardReportControls [this {:keys [report-instance] :as env}]
   {:shouldComponentUpdate (fn [_ _ _] true)}
-  (let [props (comp/props report-instance)
-        {::report/keys [controls control-layout paginate?]} (comp/component-options report-instance)
+  (let [{::report/keys [controls control-layout paginate?]} (comp/component-options report-instance)
         {:keys [action-buttons inputs]} control-layout]
     (comp/fragment
       (div :.ui.top.attached.compact.segment
         (dom/h3 :.ui.header
-          (or (some-> report-instance comp/component-options ::report/title) "Report")
+          (or (some-> report-instance comp/component-options ::report/title (?! report-instance)) "Report")
           (div :.ui.right.floated.buttons
             (keep (fn [k] (report/render-control report-instance k))
               action-buttons)))
@@ -167,7 +166,7 @@
                                                                                   (some-> props (comp/get-computed ::report/idx)))})))})
    :shouldComponentUpdate (fn [_ _ _] true)}
   (let [{report-column-headings ::report/column-headings
-         ::report/keys          [columns row-actions BodyItem compare-rows]} (comp/component-options report-instance)
+         ::report/keys          [columns row-actions BodyItem compare-rows table-classes]} (comp/component-options report-instance)
         render-row       ((comp/get-state this :row-factory) BodyItem)
         column-headings  (mapv (fn [{::report/keys [column-heading]
                                      ::attr/keys   [qualified-key] :as attr}]
@@ -197,7 +196,7 @@
         (render-controls report-instance))
       (div :.ui.attached.segment
         (div :.ui.orange.loader {:classes [(when (or busy? loading?) "active")]})
-        (dom/table :.ui.selectable.table
+        (dom/table :.ui.selectable.table {:classes [(when table-classes table-classes)]}
           (dom/thead
             (dom/tr
               (map-indexed (fn [idx {:keys [label column]}]
