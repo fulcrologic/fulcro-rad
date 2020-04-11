@@ -8,7 +8,9 @@
     [com.fulcrologic.rad.rendering.semantic-ui.boolean-field :as boolean-field]
     [com.fulcrologic.rad.rendering.semantic-ui.decimal-field :as decimal-field]
     [com.fulcrologic.rad.rendering.semantic-ui.int-field :as int-field]
-    [com.fulcrologic.rad.rendering.semantic-ui.boolean-input :as boolean-input]
+    [com.fulcrologic.rad.rendering.semantic-ui.controls.boolean-control :as boolean-input]
+    [com.fulcrologic.rad.rendering.semantic-ui.controls.action-button :as action-button]
+    [com.fulcrologic.rad.rendering.semantic-ui.controls.pickers :as picker-controls]
     [com.fulcrologic.rad.rendering.semantic-ui.instant-field :as instant]
     [com.fulcrologic.rad.rendering.semantic-ui.enumerated-field :as enumerated-field]
     [com.fulcrologic.rad.rendering.semantic-ui.blob-field :as blob-field]
@@ -56,6 +58,9 @@
    {:default sui-report/render-table-row
     :list    sui-report/render-list-row}
 
-   :com.fulcrologic.rad.report/parameter-type->style->input
-   {:boolean {:default boolean-input/render-input}}})
+   :com.fulcrologic.rad.report/control-type->style->input
+   {:boolean {:toggle  boolean-input/render-control
+              :default boolean-input/render-control}
+    :picker  {:default picker-controls/render-control}
+    :button  {:default action-button/render-control}}})
 

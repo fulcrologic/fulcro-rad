@@ -10,6 +10,7 @@
         :clj
         [[com.fulcrologic.fulcro.dom-server :as dom :refer [div]]])
     [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.rad.rendering.semantic-ui.form :as sui-form]
     [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.form :as form]))
 
@@ -83,44 +84,33 @@
                          :row-class       row-class
                          :props           row-props})))
 
-
 (comp/defsc StandardReportControls [this {:keys [report-instance] :as env}]
   {:shouldComponentUpdate (fn [_ _ _] true)}
-  (let [props    (comp/props report-instance)
-        {::report/keys [parameters run-on-mount? actions paginate?]} (comp/component-options report-instance)
-        loading? (df/loading? (get-in props [df/marker-table (comp/get-ident report-instance)]))]
+  (let [props (comp/props report-instance)
+        {::report/keys [controls control-layout paginate?]} (comp/component-options report-instance)
+        {:keys [action-buttons inputs]} control-layout]
     (comp/fragment
       (div :.ui.top.attached.segment
         (dom/h3 :.ui.header
           (or (some-> report-instance comp/component-options ::report/title) "Report")
           (div :.ui.right.floated.buttons
-            (keep
-              (fn [{:keys [label action disabled? visible?]}]
-                (let [label     (or (?! label report-instance) "Missing Label")
-                      disabled? (?! disabled? report-instance)
-                      visible?  (or (nil? visible?) (?! visible? report-instance))]
-                  (when visible?
-                    (dom/button :.ui.tiny.primary.button
-                      {:key      (str label)
-                       :disabled (boolean disabled?)
-                       :onClick  (fn [] (when action (action report-instance)))} label))))
-              actions)
-            (dom/button :.ui.tiny.primary.button
-              {:classes [(when loading? "loading")]
-               :onClick (fn [] (report/run-report! report-instance))} (if run-on-mount? "Refresh" "Run"))))
+            (keep (fn [k] (report/render-control report-instance k))
+              action-buttons)))
         (when paginate?
           (let []
             #?(:cljs
                (sui-pagination/ui-pagination {:activePage   (:ui/current-page props)
                                               :onPageChange (fn [_ data]
-                                                              (report/goto-page! env (comp/isoget data "activePage")))
+                                                              (report/goto-page! report-instance (comp/isoget data "activePage")))
                                               :totalPages   (or (:ui/page-count props) 1)
                                               :size         "tiny"}))))
         (div :.ui.form
           (map-indexed
-            (fn [idx k]
-              (report/render-parameter-input report-instance k))
-            (keys parameters)))))))
+            (fn [idx row]
+              (div {:key idx :className (sui-form/n-fields-string (count row))}
+                (keep #(when (get controls %)
+                         (report/render-control report-instance %)) row)))
+            inputs))))))
 
 (let [ui-standard-report-controls (comp/factory StandardReportControls)]
   (defn render-standard-controls [report-instance]
@@ -135,8 +125,8 @@
   (let [{::report/keys [BodyItem]} (comp/component-options report-instance)
         render-row      ((comp/get-state this :row-factory) BodyItem)
         render-controls (report/control-renderer this)
-        rows            (report/current-rows env)
-        loading?        (report/loading? env)]
+        rows            (report/current-rows report-instance)
+        loading?        (report/loading? report-instance)]
     (div
       (when render-controls
         (render-controls report-instance))
@@ -170,8 +160,8 @@
                                             "")})
                            columns)
         render-controls  (report/control-renderer report-instance)
-        rows             (report/current-rows env)
-        loading?         (report/loading? env)
+        rows             (report/current-rows report-instance)
+        loading?         (report/loading? report-instance)
         props            (comp/props report-instance)
         sort-params      (-> props :ui/parameters :sort-parameters)
         sortable?        (if-not (boolean compare-rows)
@@ -194,7 +184,7 @@
               (map-indexed (fn [idx {:keys [label column]}]
                              (dom/th {:key idx}
                                (if (sortable? column)
-                                 (dom/a {:onClick #(report/sort-rows! env column)} (str label)
+                                 (dom/a {:onClick #(report/sort-rows! report-instance column)} (str label)
                                    (when (= sorting-by (::attr/qualified-key column))
                                      (if forward?
                                        (dom/i :.angle.down.icon)
