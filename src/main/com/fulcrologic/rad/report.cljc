@@ -166,7 +166,14 @@
                        all-rows)]
     (uism/assoc-aliased uism-env :sorted-rows sorted-rows)))
 
-(defn- populate-current-page [{::uism/keys [state-map] :as uism-env}]
+(declare goto-page*)
+
+(defn- page-number-changed [env]
+  (let [pg (uism/alias-value env :current-page)]
+    (rad-routing/update-route-params! (::uism/fulcro-app env) assoc ::selected-row -1 ::current-page pg))
+  env)
+
+(defn- populate-current-page [uism-env]
   (if (report-options uism-env ::paginate?)
     (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
           page-size      (or (report-options uism-env ::page-size) 20)
@@ -181,13 +188,22 @@
                            (> n page-size) (subvec available-rows page-start (+ page-start page-size))
                            :else available-rows)]
       (if (and (not= 1 current-page) (empty? rows))
+        (goto-page* uism-env 1)
         (-> uism-env
-          (uism/assoc-aliased :current-page 1)
-          (populate-current-page))
-        (uism/assoc-aliased uism-env :current-rows rows :page-count pages)))
-    (uism/assoc-aliased uism-env
-      :page-count 1
-      :current-rows (uism/alias-value uism-env :sorted-rows))))
+          (uism/assoc-aliased :current-rows rows :page-count pages))))
+    (-> uism-env
+      (uism/assoc-aliased
+        :page-count 1
+        :current-rows (uism/alias-value uism-env :sorted-rows)))))
+
+(defn- goto-page* [env page]
+  (let [pg (uism/alias-value env :current-page)]
+    (if (not= pg page)
+      (-> env
+        (uism/assoc-aliased :current-page (max 1 page) :selected-row -1)
+        (populate-current-page)
+        (page-number-changed))
+      env)))
 
 (defstatemachine report-machine
   {::uism/actors
@@ -202,21 +218,25 @@
     :sorted-rows   [:actor/report :ui/cache :sorted-rows]
     :raw-rows      [:actor/report :ui/loaded-data]
     :current-rows  [:actor/report :ui/current-rows]
-    :current-page  [:actor/report :ui/current-page]
+    :current-page  [:actor/report :ui/parameters ::current-page]
+    :selected-row  [:actor/report :ui/parameters ::selected-row]
     :page-count    [:actor/report :ui/page-count]
     :busy?         [:actor/report :ui/busy?]}
 
    ::uism/states
    {:initial
     {::uism/handler (fn [env]
-                      (let [{::uism/keys [event-data]} env
-                            {::keys [run-on-mount?]} (report-options env)]
+                      (let [{::uism/keys [fulcro-app event-data]} env
+                            {::keys [run-on-mount?]} (report-options env)
+
+                            {desired-page ::current-page} (:params (history/current-route fulcro-app))]
                         (-> env
                           (uism/store :route-params (:route-params event-data))
-                          (uism/assoc-aliased :current-page 1)
+                          (cond->
+                            (nil? desired-page) (uism/assoc-aliased :current-page 1))
                           (initialize-parameters)
                           (cond->
-                            run-on-mount? (load-report!)
+                            (or desired-page run-on-mount?) (load-report!)
                             (not run-on-mount?) (uism/activate :state/gathering-parameters)))))}
 
     :state/loading
@@ -237,28 +257,24 @@
       {::uism/events
        {:event/goto-page         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    (let [{:keys [page]} event-data]
-                                                     (-> env
-                                                       (uism/assoc-aliased :current-page (max 1 page))
-                                                       (populate-current-page))))}
+                                                     (goto-page* env page)))}
         :event/next-page         {::uism/handler (fn [env]
                                                    (let [page (uism/alias-value env :current-page)]
-                                                     (-> env
-                                                       (uism/assoc-aliased :current-page (inc (max 1 page)))
-                                                       (populate-current-page))))}
+                                                     (goto-page* env (inc (max 1 page)))))}
 
         :event/prior-page        {::uism/handler (fn [env]
                                                    (let [page (uism/alias-value env :current-page)]
-                                                     (-> env
-                                                       (uism/assoc-aliased :current-page (dec (max 2 page)))
-                                                       (populate-current-page))))}
+                                                     (goto-page* env (dec (max 2 page)))))}
 
-        :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+        :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                                                    (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
                                                      (let [sort-by  (uism/alias-value env :sort-by)
                                                            forward? (uism/alias-value env :forward?)
                                                            forward? (if (= qualified-key sort-by)
                                                                       (not forward?)
                                                                       true)]
+                                                       (rad-routing/update-route-params! fulcro-app update ::sort merge {:forward? forward?
+                                                                                                                         :sort-by  qualified-key})
                                                        (-> env
                                                          (uism/assoc-aliased
                                                            :busy? false
@@ -267,6 +283,12 @@
                                                          (sort-rows)
                                                          (populate-current-page)))
                                                      env))}
+
+        :event/select-row        {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
+                                                   (let [row (:row event-data)]
+                                                     (when (nat-int? row)
+                                                       (rad-routing/update-route-params! fulcro-app assoc ::selected-row row))
+                                                     (uism/assoc-aliased env :selected-row row)))}
 
         :event/sort              {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
                                                    ;; this ensures that the do sort doesn't get the CPU until the busy state is rendered
@@ -539,3 +561,21 @@
   "Move to the next page (if there is one)"
   [this]
   (uism/trigger! this (comp/get-ident this) :event/prior-page))
+
+(defn current-page
+  "Returns the current page number displayed on the report"
+  [report-instance]
+  (get-in (comp/props report-instance) [:ui/parameters ::current-page] 1))
+
+(defn page-count
+  "Returns how many pages the current report has."
+  [report-instance]
+  (get-in (comp/props report-instance) [:ui/page-count] 1))
+
+(defn currently-selected-row
+  "Returns the currently-selected row index, if any."
+  [report-instance]
+  (get-in (comp/props report-instance) [:ui/parameters ::selected-row] -1))
+
+(defn select-row! [report-instance idx]
+  (uism/trigger! report-instance (comp/get-ident report-instance) :event/select-row {:row idx}))

@@ -11,8 +11,10 @@
         [[com.fulcrologic.fulcro.dom-server :as dom :refer [div]]])
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.rad.rendering.semantic-ui.form :as sui-form]
+    [taoensso.timbre :as log]
     [com.fulcrologic.rad.options-util :refer [?!]]
-    [com.fulcrologic.rad.form :as form]))
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.fulcro.dom.events :as evt]))
 
 (defn row-action-buttons [report-instance row-props]
   (let [{::report/keys [row-actions]} (comp/component-options report-instance)]
@@ -24,18 +26,25 @@
               (dom/button :.ui.button
                 {:key      idx
                  :disabled (boolean (?! disabled? report-instance row-props))
-                 :onClick  (fn [] (when action
-                                    (action report-instance row-props)
-                                    (when reload?
-                                      (report/reload! report-instance))))}
+                 :onClick  (fn [evt]
+                             (evt/stop-propagation! evt)
+                             (when action
+                               (action report-instance row-props)
+                               (when reload?
+                                 (report/reload! report-instance))))}
                 (?! label report-instance row-props))))
           row-actions)))))
 
-(comp/defsc TableRowLayout [_ {:keys [report-instance props]}]
+(comp/defsc TableRowLayout [_ {:keys [report-instance props] :as rp}]
   {}
   (let [{::report/keys [columns link]} (comp/component-options report-instance)
-        action-buttons (row-action-buttons report-instance props)]
-    (dom/tr {}
+        action-buttons (row-action-buttons report-instance props)
+        {:keys         [highlighted?]
+         ::report/keys [idx]} (comp/get-computed props)]
+    (dom/tr {:classes [(when highlighted? "active")]
+             :onClick (fn [evt]
+                        (evt/stop-propagation! evt)
+                        (report/select-row! report-instance idx))}
       (map
         (fn [{::attr/keys [qualified-key] :as column}]
           (dom/td {:key (str "col-" qualified-key)}
@@ -43,15 +52,19 @@
                   link-fn (get link qualified-key)
                   label   (str (report/formatted-column-value report-instance props column))]
               (cond
-                edit-form (dom/a {:onClick (fn [] (form/edit! report-instance edit-form entity-id))} label)
-                (fn? link-fn) (dom/a {:onClick (fn [] (link-fn report-instance props))} label)
+                edit-form (dom/a {:onClick (fn [evt]
+                                             (evt/stop-propagation! evt)
+                                             (form/edit! report-instance edit-form entity-id))} label)
+                (fn? link-fn) (dom/a {:onClick (fn [evt]
+                                                 (evt/stop-propagation! evt)
+                                                 (link-fn report-instance props))} label)
                 :else label))))
         columns)
       (when action-buttons
         (dom/td :.collapsing {:key "actions"}
           action-buttons)))))
 
-(let [ui-table-row-layout (comp/factory TableRowLayout {:keyfn ::report/idx})]
+(let [ui-table-row-layout (comp/factory TableRowLayout)]
   (defn render-table-row [report-instance row-class row-props]
     (ui-table-row-layout {:report-instance report-instance
                           :row-class       row-class
@@ -73,7 +86,9 @@
               action-buttons))
           (when header-label
             (if edit-form
-              (dom/a :.header {:onClick (fn [] (form/edit! report-instance edit-form entity-id))} header-label)
+              (dom/a :.header {:onClick (fn [evt]
+                                          (evt/stop-propagation! evt)
+                                          (form/edit! report-instance edit-form entity-id))} header-label)
               (div :.header header-label)))
           (when description-label
             (div :.description description-label)))))))
@@ -99,10 +114,10 @@
         (when paginate?
           (let []
             #?(:cljs
-               (sui-pagination/ui-pagination {:activePage   (:ui/current-page props)
+               (sui-pagination/ui-pagination {:activePage   (report/current-page report-instance)
                                               :onPageChange (fn [_ data]
                                                               (report/goto-page! report-instance (comp/isoget data "activePage")))
-                                              :totalPages   (or (:ui/page-count props) 1)
+                                              :totalPages   (report/page-count report-instance)
                                               :size         "tiny"}))))
         (div :.ui.form
           (map-indexed
@@ -163,7 +178,7 @@
         rows             (report/current-rows report-instance)
         loading?         (report/loading? report-instance)
         props            (comp/props report-instance)
-        sort-params      (-> props :ui/parameters :sort-parameters)
+        sort-params      (-> props :ui/parameters ::report/sort)
         sortable?        (if-not (boolean compare-rows)
                            (constantly false)
                            (if-let [sortable-columns (some-> sort-params :sortable-columns set)]
@@ -178,13 +193,15 @@
         (render-controls report-instance))
       (div :.ui.attached.segment
         (div :.ui.orange.loader {:classes [(when (or busy? loading?) "active")]})
-        (dom/table :.ui.table
+        (dom/table :.ui.selectable.table
           (dom/thead
             (dom/tr
               (map-indexed (fn [idx {:keys [label column]}]
                              (dom/th {:key idx}
                                (if (sortable? column)
-                                 (dom/a {:onClick #(report/sort-rows! report-instance column)} (str label)
+                                 (dom/a {:onClick (fn [evt]
+                                                    (evt/stop-propagation! evt)
+                                                    (report/sort-rows! report-instance column))} (str label)
                                    (when (= sorting-by (::attr/qualified-key column))
                                      (if forward?
                                        (dom/i :.angle.down.icon)
@@ -196,9 +213,11 @@
             (dom/tbody
               (map-indexed
                 (fn [idx row]
-                  (render-row row {:report-instance report-instance
-                                   :row-class       BodyItem
-                                   ::report/idx     idx}))
+                  (let [highlighted-row-idx (report/currently-selected-row report-instance)]
+                    (render-row row {:report-instance report-instance
+                                     :row-class       BodyItem
+                                     :highlighted?    (= idx highlighted-row-idx)
+                                     ::report/idx     idx})))
                 rows))))))))
 
 (let [ui-table-report-layout (comp/factory TableReportLayout {:keyfn ::report/idx})]
