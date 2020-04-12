@@ -305,18 +305,23 @@
                                                    (uism/trigger! fulcro-app (uism/asm-id env) :event/do-filter)
                                                    (uism/assoc-aliased env :busy? true))}
 
-        :event/parameter-changed {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                   ;; NOTE: value at this layer is ALWAYS typed to the attribute.
-                                                   ;; The rendering layer is responsible for converting the value to/from
-                                                   ;; the representation needed by the UI component (e.g. string)
-                                                   (let [{:keys [parameter value]} event-data
-                                                         form-ident (uism/actor->ident env :actor/report)
-                                                         path       (when (and form-ident parameter)
-                                                                      (conj form-ident parameter))]
-                                                     (when-not path
-                                                       (log/error "Unable to record attribute change. Path cannot be calculated."))
-                                                     (cond-> env
-                                                       path (uism/apply-action assoc-in path value))))}
+        :event/set-ui-parameters {::uism/handler
+                                  (fn [{::uism/keys [event-data fulcro-app] :as env}]
+                                    (let [report-ident        (uism/actor->ident env :actor/report)
+                                          {:keys [params]} event-data
+                                          path                (conj report-ident :ui/parameters)
+                                          controls            (report-options env ::controls)
+                                          initial-sort-params (or (report-options env ::initial-sort-params) {})
+                                          initial-parameters  (reduce-kv
+                                                                (fn [result control-key {:keys [default-value]}]
+                                                                  (if default-value
+                                                                    (assoc result control-key (?! default-value fulcro-app))
+                                                                    result))
+                                                                {::sort initial-sort-params}
+                                                                controls)]
+                                      (cond-> env
+                                        report-ident (uism/apply-action assoc-in path (merge initial-parameters params)))))}
+
         :event/run               {::uism/handler load-report!}}})}})
 
 (defn run-report!
@@ -341,18 +346,21 @@
   ([app report-class options]
    (let [machine-def         (or (comp/component-options report-class ::machine) report-machine)
          now-ms              (inst-ms (dt/now))
+         params              (:route-params options)
          cache-expiration-ms (* 1000 (or (comp/component-options report-class ::load-cache-seconds) 0))
          asm-id              (comp/ident report-class {})
          state-map           (app/current-state app)
          asm                 (some-> state-map (get-in [::uism/asm-id asm-id]))
          running?            (some-> asm ::uism/active-state boolean)
          last-load-time      (some-> asm ::uism/local-storage :last-load-time)
-         start?              (or
-                               (not running?)
-                               (nil? last-load-time)
-                               (< last-load-time (- now-ms cache-expiration-ms)))]
-     (when start?
-       (uism/begin! app machine-def asm-id {:actor/report report-class} options)))))
+         cache-expired?      (or (nil? last-load-time) (< last-load-time (- now-ms cache-expiration-ms)))]
+     (if (not running?)
+       (uism/begin! app machine-def asm-id {:actor/report report-class} options)
+       (do
+         (uism/trigger! app asm-id :event/set-ui-parameters {:params params})
+         (if cache-expired?
+           (uism/trigger! app asm-id :event/run)
+           (uism/trigger! app asm-id :event/filter)))))))
 
 (defn report-will-enter [app route-params report-class]
   (let [report-ident (comp/get-ident report-class {})]
@@ -458,13 +466,10 @@
       (swap! state update-in path merge params))))
 
 (defn set-parameter!
-  "Set the given parameter on the report, possibly triggering an auto-refresh."
+  "Set the given parameter on the report. Use `filter-rows!`, `reload!`, etc. to refresh the report."
   [report-instance parameter-name new-value]
-  (let [reload? (comp/component-options report-instance ::run-on-parameter-change?)]
-    (comp/transact! report-instance [(merge-params {parameter-name new-value})])
-    (rad-routing/update-route-params! report-instance assoc parameter-name new-value)
-    (when reload?
-      (reload! report-instance))))
+  (comp/transact! report-instance [(merge-params {parameter-name new-value})])
+  (rad-routing/update-route-params! report-instance assoc parameter-name new-value))
 
 (defn form-link
   "Get the form link info for a given (column) key.
