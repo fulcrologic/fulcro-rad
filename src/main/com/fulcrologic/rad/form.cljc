@@ -288,9 +288,9 @@
   (let [id         (comp/get-ident this)
         form-props (comp/props this)
         read-only? (?! (comp/component-options this ::read-only?) this)
-        abandoned? (= :state/abandoned (uism/get-active-state this id))
+        abandoned? (not= :state/editing (uism/get-active-state this id))
         dirty?     (and (not abandoned?) (fs/dirty? form-props))]
-    (or read-only? (not dirty?))))
+    (log/spy :info (or read-only? (not dirty?)))))
 
 (defn form-pre-merge
   "Generate a pre-merge for a component that has the given for attribute map. Returns a proper
@@ -652,22 +652,14 @@
 
 (defn exit-form
   "Discard all changes, and attempt to change route. Exits the state machine (cleaning it up) if the new route takes effect."
-  [{::uism/keys [fulcro-app] :as uism-env}]
+  [uism-env]
   (let [Form         (uism/actor-class uism-env :actor/form)
         cancel-route (some-> Form comp/component-options ::cancel-route)]
-    (cond
-      (and (= :back cancel-route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
-
-      (and (nil? cancel-route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
-
-      (vector? cancel-route) (let [form-ident (uism/actor->ident uism-env :actor/form)]
-                               (-> uism-env
-                                 (uism/apply-action fs/pristine->entity* form-ident)
-                                 (uism/activate :state/abandoned)
-                                 (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))
-      :else (do
-              (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form.")
-              uism-env))))
+    (let [form-ident (uism/actor->ident uism-env :actor/form)]
+      (-> uism-env
+        (uism/apply-action fs/pristine->entity* form-ident)
+        (uism/activate :state/abandoned)
+        (uism/set-timeout :cleanup :event/exit {::new-route (or cancel-route :back)} 1)))))
 
 (>defn calc-diff
   "Calculates the minimal form diff from the UISM env of the master form's state machine."
@@ -685,7 +677,9 @@
    {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                      (let [route (::new-route event-data)]
                        (cond
-                         route (dr/change-route! fulcro-app route))
+                         (and (= :back route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
+                         (and (nil? route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
+                         (vector? route) (dr/change-route! fulcro-app route))
                        (uism/exit env)))}
 
    :event/route-denied
@@ -912,7 +906,9 @@
                             (uism/apply-action env fs/pristine->entity* form-ident)))}
 
         :event/cancel
-        {::uism/handler exit-form}})}
+        {::uism/handler (fn [env] (-> env
+                                    (uism/activate :state/abandoned)
+                                    (exit-form)))}})}
 
     :state/abandoned
     {::uism/events global-events}}})
