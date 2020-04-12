@@ -32,12 +32,10 @@
     #?@(:clj  [[cljs.analyzer :as ana]]
         :cljs [[cognitect.transit :as ct]
                [goog.object :as gobj]])
-    [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
+    [com.fulcrologic.rad.options-util :as opts :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.options-util :as opts]
-    [com.fulcrologic.rad.routing :as routing]
     [com.fulcrologic.rad.routing.history :as history]))
 
 (def view-action "view")
@@ -256,26 +254,27 @@
   to a different Fulcro uism state machine definition. Machines do *not* run in subforms, only in the master, which
   is what `form-class` will become for that machine.
   "
-  [app id form-class]
-  (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
-        machine    (or (::machine form-class) form-machine)
-        new?       (tempid/tempid? id)
-        form-ident [qualified-key id]]
-    (uism/begin! app form-machine
-      form-ident
-      {:actor/form (uism/with-actor-class form-ident form-class)}
-      {::create? new?})))
+  ([app id form-class] (start-form! app id form-class {}))
+  ([app id form-class params]
+   (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
+         machine    (or (::machine form-class) form-machine)
+         new?       (tempid/tempid? id)
+         form-ident [qualified-key id]]
+     (uism/begin! app machine
+       form-ident
+       {:actor/form (uism/with-actor-class form-ident form-class)}
+       (merge params {::create? new?})))))
 
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter dynamic routing hook."
-  [app {:keys [action id]} form-class]
+  [app {:keys [action id] :as route-params} form-class]
   (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
         new?       (= create-action action)
         coerced-id (if new? (tempid/tempid) (ids/id-string->id type id))
         form-ident [qualified-key coerced-id]]
     (when (and new? (not (ids/valid-uuid-string? id)))
       (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route for new entity. The form may misbehave."))
-    (dr/route-deferred form-ident (fn [] (start-form! app coerced-id form-class)))))
+    (dr/route-deferred form-ident (fn [] (start-form! app coerced-id form-class route-params)))))
 
 (defn form-will-leave
   "Checks to see if the UISM is still running (indicating an exit via routing) and cleans up the machine."
@@ -639,11 +638,12 @@
     #{}
     m))
 
-(defn- start-create [uism-env _]
-  (let [FormClass        (uism/actor-class uism-env :actor/form)
+(defn- start-create [uism-env start-params]
+  (let [form-overrides   (:initial-state start-params)
+        FormClass        (uism/actor-class uism-env :actor/form)
         form-ident       (uism/actor->ident uism-env :actor/form)
         id               (second form-ident)
-        initial-state    (default-state FormClass id)
+        initial-state    (deep-merge (default-state FormClass id) form-overrides)
         entity-to-merge  (fs/add-form-config FormClass initial-state)
         initialized-keys (all-keys initial-state)]
     (-> uism-env
@@ -1035,7 +1035,13 @@
 
    - `app-ish`: A component instance or the app.
    - `form-class`: The form to create.
-   - options map will be passed to the form as extra options."
+   - `options` map will be passed to the form as extra options.
+
+   The `options` in the default form state machine can contain:
+
+   * `:initial-state` - A tree of data to be deep-merged into the new instance of the form before form config
+   is added. This can be used to pre-set form fields to specific values.
+   "
   ([app-ish form-class]
    ;; This function uses UUIDs for all ID types, since they will end up being tempids
    ;; which are UUID-based.
@@ -1199,3 +1205,6 @@
            database adapter."
           [save-form delete-entity]))
 
+(comment
+  (opts/resolve-key {} `com.fulcrologic.rad.form-options/field-options)
+  )

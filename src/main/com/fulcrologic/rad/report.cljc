@@ -239,13 +239,15 @@
     :state/loading
     (merge global-events
       {::uism/events
-       {:event/loaded {::uism/handler (fn [env]
-                                        (-> env
-                                          (filter-rows)
-                                          (sort-rows)
-                                          (populate-current-page)
-                                          (uism/store :last-load-time (inst-ms (dt/now)))
-                                          (uism/activate :state/gathering-parameters)))}
+       {:event/loaded {::uism/handler (fn [{::uism/keys [state-map] :as env}]
+                                        (let [table-name (comp/component-options (uism/actor-class env :actor/report) ::row-pk ::attr/qualified-key)]
+                                          (-> env
+                                            (filter-rows)
+                                            (sort-rows)
+                                            (populate-current-page)
+                                            (uism/store :last-load-time (inst-ms (dt/now)))
+                                            (uism/store :raw-items-in-table (count (keys (get state-map table-name))))
+                                            (uism/activate :state/gathering-parameters))))}
         :event/failed {::uism/handler (fn [env] (log/error "Report failed to load.")
                                         ;; TASK: need global error reporting
                                         (uism/activate env :state/gathering-parameters))}}})
@@ -353,7 +355,12 @@
          asm                 (some-> state-map (get-in [::uism/asm-id asm-id]))
          running?            (some-> asm ::uism/active-state boolean)
          last-load-time      (some-> asm ::uism/local-storage :last-load-time)
-         cache-expired?      (or (nil? last-load-time) (< last-load-time (- now-ms cache-expiration-ms)))]
+         table-name          (comp/component-options report-class ::row-pk ::attr/qualified-key)
+         current-table-count (count (keys (get state-map table-name)))
+         last-table-count    (some-> asm ::uism/local-storage :raw-items-in-table)
+         cache-expired?      (or (nil? last-load-time)
+                               (not= current-table-count last-table-count)
+                               (< last-load-time (- now-ms cache-expiration-ms)))]
      (if (not running?)
        (uism/begin! app machine-def asm-id {:actor/report report-class} options)
        (do

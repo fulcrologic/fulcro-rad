@@ -1,14 +1,57 @@
 (ns com.fulcrologic.rad.options-util
   "Utilities for interpreting and coping with form/report options."
   (:require
-    [clojure.string]
+    #?(:clj  [cljs.analyzer :as ana]
+       :cljs [goog.functions :as gf])
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
-    #?(:cljs [goog.functions :as gf])
+    [clojure.string]
     [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [taoensso.encore :as enc]
-    #?(:clj [cljs.analyzer :as ana])
     [taoensso.timbre :as log]))
+
+#?(:clj
+   (defn resolve-cljc
+     "Usable in macros. Try to resolve the given raw-sym. If compiling CLJC/CLJS this requires that the raw-sym itself be
+     in a CLJC file so it can be resolved at compile-time."
+     [macro-env raw-sym]
+     (let [sym-ns     (some-> raw-sym namespace symbol)
+           {:keys [uses requires]} (get macro-env :ns)
+           sym-ns     (log/spy :info (if sym-ns (get requires sym-ns) (get uses raw-sym)))
+           to-resolve (log/spy :info (if sym-ns (symbol (str sym-ns) (name raw-sym)) raw-sym))]
+       (when sym-ns
+         (require sym-ns))
+       (resolve macro-env to-resolve))))
+
+#?(:clj
+   (defn resolve-key
+     "Used by RAD macros to ensure that the given value is a keyword."
+     [macro-env k?]
+     (let [macro-env (merge {::original-key k?} macro-env)]
+       (cond
+         (var? k?) (var-get k?)
+         (keyword? k?) k?
+         (and (map? k?) (contains? k? :com.fulcrologic.rad.attributes/qualified-key)) (:com.fulcrologic.rad.attributes/qualified-key k?)
+         (symbol? k?) (let [resolved (resolve-cljc macro-env k?)]
+                        (resolve-key macro-env resolved))
+         :else (do
+                 (log/spy :error macro-env)
+                 (throw (IllegalArgumentException.
+                          (str "A key used in options map cannot be resolved to a keyword: " (str (or
+                                                                                                    (::original-key macro-env)
+                                                                                                    k?))))))))))
+
+#?(:clj
+   (>defn resolve-keys
+     "Used by RAD macros on options map to resolve keys in option maps at compile time. options-map MUST be
+      a map already."
+     [macro-env options-map]
+     [any? map? => map?]
+     (reduce-kv
+       (fn [options k v]
+         (assoc options (resolve-key macro-env k) v))
+       {}
+       options-map)))
 
 (defn ?!
   "Run if the argument is a fn. This function can accept a value or function. If it is a
@@ -64,12 +107,13 @@
      (try
        (reduce-kv
          (fn [new-options k v]
-           (assoc new-options
-             k (if-let [xform (get key-transforms k)]
-                 (xform v)
-                 (if (and (contains? keys-to-fix k) (or (map? v) (symbol? v)))
-                   `(com.fulcrologic.rad.options-util/?fix-keys ~v)
-                   v))))
+           (let [k (resolve-key env k)]
+             (assoc new-options
+               k (if-let [xform (get key-transforms k)]
+                   (xform v)
+                   (if (and (contains? keys-to-fix k) (or (map? v) (symbol? v)))
+                     `(com.fulcrologic.rad.options-util/?fix-keys ~v)
+                     v)))))
          {}
          options)
        (catch Exception e
