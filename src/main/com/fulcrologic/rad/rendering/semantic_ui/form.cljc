@@ -6,7 +6,7 @@
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.blob :as blob]
     [com.fulcrologic.fulcro.dom.events :as evt]
-    [com.fulcrologic.fulcro-i18n.i18n :as i18n :refer [tr]]
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.application :as app]
     #?(:cljs [com.fulcrologic.fulcro.dom :as dom :refer [div h3 button i span]]
@@ -284,6 +284,17 @@
         (render-layout* env options k->attr active-layout)))))
 
 (def ui-tabbed-layout (comp/computed-factory TabbedLayout))
+
+(comp/defsc StandardFormControls [this {:keys [form-instance] :as env}]
+  {:shouldComponentUpdate (fn [_ _ _] true)}
+  (let [{::form/keys [controls control-layout]} (comp/component-options form-instance)
+        {:keys [action-buttons]} control-layout]
+    (comp/fragment
+      (div :.ui.top.attached.compact.segment
+        (dom/h3 :.ui.header
+          (or (some-> form-instance comp/component-options ::form/title (?! form-instance)) "Report")
+          (div :.ui.right.floated.buttons
+            #_(keep (fn [k] (form/render-control form-instance k)) action-buttons)))))))
 
 (declare standard-form-layout-renderer)
 
