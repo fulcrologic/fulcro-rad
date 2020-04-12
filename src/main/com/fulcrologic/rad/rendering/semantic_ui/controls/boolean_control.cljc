@@ -13,7 +13,7 @@
         props (comp/props report-instance)
         {:keys [label onChange disabled? visible?] :as control} (get controls control-key)]
     (when control
-      (let [label     (or (?! label report-instance) "Missing Label")
+      (let [label     (or (?! label report-instance))
             disabled? (?! disabled? report-instance)
             visible?  (or (nil? visible?) (?! visible? report-instance))
             value     (get-in props [:ui/parameters control-key])]

@@ -16,6 +16,7 @@
         [[clojure.pprint :refer [pprint]]
          [cljs.analyzer :as ana]])
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.type-support.date-time :as dt]
     [edn-query-language.core :as eql]
     [com.fulcrologic.rad.type-support.decimal :as math]
     [com.fulcrologic.fulcro.mutations :as m]
@@ -95,10 +96,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (def global-events {})
-
-(defn exit-report [{::uism/keys [fulcro-app] :as env}]
-  (let [Report (uism/actor-class env :actor/report)]
-    (uism/exit env)))
 
 (defn report-options
   "Returns the report options from the current report actor."
@@ -247,6 +244,7 @@
                                           (filter-rows)
                                           (sort-rows)
                                           (populate-current-page)
+                                          (uism/store :last-load-time (inst-ms (dt/now)))
                                           (uism/activate :state/gathering-parameters)))}
         :event/failed {::uism/handler (fn [env] (log/error "Report failed to load.")
                                         ;; TASK: need global error reporting
@@ -341,8 +339,20 @@
   ([app report-class]
    (start-report! app report-class {}))
   ([app report-class options]
-   (let [machine-def (or (comp/component-options report-class ::machine) report-machine)]
-     (uism/begin! app report-machine (comp/ident report-class {}) {:actor/report report-class} options))))
+   (let [machine-def         (or (comp/component-options report-class ::machine) report-machine)
+         now-ms              (inst-ms (dt/now))
+         cache-expiration-ms (* 1000 (or (comp/component-options report-class ::load-cache-seconds) 0))
+         asm-id              (comp/ident report-class {})
+         state-map           (app/current-state app)
+         asm                 (some-> state-map (get-in [::uism/asm-id asm-id]))
+         running?            (some-> asm ::uism/active-state boolean)
+         last-load-time      (some-> asm ::uism/local-storage :last-load-time)
+         start?              (or
+                               (not running?)
+                               (nil? last-load-time)
+                               (< last-load-time (- now-ms cache-expiration-ms)))]
+     (when start?
+       (uism/begin! app machine-def asm-id {:actor/report report-class} options)))))
 
 (defn report-will-enter [app route-params report-class]
   (let [report-ident (comp/get-ident report-class {})]

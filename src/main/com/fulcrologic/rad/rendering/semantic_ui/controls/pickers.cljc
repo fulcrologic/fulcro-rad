@@ -12,25 +12,27 @@
   {:shouldComponentUpdate (fn [_ _ _] true)}
   (let [{::report/keys [controls]} (comp/component-options report-instance)
         props (comp/props report-instance)
-        {:keys [label onChange disabled? visible? options user-props] :as control} (get controls control-key)]
+        {:keys [label onChange disabled? visible? placeholder options user-props] :as control} (get controls control-key)]
     (when control
-      (let [label     (or (?! label report-instance) "Missing Label")
-            disabled? (?! disabled? report-instance)
-            visible?  (or (nil? visible?) (?! visible? report-instance))
-            value     (get-in props [:ui/parameters control-key])]
+      (let [label       (or (?! label report-instance))
+            disabled?   (?! disabled? report-instance)
+            placeholder (?! placeholder report-instance)
+            visible?    (or (nil? visible?) (?! visible? report-instance))
+            value       (get-in props [:ui/parameters control-key])]
         (when visible?
           (dom/div :.ui.field {:key (str control-key)}
             (dom/label label)
             (ui-wrapped-dropdown (merge
                                    user-props
-                                   {:disabled disabled?
-                                    :options  options
-                                    :value    value
-                                    :onChange (fn [v]
-                                                (report/set-parameter! report-instance control-key v)
-                                                (binding [comp/*after-render* true]
-                                                  (when onChange
-                                                    (onChange report-instance v))))}))))))))
+                                   {:disabled    disabled?
+                                    :placeholder (str placeholder)
+                                    :options     options
+                                    :value       value
+                                    :onChange    (fn [v]
+                                                   (report/set-parameter! report-instance control-key v)
+                                                   (binding [comp/*after-render* true]
+                                                     (when onChange
+                                                       (onChange report-instance v))))}))))))))
 
 (def render-control (comp/factory SimplePicker {:keyfn :control-key}))
 
