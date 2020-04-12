@@ -18,8 +18,7 @@
                                   november december]]
     #?@(:clj  []
         :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
-               ;; TASK: would be nice to figure out a better way of dealing with this
-               ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"]
+               [com.fulcrologic.rad.type-support.ten-year-timezone]
                [goog.date.duration :as g-duration]]))
   #?(:clj (:import java.io.Writer
                    [java.util Date]

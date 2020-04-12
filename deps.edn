@@ -8,6 +8,14 @@
            com.fulcrologic/guardrails  {:mvn/version "0.0.12"}
            com.wsscode/pathom          {:mvn/version "2.2.30"}
            commons-codec               {:mvn/version "1.14"}
+
+           ;; TODO: These might be needed so cljdoc works. Use shadow-cljs, which means you really want them
+           ;; in package.json.
+           ;;cljsjs/react                {:mvn/version "16.13.0-0"}
+           ;;cljsjs/js-joda              {:mvn/version "1.10.1-0"}
+           ;;cljsjs/js-joda-timezone     {:mvn/version "2.0.1-0"}
+           ;;cljsjs/js-joda-locale-en-us {:mvn/version "2.0.0-0"}
+
            cljc.java-time              {:mvn/version "0.1.7"}
            org.clojure/clojure         {:mvn/version "1.10.1" :scope "provided"}
            org.clojure/clojurescript   {:mvn/version "1.10.597" :scope "provided"}
