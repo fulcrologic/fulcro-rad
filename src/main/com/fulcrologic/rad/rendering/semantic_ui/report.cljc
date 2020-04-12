@@ -4,13 +4,17 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.report :as report]
     [com.fulcrologic.fulcro.components :as comp]
-    #?(:cljs
-       [com.fulcrologic.fulcro.dom :as dom :refer [div]]
-       :clj
-       [com.fulcrologic.fulcro.dom-server :as dom :refer [div]])
+    #?@(:cljs
+        [[com.fulcrologic.fulcro.dom :as dom :refer [div]]
+         [com.fulcrologic.semantic-ui.addons.pagination.ui-pagination :as sui-pagination]]
+        :clj
+        [[com.fulcrologic.fulcro.dom-server :as dom :refer [div]]])
     [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.rad.rendering.semantic-ui.form :as sui-form]
+    [taoensso.timbre :as log]
     [com.fulcrologic.rad.options-util :refer [?!]]
-    [com.fulcrologic.rad.form :as form]))
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.fulcro.dom.events :as evt]))
 
 (defn row-action-buttons [report-instance row-props]
   (let [{::report/keys [row-actions]} (comp/component-options report-instance)]
@@ -22,35 +26,47 @@
               (dom/button :.ui.button
                 {:key      idx
                  :disabled (boolean (?! disabled? report-instance row-props))
-                 :onClick  (fn [] (when action
-                                    (action report-instance row-props)
-                                    (when reload?
-                                      (report/reload! report-instance))))}
+                 :onClick  (fn [evt]
+                             (evt/stop-propagation! evt)
+                             (when action
+                               (action report-instance row-props)
+                               (when reload?
+                                 (report/reload! report-instance))))}
                 (?! label report-instance row-props))))
           row-actions)))))
 
-(comp/defsc TableRowLayout [_ {:keys [report-instance props]}]
+(comp/defsc TableRowLayout [_ {:keys [report-instance props] :as rp}]
   {}
   (let [{::report/keys [columns link]} (comp/component-options report-instance)
-        action-buttons (row-action-buttons report-instance props)]
-    (dom/tr {}
+        action-buttons (row-action-buttons report-instance props)
+        {:keys         [highlighted?]
+         ::report/keys [idx]} (comp/get-computed props)]
+    (dom/tr {:classes [(when highlighted? "active")]
+             :onClick (fn [evt]
+                        (evt/stop-propagation! evt)
+                        (report/select-row! report-instance idx))}
       (map
-        (fn [{::report/keys [field-formatter]
-              ::attr/keys   [qualified-key] :as column}]
-          (dom/td {:key (str "col-" qualified-key)}
-            (let [{:keys [edit-form entity-id]} (report/form-link report-instance props qualified-key)
-                  link-fn (get link qualified-key)
-                  label   (report/formatted-column-value report-instance props column)]
-              (cond
-                edit-form (dom/a {:onClick (fn [] (form/edit! report-instance edit-form entity-id))} label)
-                (fn? link-fn) (dom/a {:onClick (fn [] (link-fn report-instance props))} label)
-                :else label))))
+        (fn [{::attr/keys [qualified-key] :as column}]
+          (let [column-classes (report/column-classes report-instance column)]
+            (dom/td {:key     (str "col-" qualified-key)
+                     :classes [column-classes]}
+              (let [{:keys [edit-form entity-id]} (report/form-link report-instance props qualified-key)
+                    link-fn (get link qualified-key)
+                    label   (report/formatted-column-value report-instance props column)]
+                (cond
+                  edit-form (dom/a {:onClick (fn [evt]
+                                               (evt/stop-propagation! evt)
+                                               (form/edit! report-instance edit-form entity-id))} label)
+                  (fn? link-fn) (dom/a {:onClick (fn [evt]
+                                                   (evt/stop-propagation! evt)
+                                                   (link-fn report-instance props))} label)
+                  :else label)))))
         columns)
       (when action-buttons
         (dom/td :.collapsing {:key "actions"}
           action-buttons)))))
 
-(let [ui-table-row-layout (comp/factory TableRowLayout {:keyfn ::report/idx})]
+(let [ui-table-row-layout (comp/factory TableRowLayout)]
   (defn render-table-row [report-instance row-class row-props]
     (ui-table-row-layout {:report-instance report-instance
                           :row-class       row-class
@@ -72,7 +88,9 @@
               action-buttons))
           (when header-label
             (if edit-form
-              (dom/a :.header {:onClick (fn [] (form/edit! report-instance edit-form entity-id))} header-label)
+              (dom/a :.header {:onClick (fn [evt]
+                                          (evt/stop-propagation! evt)
+                                          (form/edit! report-instance edit-form entity-id))} header-label)
               (div :.header header-label)))
           (when description-label
             (div :.description description-label)))))))
@@ -83,41 +101,42 @@
                          :row-class       row-class
                          :props           row-props})))
 
-
-(comp/defsc StandardReportControls [this {:keys [report-instance]}]
+(comp/defsc StandardReportControls [this {:keys [report-instance] :as env}]
   {:shouldComponentUpdate (fn [_ _ _] true)}
-  (let [props    (comp/props report-instance)
-        {::report/keys [parameters run-on-mount? actions]} (comp/component-options report-instance)
-        loading? (df/loading? (get-in props [df/marker-table (comp/get-ident report-instance)]))]
-    (div :.ui.top.attached.segment
-      (dom/h3 :.ui.header
-        (or (some-> report-instance comp/component-options ::report/title) "Report")
-        (div :.ui.right.floated.buttons
-          (keep
-            (fn [{:keys [label action disabled? visible?]}]
-              (let [label     (or (?! label report-instance) "Missing Label")
-                    disabled? (?! disabled? report-instance)
-                    visible?  (or (nil? visible?) (?! visible? report-instance))]
-                (when visible?
-                  (dom/button :.ui.tiny.primary.button
-                    {:key      (str label)
-                     :disabled (boolean disabled?)
-                     :onClick  (fn [] (when action (action report-instance)))} label))))
-            actions)
-          (dom/button :.ui.tiny.primary.button
-            {:classes [(when loading? "loading")]
-             :onClick (fn [] (report/run-report! report-instance))} (if run-on-mount? "Refresh" "Run"))))
-      (div :.ui.form
-        (map-indexed
-          (fn [idx k]
-            (report/render-parameter-input report-instance k))
-          (keys parameters))))))
+  (let [{::report/keys [controls control-layout paginate?]} (comp/component-options report-instance)
+        {:keys [action-buttons inputs]} control-layout]
+    (comp/fragment
+      (div :.ui.top.attached.compact.segment
+        (dom/h3 :.ui.header
+          (or (some-> report-instance comp/component-options ::report/title (?! report-instance)) "Report")
+          (div :.ui.right.floated.buttons
+            (keep (fn [k] (report/render-control report-instance k))
+              action-buttons)))
+        (div :.ui.form
+          (map-indexed
+            (fn [idx row]
+              (div {:key idx :className (sui-form/n-fields-string (count row))}
+                (keep #(when (get controls %)
+                         (report/render-control report-instance %)) row)))
+            inputs))
+        (when paginate?
+          (let [page-count (report/page-count report-instance)]
+            (when (> page-count 1)
+              (div :.ui.two.column.centered.grid
+                (div :.column
+                  (div {:style {:paddingTop "4px"}}
+                    #?(:cljs
+                       (sui-pagination/ui-pagination {:activePage   (report/current-page report-instance)
+                                                      :onPageChange (fn [_ data]
+                                                                      (report/goto-page! report-instance (comp/isoget data "activePage")))
+                                                      :totalPages   page-count
+                                                      :size         "tiny"}))))))))))))
 
 (let [ui-standard-report-controls (comp/factory StandardReportControls)]
   (defn render-standard-controls [report-instance]
     (ui-standard-report-controls {:report-instance report-instance})))
 
-(comp/defsc ListReportLayout [this {:keys [report-instance]}]
+(comp/defsc ListReportLayout [this {:keys [report-instance] :as env}]
   {:shouldComponentUpdate (fn [_ _ _] true)
    :initLocalState        (fn [_] {:row-factory (memoize
                                                   (fn [cls]
@@ -143,43 +162,67 @@
   (defn render-list-report-layout [report-instance]
     (ui-list-report-layout {:report-instance report-instance})))
 
-(comp/defsc TableReportLayout [this {:keys [report-instance]}]
+(comp/defsc TableReportLayout [this {:keys [report-instance] :as env}]
   {:initLocalState        (fn [this] {:row-factory (memoize (fn [cls] (comp/computed-factory cls
                                                                         {:keyfn (fn [props]
                                                                                   (some-> props (comp/get-computed ::report/idx)))})))})
    :shouldComponentUpdate (fn [_ _ _] true)}
   (let [{report-column-headings ::report/column-headings
-         ::report/keys          [columns row-actions BodyItem]} (comp/component-options report-instance)
+         ::report/keys          [columns row-actions BodyItem compare-rows table-class]} (comp/component-options report-instance)
         render-row       ((comp/get-state this :row-factory) BodyItem)
         column-headings  (mapv (fn [{::report/keys [column-heading]
                                      ::attr/keys   [qualified-key] :as attr}]
-                                 (or
-                                   (?! (get report-column-headings qualified-key))
-                                   (?! column-heading)
-                                   (some-> qualified-key name str/capitalize)
-                                   ""))
+                                 {:column attr
+                                  :label  (or
+                                            (?! (get report-column-headings qualified-key))
+                                            (?! column-heading)
+                                            (some-> qualified-key name str/capitalize)
+                                            "")})
                            columns)
         render-controls  (report/control-renderer report-instance)
         rows             (report/current-rows report-instance)
         loading?         (report/loading? report-instance)
+        props            (comp/props report-instance)
+        sort-params      (-> props :ui/parameters ::report/sort)
+        sortable?        (if-not (boolean compare-rows)
+                           (constantly false)
+                           (if-let [sortable-columns (some-> sort-params :sortable-columns set)]
+                             (fn [{::attr/keys [qualified-key]}] (contains? sortable-columns qualified-key))
+                             (constantly true)))
+        busy?            (:ui/busy? props)
+        forward?         (and sortable? (:forward? sort-params))
+        sorting-by       (and sortable? (:sort-by sort-params))
         has-row-actions? (seq row-actions)]
     (div
       (when render-controls
         (render-controls report-instance))
       (div :.ui.attached.segment
-        (div :.ui.loader {:classes [(when loading? "active")]})
-        (dom/table :.ui.table
+        (div :.ui.orange.loader {:classes [(when (or busy? loading?) "active")]})
+        (dom/table :.ui.selectable.table {:classes [table-class]}
           (dom/thead
             (dom/tr
-              (map-indexed (fn [idx h] (dom/th {:key idx} (str h))) column-headings)
+              (map-indexed (fn [idx {:keys [label column]}]
+                             (dom/th {:key idx}
+                               (if (sortable? column)
+                                 (dom/a {:onClick (fn [evt]
+                                                    (evt/stop-propagation! evt)
+                                                    (report/sort-rows! report-instance column))} (str label)
+                                   (when (= sorting-by (::attr/qualified-key column))
+                                     (if forward?
+                                       (dom/i :.angle.down.icon)
+                                       (dom/i :.angle.up.icon))))
+                                 (str label))))
+                column-headings)
               (when has-row-actions? (dom/th :.collapsing ""))))
           (when (seq rows)
             (dom/tbody
               (map-indexed
                 (fn [idx row]
-                  (render-row row {:report-instance report-instance
-                                   :row-class       BodyItem
-                                   ::report/idx     idx}))
+                  (let [highlighted-row-idx (report/currently-selected-row report-instance)]
+                    (render-row row {:report-instance report-instance
+                                     :row-class       BodyItem
+                                     :highlighted?    (= idx highlighted-row-idx)
+                                     ::report/idx     idx})))
                 rows))))))))
 
 (let [ui-table-report-layout (comp/factory TableReportLayout {:keyfn ::report/idx})]

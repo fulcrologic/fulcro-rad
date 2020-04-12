@@ -24,7 +24,6 @@
     [com.fulcrologic.rad.application :as rapp]
     [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
     [com.fulcrologic.rad.type-support.integer :as int]
-    [com.rpl.specter :as sp]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
     [taoensso.tufte :refer [p profile]]
@@ -632,13 +631,21 @@
                            [entity (assoc form-config ::fs/complete? to-mark)]))]
     (fs/update-forms state-map mark-complete* entity-ident)))
 
+(defn- all-keys [m]
+  (reduce-kv
+    (fn [result k v]
+      (cond-> (conj result k)
+        (map? v) (into (all-keys v))))
+    #{}
+    m))
+
 (defn- start-create [uism-env _]
   (let [FormClass        (uism/actor-class uism-env :actor/form)
         form-ident       (uism/actor->ident uism-env :actor/form)
         id               (second form-ident)
         initial-state    (default-state FormClass id)
         entity-to-merge  (fs/add-form-config FormClass initial-state)
-        initialized-keys (set (sp/select (sp/walker keyword?) initial-state))]
+        initialized-keys (all-keys initial-state)]
     (-> uism-env
       (uism/apply-action merge/merge-component FormClass entity-to-merge)
       (uism/apply-action mark-filled-fields-complete* {:entity-ident     form-ident
@@ -648,19 +655,22 @@
 
 (defn exit-form
   "Discard all changes, and attempt to change route. Exits the state machine (cleaning it up) if the new route takes effect."
-  [uism-env]
+  [{::uism/keys [fulcro-app] :as uism-env}]
   (let [Form         (uism/actor-class uism-env :actor/form)
-        ;; TODO: Should allow the store of an override to this declared route.
         cancel-route (some-> Form comp/component-options ::cancel-route)]
-    (if cancel-route
-      (let [form-ident (uism/actor->ident uism-env :actor/form)]
-        (-> uism-env
-          (uism/apply-action fs/pristine->entity* form-ident)
-          (uism/activate :state/abandoned)
-          (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))
-      (do
-        (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form.")
-        uism-env))))
+    (cond
+      (and (= :back cancel-route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
+
+      (and (nil? cancel-route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
+
+      (vector? cancel-route) (let [form-ident (uism/actor->ident uism-env :actor/form)]
+                               (-> uism-env
+                                 (uism/apply-action fs/pristine->entity* form-ident)
+                                 (uism/activate :state/abandoned)
+                                 (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))
+      :else (do
+              (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form.")
+              uism-env))))
 
 (>defn calc-diff
   "Calculates the minimal form diff from the UISM env of the master form's state machine."
@@ -677,8 +687,8 @@
   {:event/exit
    {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                      (let [route (::new-route event-data)]
-                       (when route
-                         (dr/change-route! fulcro-app route))
+                       (cond
+                         route (dr/change-route! fulcro-app route))
                        (uism/exit env)))}
 
    :event/route-denied
@@ -909,15 +919,6 @@
 
     :state/abandoned
     {::uism/events global-events}}})
-
-(defn desired-attributes
-  "Returns the list of recursive attributes desired by the query of `c`"
-  [c]
-  (let [{::keys [subforms attributes]} (comp/component-options c)
-        all-attributes (into attributes (mapcat
-                                          #(-> % comp/component-options ::attributes)
-                                          (sp/select [sp/MAP-VALS (sp/keypath ::ui)] subforms)))]
-    all-attributes))
 
 (defn save!
   "Trigger a save on the given form rendering env."

@@ -7,6 +7,7 @@
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad.routing :as routing]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.fulcro.algorithms.do-not-use :refer [base64-encode base64-decode]]
     [com.fulcrologic.rad.routing.history :as history :refer [RouteHistory]]
     [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.transit :refer [transit-clj->str transit-str->clj]]
@@ -18,46 +19,49 @@
 (defn decode-uri-component
   "Decode the given string as a transit and URI encoded CLJ(s) value."
   [v]
-  (let [v #?(:clj (URLDecoder/decode ^String v (.toString StandardCharsets/UTF_8))
-             :cljs (js/decodeURIComponent v))]
-    (if (str/starts-with? v "_")
-      (try
-        (transit-str->clj (str/replace v #"^_" ""))
-        (catch #?(:clj Exception :cljs :default) _
-          (log/error "Unable to decode transit. Resorting to plain decoding" v)
-          v))
-      v)))
+  [(? string?) => (? string?)]
+  (when (string? v)
+    #?(:clj  (URLDecoder/decode ^String v (.toString StandardCharsets/UTF_8))
+       :cljs (js/decodeURIComponent v))))
 
 (>defn encode-uri-component
   "Encode a key/value pair of CLJ(s) data such that it can be safely placed in browser query params. If `v` is
    a plain string, then it will not be transit-encoded."
   [v]
-  [any? => string?]
-  (let [v (if (string? v) v (str "_" (transit-clj->str v)))]
-    #?(:clj  (URLEncoder/encode ^String v (.toString StandardCharsets/UTF_8))
-       :cljs (js/encodeURIComponent v))))
+  [string? => string?]
+  #?(:clj  (URLEncoder/encode ^String v (.toString StandardCharsets/UTF_8))
+     :cljs (js/encodeURIComponent v)))
 
 (>defn query-params
   [raw-search-string]
   [string? => map?]
-  (let [param-string (str/replace raw-search-string #"^[?]" "")]
-    (into {}
-      (keep (fn [assignment]
-              (let [[k v] (str/split assignment #"=")]
-                (when (and k v)
-                  [(keyword (decode-uri-component k)) (decode-uri-component v)]))))
-      (str/split param-string #"&"))))
+  (try
+    (let [param-string (str/replace raw-search-string #"^[?]" "")]
+      (reduce
+        (fn [result assignment]
+          (let [[k v] (str/split assignment #"=")]
+            (cond
+              (and k v (= k "_rp_")) (merge result (transit-str->clj (base64-decode (decode-uri-component v))))
+              (and k v) (assoc result (keyword (decode-uri-component k)) (decode-uri-component v))
+              :else result)))
+        {}
+        (str/split param-string #"&")))
+    (catch #?(:clj Exception :cljs :default) e
+      (log/error e "Cannot decode query param string")
+      {})))
 
 (>defn query-string
-  "Convert a map to an encoded string that is acceptable on a URL."
-  [param-map]
-  [map? => string?]
-  (str "?"
+  "Convert a map to an encoded string that is acceptable on a URL.
+  The param-map allows any data type acceptable to transit. The additional key-values must all be strings
+  (and will be coerced to string if not). "
+  [param-map & {:as string-key-values}]
+  [map? (s/* string?) => string?]
+  (str "?_rp_="
+    (encode-uri-component (base64-encode (transit-clj->str param-map)))
+    "&"
     (str/join "&"
       (map (fn [[k v]]
-             (str
-               (encode-uri-component (str (symbol k)))
-               "=" (encode-uri-component v))) param-map))))
+             (str (encode-uri-component (name k)) "=" (encode-uri-component (str v)))) string-key-values))))
 
 (defrecord HTML5History [listeners generator current-uid prior-route]
   RouteHistory
@@ -122,7 +126,7 @@
        (let [history            (HTML5History. (atom {}) (atom 1) (atom 1) (atom nil))
              pop-state-listener (fn [evt]
                                   (let [current-uid (-> history (:current-uid) deref)
-                                        event-uid   (log/spy :info (gobj/getValueByKeys evt "state" "uid"))
+                                        event-uid   (gobj/getValueByKeys evt "state" "uid")
                                         forward?    (< event-uid current-uid)
                                         {:keys [route params]} (url->route)
                                         listeners   (some-> history :listeners deref vals)]

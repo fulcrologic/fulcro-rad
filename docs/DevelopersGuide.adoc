@@ -208,19 +208,6 @@ Many of these will *not* impact your build size unless you use the features they
 not use the UI the semantic UI controls for the web, then semantic-ui-react will not be included. This is a normal
 feature of the CLJS and shadow-cljs build tools.
 
-If you use the date/time support then you will want timezone support. The `js-joda` system explicitly makes these
-optional, since the files involved can be large. Your application's main should require a timezone file for
-full support to work properly:
-
-[source]
------
-(:require
-  ["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"]
-  ...)
------
-
-See the `client.cljs` file in the RAD demo for an example.
-
 == Attribute-Centric
 
 Fulcro encourages the use of a graph-based data model that is agnostic to the underlying representation of your data.
