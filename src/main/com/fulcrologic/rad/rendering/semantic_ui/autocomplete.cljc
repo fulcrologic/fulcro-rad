@@ -40,7 +40,9 @@
                 (dissoc source)
                 (assoc-in target normalized-options))))))
 
-(defsc AutocompleteField [this {:ui/keys [search-string options] :as props} {:keys [value label onChange read-only?]}]
+(defsc AutocompleteField [this {:ui/keys [search-string options] :as props} {:keys [value label onChange
+                                                                                    invalid? validation-message
+                                                                                    read-only?]}]
   {:initLocalState    (fn [this]
                         ;; TASK: props not making it...fix that, or debounce isn't configurable.
                         (let [{:autocomplete/keys [debounce-ms]} (comp/props this)]
@@ -72,7 +74,7 @@
        (dom/div "")
        :cljs
        (dom/div :.field
-         (dom/label label)
+         (dom/label label (when invalid? (str " " validation-message)))
          (if read-only?
            (gobj/getValueByKeys options 0 "text")
            (ui-dropdown #js {:search             true
@@ -118,25 +120,29 @@
                             (mroot/deregister-root! this))
    :query                 [::autocomplete-id]}
   (let [{:autocomplete/keys [debounce-ms search-key]} (::form/field-options attribute)
-        k          (::attr/qualified-key attribute)
+        k                  (::attr/qualified-key attribute)
         {::form/keys [form-instance]} env
-        value      (-> (comp/props form-instance) (get k))
-        id         (comp/get-state this :field-id)
-        label      (form/field-label env attribute)
-        read-only? (form/read-only? form-instance attribute)
-        field      (get-in props [::autocomplete-id id])]
+        value              (-> (comp/props form-instance) (get k))
+        id                 (comp/get-state this :field-id)
+        label              (form/field-label env attribute)
+        read-only?         (form/read-only? form-instance attribute)
+        invalid?           (validation/invalid-attribute-value? env attribute)
+        validation-message (when invalid? (validation/validation-error-message env attribute))
+        field              (get-in props [::autocomplete-id id])]
     ;; Have to pass the id and debounce early since the merge in mount won't happen until after, which is too late for initial
     ;; state
     (ui-autocomplete-field (assoc field
                              ::autocomplete-id id
                              :autocomplete/search-key search-key
                              :autocomplete/debounce-ms debounce-ms)
-      {:value      value
-       :label      label
-       :read-only? read-only?
-       :onChange   (fn [normalized-value]
-                     #?(:cljs
-                        (when normalized-value (form/input-changed! env k normalized-value))))})))
+      {:value              value
+       :invalid?           invalid?
+       :validation-message validation-message
+       :label              label
+       :read-only?         read-only?
+       :onChange           (fn [normalized-value]
+                             #?(:cljs
+                                (when normalized-value (form/input-changed! env k normalized-value))))})))
 
 (def ui-autocomplete-field-root (mroot/floating-root-factory AutocompleteFieldRoot
                                   {:keyfn (fn [props] (-> props :attribute ::attr/qualified-key))}))

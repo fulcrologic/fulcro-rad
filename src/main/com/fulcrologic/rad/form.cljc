@@ -41,8 +41,13 @@
 (def edit-action "edit")
 (declare form-machine valid? invalid? cancel! undo-all! save!)
 
-(def standard-action-buttons [::done ::undo ::save])
-(def standard-controls {::done {:type   :button
+(def standard-action-buttons
+  "The standard ::form/action-buttons button layout. Requires you include stardard-controls in your ::control/controls key."
+  [::done ::undo ::save])
+
+(def standard-controls
+  "The default value of ::control/controls for forms. Includes a ::done, ::undo, and ::save button."
+  {::done {:type   :button
                                 :label  (fn [this]
                                           (let [props           (comp/props this)
                                                 read-only-form? (?! (comp/component-options this ::read-only?) this)

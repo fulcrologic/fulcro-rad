@@ -56,7 +56,7 @@
         field-label        (form/field-label env attribute)
         read-only?         (form/read-only? form-instance attribute)]
     (div :.ui.field {:key (str k)}
-      (label (str field-label (when invalid? (str " (" validation-message ")"))))
+      (label field-label (when invalid? (str " (" validation-message ")")))
       (ui-wrapped-dropdown
         (merge
           {:disabled  read-only?

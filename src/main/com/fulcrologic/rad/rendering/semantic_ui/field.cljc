@@ -30,8 +30,9 @@
        (when visible?
          (div :.ui.field {:key     (str qualified-key)
                           :classes [(when invalid? "error")]}
-           (label (str (or field-label (some-> qualified-key name str/capitalize))
-                    (when validation-message (str ent/nbsp "(" validation-message ")"))))
+           (label
+             (or field-label (some-> qualified-key name str/capitalize))
+             (when validation-message (str ent/nbsp "(" validation-message ")")))
            (div :.ui.input {:classes [(when read-only? "transparent")]}
              (input-factory (merge addl-props
                               {:value    value

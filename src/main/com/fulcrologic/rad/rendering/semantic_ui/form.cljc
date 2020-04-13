@@ -231,16 +231,24 @@
                          attributes))))
 
 (defn- render-layout* [env options k->attribute layout]
-  (map-indexed
-    (fn [idx row]
-      (div {:key idx :className (n-fields-string (count row))}
-        (mapv (fn [col]
-                (enc/if-let [_    k->attribute
-                             attr (k->attribute col)]
-                  (render-attribute env attr options)
-                  (log/error "Missing attribute (or lookup) for" col)))
-          row)))
-    layout))
+  (when #?(:clj true :cljs goog.DEBUG)
+    (when-not (and (vector? layout) (every? vector? layout))
+      (log/error "::form/layout must be a vector of vectors!")))
+  (try
+    (into []
+      (map-indexed
+        (fn [idx row]
+          (div {:key idx :className (n-fields-string (count row))}
+            (mapv (fn [col]
+                    (enc/if-let [_    k->attribute
+                                 attr (k->attribute col)]
+                      (render-attribute env attr options)
+                      (if (some-> options ::control/controls (get col))
+                        (control/render-control (::form/form-instance env) col)
+                        (log/error "Missing attribute (or lookup) for" col))))
+              row)))
+        layout))
+    (catch #?(:clj Exception :cljs :default) _)))
 
 (defn render-layout [env {::form/keys [attributes layout] :as options}]
   (let [k->attribute (attribute-map attributes)]
@@ -318,9 +326,9 @@
           (div :.ui.attached.form {:classes [(when invalid? "error")]}
             (div :.ui.error.message (tr "The form has errors and cannot be saved."))
             (div :.ui.attached.segment
-              (render-fields env))))))) )
+              (render-fields env))))))))
 
-(def standard-form-container (comp/factory StandardFormContainer ))
+(def standard-form-container (comp/factory StandardFormContainer))
 
 (defn standard-form-layout-renderer [{::form/keys [form-instance] :as env}]
   (let [{::form/keys [attributes layout tabbed-layout] :as options} (comp/component-options form-instance)]
