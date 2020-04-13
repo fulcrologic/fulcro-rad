@@ -103,7 +103,7 @@
 
 (comp/defsc StandardReportControls [this {:keys [report-instance] :as env}]
   {:shouldComponentUpdate (fn [_ _ _] true)}
-  (let [{::report/keys [controls control-layout paginate?]} (comp/component-options report-instance)
+  (let [{:keys [:com.fulcrologic.rad.control/controls ::report/control-layout ::report/paginate?]} (comp/component-options report-instance)
         {:keys [action-buttons inputs]} control-layout]
     (let [action-buttons (or action-buttons
                            (keep (fn [[k v]] (when (= :button (:type v)) k)) controls))

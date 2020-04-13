@@ -15,6 +15,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [com.fulcrologic.rad :as rad]
+    [com.fulcrologic.rad.control :as control]
     [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes :as attr]
@@ -38,7 +39,42 @@
 (def view-action "view")
 (def create-action "create")
 (def edit-action "edit")
-(declare form-machine valid? invalid?)
+(declare form-machine valid? invalid? cancel! undo-all! save!)
+
+(def standard-action-buttons [::done ::undo ::save])
+(def standard-controls {::done {:type   :button
+                                :label  (fn [this]
+                                          (let [props           (comp/props this)
+                                                read-only-form? (?! (comp/component-options this ::read-only?) this)
+                                                dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                                            (if dirty? "Cancel" "Done")))
+                                :class  (fn [this]
+                                          (let [props  (comp/props this)
+                                                dirty? (or (:ui/new? props) (fs/dirty? props))]
+                                            (if dirty? "negative" "positive")))
+                                :action (fn [this] (cancel! {::master-form this}))}
+                        ::undo {:type      :button
+                                :disabled? (fn [this]
+                                             (let [props           (comp/props this)
+                                                   read-only-form? (?! (comp/component-options this ::read-only?) this)
+                                                   dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                                               (not dirty?)))
+                                :label     "Undo"
+                                :action    (fn [this] (undo-all! {::master-form this}))}
+                        ::save {:type      :button
+                                :disabled? (fn [this]
+                                             (let [props           (comp/props this)
+                                                   read-only-form? (?! (comp/component-options this ::read-only?) this)
+                                                   remote-busy?    (seq (::app/active-remotes props))
+                                                   dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                                               (or (not dirty?) remote-busy?)))
+                                :label     "Save"
+                                :class     (fn [this]
+                                             (let [props        (comp/props this)
+                                                   remote-busy? (seq (::app/active-remotes props))]
+                                               (when remote-busy? "loading")))
+                                :action    (fn [this] (save! {::master-form this}))}})
+
 
 (>def ::form-env map?)
 
@@ -331,11 +367,12 @@
         attribute-map              (attr/attribute-map attributes)
         pre-merge                  (form-pre-merge options attribute-map)
         base-options               (merge
-                                     {::validator   (attr/make-attribute-validator attributes)
-                                      :route-denied (fn [this relative-root proposed-route]
-                                                      #?(:cljs
-                                                         (when (js/confirm "You will lose unsaved changes. Are you sure?")
-                                                           (dr/retry-route! this relative-root proposed-route))))}
+                                     {::validator        (attr/make-attribute-validator attributes)
+                                      ::control/controls standard-controls
+                                      :route-denied      (fn [this relative-root proposed-route]
+                                                           #?(:cljs
+                                                              (when (js/confirm "You will lose unsaved changes. Are you sure?")
+                                                                (dr/retry-route! this relative-root proposed-route))))}
                                      options
                                      (cond->
                                        {:ident           (fn [_ props] [id-key (get props id-key)])

@@ -79,10 +79,10 @@
    "
   [report-instance control-key]
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
-        {::keys [controls]} (comp/component-options report-instance)
+        {:keys [:com.fulcrologic.rad.control/controls]} (comp/component-options report-instance)
         input-type   (get-in controls [control-key :type])
         input-style  (get-in controls [control-key :style] :default)
-        style->input (some-> runtime-atom deref ::rad/controls ::control-type->style->input (get input-type))
+        style->input (some-> runtime-atom deref ::rad/controls :com.fulcrologic.rad.control/type->style->control (get input-type))
         input        (or (get style->input input-style) (get style->input :default))]
     (if input
       (input {:report-instance report-instance
@@ -106,7 +106,7 @@
   (let [report-ident        (uism/actor->ident env :actor/report)
         path                (conj report-ident :ui/parameters)
         {history-params :params} (history/current-route fulcro-app)
-        controls            (report-options env ::controls)
+        controls            (report-options env :com.fulcrologic.rad.control/controls)
         initial-sort-params (or (report-options env ::initial-sort-params) {})
         initial-parameters  (reduce-kv
                               (fn [result control-key {:keys [default-value]}]
@@ -312,7 +312,7 @@
                                     (let [report-ident        (uism/actor->ident env :actor/report)
                                           {:keys [params]} event-data
                                           path                (conj report-ident :ui/parameters)
-                                          controls            (report-options env ::controls)
+                                          controls            (report-options env :com.fulcrologic.rad.control/controls)
                                           initial-sort-params (or (report-options env ::initial-sort-params) {})
                                           initial-parameters  (reduce-kv
                                                                 (fn [result control-key {:keys [default-value]}]

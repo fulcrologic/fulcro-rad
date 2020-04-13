@@ -10,7 +10,7 @@
 
 (defsc SimplePicker [_ {:keys [report-instance control-key]}]
   {:shouldComponentUpdate (fn [_ _ _] true)}
-  (let [{::report/keys [controls]} (comp/component-options report-instance)
+  (let [{:keys [:com.fulcrologic.rad.control/controls]} (comp/component-options report-instance)
         props (comp/props report-instance)
         {:keys [label onChange disabled? visible? placeholder options user-props] :as control} (get controls control-key)]
     (when control

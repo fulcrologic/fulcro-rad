@@ -59,7 +59,7 @@
    {:default sui-report/render-table-row
     :list    sui-report/render-list-row}
 
-   :com.fulcrologic.rad.report/control-type->style->input
+   :com.fulcrologic.rad.control/type->style->control
    {:boolean {:toggle  boolean-input/render-control
               :default boolean-input/render-control}
     :string  {:default text-input/render-control

@@ -32,7 +32,7 @@
   :com.fulcrologic.rad.form/layout)
 
 (def title
-  "OPTIONAL: The title for the form. Can be a string or a `(fn [form-props])`."
+  "OPTIONAL: The title for the form. Can be a string or a `(fn [form-instance form-props])`."
   :com.fulcrologic.rad.form/title)
 
 (def field-visible?
