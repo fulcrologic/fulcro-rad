@@ -281,7 +281,8 @@
         form-ident  (comp/get-ident master-form)
         machine     (get-in state-map [::uism/asm-id form-ident])]
     (when machine
-      (uism/trigger! master-form form-ident :event/exit {}))))
+      (uism/trigger! master-form form-ident :event/exit {}))
+    true))
 
 (defn form-allow-route-change [this]
   "Used as a form route target's :allow-route-change?"
