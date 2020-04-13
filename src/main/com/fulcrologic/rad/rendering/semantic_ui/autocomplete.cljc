@@ -73,7 +73,7 @@
     #?(:clj
        (dom/div "")
        :cljs
-       (dom/div :.field
+       (dom/div :.field {:classes [(when invalid? "error")]}
          (dom/label label (when invalid? (str " " validation-message)))
          (if read-only?
            (gobj/getValueByKeys options 0 "text")
