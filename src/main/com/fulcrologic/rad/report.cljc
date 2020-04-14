@@ -79,10 +79,10 @@
    "
   [report-instance control-key]
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
-        {::keys [controls]} (comp/component-options report-instance)
+        {:keys [:com.fulcrologic.rad.control/controls]} (comp/component-options report-instance)
         input-type   (get-in controls [control-key :type])
         input-style  (get-in controls [control-key :style] :default)
-        style->input (some-> runtime-atom deref ::rad/controls ::control-type->style->input (get input-type))
+        style->input (some-> runtime-atom deref ::rad/controls :com.fulcrologic.rad.control/type->style->control (get input-type))
         input        (or (get style->input input-style) (get style->input :default))]
     (if input
       (input {:report-instance report-instance
@@ -106,7 +106,7 @@
   (let [report-ident        (uism/actor->ident env :actor/report)
         path                (conj report-ident :ui/parameters)
         {history-params :params} (history/current-route fulcro-app)
-        controls            (report-options env ::controls)
+        controls            (report-options env :com.fulcrologic.rad.control/controls)
         initial-sort-params (or (report-options env ::initial-sort-params) {})
         initial-parameters  (reduce-kv
                               (fn [result control-key {:keys [default-value]}]
@@ -239,13 +239,15 @@
     :state/loading
     (merge global-events
       {::uism/events
-       {:event/loaded {::uism/handler (fn [env]
-                                        (-> env
-                                          (filter-rows)
-                                          (sort-rows)
-                                          (populate-current-page)
-                                          (uism/store :last-load-time (inst-ms (dt/now)))
-                                          (uism/activate :state/gathering-parameters)))}
+       {:event/loaded {::uism/handler (fn [{::uism/keys [state-map] :as env}]
+                                        (let [table-name (comp/component-options (uism/actor-class env :actor/report) ::row-pk ::attr/qualified-key)]
+                                          (-> env
+                                            (filter-rows)
+                                            (sort-rows)
+                                            (populate-current-page)
+                                            (uism/store :last-load-time (inst-ms (dt/now)))
+                                            (uism/store :raw-items-in-table (count (keys (get state-map table-name))))
+                                            (uism/activate :state/gathering-parameters))))}
         :event/failed {::uism/handler (fn [env] (log/error "Report failed to load.")
                                         ;; TASK: need global error reporting
                                         (uism/activate env :state/gathering-parameters))}}})
@@ -310,7 +312,7 @@
                                     (let [report-ident        (uism/actor->ident env :actor/report)
                                           {:keys [params]} event-data
                                           path                (conj report-ident :ui/parameters)
-                                          controls            (report-options env ::controls)
+                                          controls            (report-options env :com.fulcrologic.rad.control/controls)
                                           initial-sort-params (or (report-options env ::initial-sort-params) {})
                                           initial-parameters  (reduce-kv
                                                                 (fn [result control-key {:keys [default-value]}]
@@ -353,7 +355,12 @@
          asm                 (some-> state-map (get-in [::uism/asm-id asm-id]))
          running?            (some-> asm ::uism/active-state boolean)
          last-load-time      (some-> asm ::uism/local-storage :last-load-time)
-         cache-expired?      (or (nil? last-load-time) (< last-load-time (- now-ms cache-expiration-ms)))]
+         table-name          (comp/component-options report-class ::row-pk ::attr/qualified-key)
+         current-table-count (count (keys (get state-map table-name)))
+         last-table-count    (some-> asm ::uism/local-storage :raw-items-in-table)
+         cache-expired?      (or (nil? last-load-time)
+                               (not= current-table-count last-table-count)
+                               (< last-load-time (- now-ms cache-expiration-ms)))]
      (if (not running?)
        (uism/begin! app machine-def asm-id {:actor/report report-class} options)
        (do
@@ -388,13 +395,13 @@
      "
      [sym arglist & args]
      (let [this-sym (first arglist)
-           options  (first args)]
+           options  (first args)
+           options  (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})]
        (req! &env sym options ::columns #(every? symbol? %))
        (req! &env sym options ::row-pk #(symbol? %))
        (req! &env sym options ::source-attribute keyword?)
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
-          options           (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})
           {::keys [BodyItem edit-form columns row-pk form-links
                    row-query-inclusion denormalize?
                    row-actions route] :as options} options

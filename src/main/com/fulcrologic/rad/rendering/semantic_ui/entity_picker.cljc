@@ -36,7 +36,7 @@
         onSelect      (fn [v]
                         (form/input-changed! env qualified-key v))]
     (div :.ui.field {:classes [(when invalid? "error")]}
-      (dom/label (str field-label (when invalid? " (Required)")))
+      (dom/label field-label (when invalid? " (Required)"))
       (if read-only?
         (let [value (first (filter #(= value (:value %)) options))]
           (:text value))
@@ -84,7 +84,7 @@
             read-only?         (form/read-only? form-instance attr)
             validation-message (when invalid? (validation/validation-error-message env attr))]
         (div :.ui.field {:classes [(when invalid? "error")]}
-          (dom/label (str field-label " " (when invalid? validation-message)))
+          (dom/label field-label " " (when invalid? validation-message))
           (div :.ui.middle.aligned.celled.list.big
             {:style {:marginTop "0"}}
             (if (= style :dropdown)

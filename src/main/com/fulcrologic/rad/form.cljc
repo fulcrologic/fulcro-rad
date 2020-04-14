@@ -4,12 +4,9 @@
     [clojure.spec.alpha :as s]
     [clojure.set :as set]
     [clojure.string :as str]
-    [com.fulcrologic.fulcro.algorithms.tx-processing :as txn]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
-    [com.fulcrologic.fulcro.algorithms.denormalize :as fdn]
     [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
@@ -18,6 +15,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [com.fulcrologic.rad :as rad]
+    [com.fulcrologic.rad.control :as control]
     [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes :as attr]
@@ -32,18 +30,56 @@
     #?@(:clj  [[cljs.analyzer :as ana]]
         :cljs [[cognitect.transit :as ct]
                [goog.object :as gobj]])
-    [com.fulcrologic.rad.options-util :refer [?! narrow-keyword]]
+    [com.fulcrologic.rad.options-util :as opts :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.options-util :as opts]
-    [com.fulcrologic.rad.routing :as routing]
     [com.fulcrologic.rad.routing.history :as history]))
 
 (def view-action "view")
 (def create-action "create")
 (def edit-action "edit")
-(declare form-machine valid? invalid?)
+(declare form-machine valid? invalid? cancel! undo-all! save!)
+
+(def standard-action-buttons
+  "The standard ::form/action-buttons button layout. Requires you include stardard-controls in your ::control/controls key."
+  [::done ::undo ::save])
+
+(def standard-controls
+  "The default value of ::control/controls for forms. Includes a ::done, ::undo, and ::save button."
+  {::done {:type   :button
+                                :label  (fn [this]
+                                          (let [props           (comp/props this)
+                                                read-only-form? (?! (comp/component-options this ::read-only?) this)
+                                                dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                                            (if dirty? "Cancel" "Done")))
+                                :class  (fn [this]
+                                          (let [props  (comp/props this)
+                                                dirty? (or (:ui/new? props) (fs/dirty? props))]
+                                            (if dirty? "negative" "positive")))
+                                :action (fn [this] (cancel! {::master-form this}))}
+                        ::undo {:type      :button
+                                :disabled? (fn [this]
+                                             (let [props           (comp/props this)
+                                                   read-only-form? (?! (comp/component-options this ::read-only?) this)
+                                                   dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                                               (not dirty?)))
+                                :label     "Undo"
+                                :action    (fn [this] (undo-all! {::master-form this}))}
+                        ::save {:type      :button
+                                :disabled? (fn [this]
+                                             (let [props           (comp/props this)
+                                                   read-only-form? (?! (comp/component-options this ::read-only?) this)
+                                                   remote-busy?    (seq (::app/active-remotes props))
+                                                   dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                                               (or (not dirty?) remote-busy?)))
+                                :label     "Save"
+                                :class     (fn [this]
+                                             (let [props        (comp/props this)
+                                                   remote-busy? (seq (::app/active-remotes props))]
+                                               (when remote-busy? "loading")))
+                                :action    (fn [this] (save! {::master-form this}))}})
+
 
 (>def ::form-env map?)
 
@@ -256,26 +292,27 @@
   to a different Fulcro uism state machine definition. Machines do *not* run in subforms, only in the master, which
   is what `form-class` will become for that machine.
   "
-  [app id form-class]
-  (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
-        machine    (or (::machine form-class) form-machine)
-        new?       (tempid/tempid? id)
-        form-ident [qualified-key id]]
-    (uism/begin! app form-machine
-      form-ident
-      {:actor/form (uism/with-actor-class form-ident form-class)}
-      {::create? new?})))
+  ([app id form-class] (start-form! app id form-class {}))
+  ([app id form-class params]
+   (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
+         machine    (or (::machine form-class) form-machine)
+         new?       (tempid/tempid? id)
+         form-ident [qualified-key id]]
+     (uism/begin! app machine
+       form-ident
+       {:actor/form (uism/with-actor-class form-ident form-class)}
+       (merge params {::create? new?})))))
 
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter dynamic routing hook."
-  [app {:keys [action id]} form-class]
+  [app {:keys [action id] :as route-params} form-class]
   (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
         new?       (= create-action action)
         coerced-id (if new? (tempid/tempid) (ids/id-string->id type id))
         form-ident [qualified-key coerced-id]]
     (when (and new? (not (ids/valid-uuid-string? id)))
       (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route for new entity. The form may misbehave."))
-    (dr/route-deferred form-ident (fn [] (start-form! app coerced-id form-class)))))
+    (dr/route-deferred form-ident (fn [] (start-form! app coerced-id form-class route-params)))))
 
 (defn form-will-leave
   "Checks to see if the UISM is still running (indicating an exit via routing) and cleans up the machine."
@@ -285,16 +322,17 @@
         form-ident  (comp/get-ident master-form)
         machine     (get-in state-map [::uism/asm-id form-ident])]
     (when machine
-      (uism/trigger! master-form form-ident :event/exit {}))))
+      (uism/trigger! master-form form-ident :event/exit {}))
+    true))
 
 (defn form-allow-route-change [this]
   "Used as a form route target's :allow-route-change?"
   (let [id         (comp/get-ident this)
         form-props (comp/props this)
         read-only? (?! (comp/component-options this ::read-only?) this)
-        abandoned? (= :state/abandoned (uism/get-active-state this id))
+        abandoned? (not= :state/editing (uism/get-active-state this id))
         dirty?     (and (not abandoned?) (fs/dirty? form-props))]
-    (or read-only? (not dirty?))))
+    (log/spy :info (or read-only? (not dirty?)))))
 
 (defn form-pre-merge
   "Generate a pre-merge for a component that has the given for attribute map. Returns a proper
@@ -334,11 +372,12 @@
         attribute-map              (attr/attribute-map attributes)
         pre-merge                  (form-pre-merge options attribute-map)
         base-options               (merge
-                                     {::validator   (attr/make-attribute-validator attributes)
-                                      :route-denied (fn [this relative-root proposed-route]
-                                                      #?(:cljs
-                                                         (when (js/confirm "You will lose unsaved changes. Are you sure?")
-                                                           (dr/retry-route! this relative-root proposed-route))))}
+                                     {::validator        (attr/make-attribute-validator attributes)
+                                      ::control/controls standard-controls
+                                      :route-denied      (fn [this relative-root proposed-route]
+                                                           #?(:cljs
+                                                              (when (js/confirm "You will lose unsaved changes. Are you sure?")
+                                                                (dr/retry-route! this relative-root proposed-route))))}
                                      options
                                      (cond->
                                        {:ident           (fn [_ props] [id-key (get props id-key)])
@@ -639,11 +678,12 @@
     #{}
     m))
 
-(defn- start-create [uism-env _]
-  (let [FormClass        (uism/actor-class uism-env :actor/form)
+(defn- start-create [uism-env start-params]
+  (let [form-overrides   (:initial-state start-params)
+        FormClass        (uism/actor-class uism-env :actor/form)
         form-ident       (uism/actor->ident uism-env :actor/form)
         id               (second form-ident)
-        initial-state    (default-state FormClass id)
+        initial-state    (deep-merge (default-state FormClass id) form-overrides)
         entity-to-merge  (fs/add-form-config FormClass initial-state)
         initialized-keys (all-keys initial-state)]
     (-> uism-env
@@ -655,22 +695,14 @@
 
 (defn exit-form
   "Discard all changes, and attempt to change route. Exits the state machine (cleaning it up) if the new route takes effect."
-  [{::uism/keys [fulcro-app] :as uism-env}]
+  [uism-env]
   (let [Form         (uism/actor-class uism-env :actor/form)
         cancel-route (some-> Form comp/component-options ::cancel-route)]
-    (cond
-      (and (= :back cancel-route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
-
-      (and (nil? cancel-route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
-
-      (vector? cancel-route) (let [form-ident (uism/actor->ident uism-env :actor/form)]
-                               (-> uism-env
-                                 (uism/apply-action fs/pristine->entity* form-ident)
-                                 (uism/activate :state/abandoned)
-                                 (uism/set-timeout :cleanup :event/exit {::new-route cancel-route} 1)))
-      :else (do
-              (log/error "Don't know where to route on cancel. Add ::form/cancel-route to your form.")
-              uism-env))))
+    (let [form-ident (uism/actor->ident uism-env :actor/form)]
+      (-> uism-env
+        (uism/apply-action fs/pristine->entity* form-ident)
+        (uism/activate :state/abandoned)
+        (uism/set-timeout :cleanup :event/exit {::new-route (or cancel-route :back)} 1)))))
 
 (>defn calc-diff
   "Calculates the minimal form diff from the UISM env of the master form's state machine."
@@ -688,7 +720,9 @@
    {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                      (let [route (::new-route event-data)]
                        (cond
-                         route (dr/change-route! fulcro-app route))
+                         (and (= :back route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
+                         (and (nil? route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
+                         (vector? route) (dr/change-route! fulcro-app route))
                        (uism/exit env)))}
 
    :event/route-denied
@@ -915,7 +949,9 @@
                             (uism/apply-action env fs/pristine->entity* form-ident)))}
 
         :event/cancel
-        {::uism/handler exit-form}})}
+        {::uism/handler (fn [env] (-> env
+                                    (uism/activate :state/abandoned)
+                                    (exit-form)))}})}
 
     :state/abandoned
     {::uism/events global-events}}})
@@ -1035,7 +1071,13 @@
 
    - `app-ish`: A component instance or the app.
    - `form-class`: The form to create.
-   - options map will be passed to the form as extra options."
+   - `options` map will be passed to the form as extra options.
+
+   The `options` in the default form state machine can contain:
+
+   * `:initial-state` - A tree of data to be deep-merged into the new instance of the form before form config
+   is added. This can be used to pre-set form fields to specific values.
+   "
   ([app-ish form-class]
    ;; This function uses UUIDs for all ID types, since they will end up being tempids
    ;; which are UUID-based.
@@ -1199,3 +1241,6 @@
            database adapter."
           [save-form delete-entity]))
 
+(comment
+  (opts/resolve-key {} `com.fulcrologic.rad.form-options/field-options)
+  )

@@ -25,7 +25,7 @@
 
 (defn validation-error-message
   "Get the string that should be shown for the error message on a given attribute in the given form context."
-  [{::form/keys [form-instance master-form] :as env} {::attr/keys [validation-message qualified-key] :as attribute}]
+  [{::form/keys [form-instance master-form] :as env} {:keys [::form/validation-message ::attr/qualified-key] :as attribute}]
   (let [props          (comp/props form-instance)
         value          (and attribute (get props qualified-key))
         master-message (comp/component-options master-form ::form/validation-messages qualified-key)
@@ -35,5 +35,5 @@
                            (?! master-message props qualified-key)
                            (?! local-message props qualified-key)
                            (?! validation-message value)
-                           (tr "Invalid value")))]
+                           "Invalid value"))]
     message))

@@ -5,9 +5,7 @@
     [cljc.java-time.local-date :as ld]
     [fulcro-spec.core :refer [assertions specification behavior]]
     #?@(:clj  []
-        :cljs [["js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js"]
-               ;; ["@js-joda/locale_en-us/dist/index.js"] possibly needed once we add more stuff
-               [java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
+        :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
                [goog.date.duration :as g-duration]])
     [cljc.java-time.instant :as instant]
     [com.fulcrologic.rad.type-support.date-time :as datetime])
@@ -54,7 +52,7 @@
       (dt/html-datetime-string->inst "America/Los_Angeles" "2019-04-01T11:30") => la-1130)))
 
 (specification "inst->local-datetime"
-  (let [tm          (datetime/new-date (instant/to-epoch-milli (cljc.java-time.instant/parse "2019-03-05T12:00:00Z")))
+  (let [tm (datetime/new-date (instant/to-epoch-milli (cljc.java-time.instant/parse "2019-03-05T12:00:00Z")))
         expected-LA (cljc.java-time.local-date-time/of 2019 3 5 4 0 0)
         expected-NY (cljc.java-time.local-date-time/of 2019 3 5 7 0 0)]
     (assertions
