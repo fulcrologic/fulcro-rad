@@ -17,8 +17,8 @@
      [macro-env raw-sym]
      (let [sym-ns     (some-> raw-sym namespace symbol)
            {:keys [uses requires]} (get macro-env :ns)
-           sym-ns     (log/spy :info (if sym-ns (get requires sym-ns) (get uses raw-sym)))
-           to-resolve (log/spy :info (if sym-ns (symbol (str sym-ns) (name raw-sym)) raw-sym))]
+           sym-ns     (if sym-ns (get requires sym-ns) (get uses raw-sym))
+           to-resolve (if sym-ns (symbol (str sym-ns) (name raw-sym)) raw-sym)]
        (when sym-ns
          (require sym-ns))
        (resolve macro-env to-resolve))))
@@ -34,12 +34,7 @@
          (and (map? k?) (contains? k? :com.fulcrologic.rad.attributes/qualified-key)) (:com.fulcrologic.rad.attributes/qualified-key k?)
          (symbol? k?) (let [resolved (resolve-cljc macro-env k?)]
                         (resolve-key macro-env resolved))
-         :else (do
-                 (log/spy :error macro-env)
-                 (throw (IllegalArgumentException.
-                          (str "A key used in options map cannot be resolved to a keyword: " (str (or
-                                                                                                    (::original-key macro-env)
-                                                                                                    k?))))))))))
+         :else (::original-key macro-env)))))
 
 #?(:clj
    (>defn resolve-keys

@@ -9,9 +9,8 @@
   * `attributes`
 
   NOTE to maintainers and Plugin authors: These files must be CLJC to make sure the symbols are resolvable
-  at *compile* time. No dynamic tricks allowed. The form and report macros must be able to resolve the option
-  symbols during evaluation. Also, DO NOT require *any* other files in your option files. This ensures
-  you don't get circular references, and compile times stay light.")
+  at *compile* time. No dynamic tricks please. The form and report macros must be able to resolve the option
+  symbols during evaluation.")
 
 (def id
   "REQUIRED: The *attribute* that will act as the primary key for this form."
