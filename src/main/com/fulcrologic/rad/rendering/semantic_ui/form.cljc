@@ -316,6 +316,7 @@
               (i :.times.icon)))
           (render-fields env)))
       (let [{::form/keys [title action-buttons controls]} (comp/component-options form-instance)
+            title (?! title form-instance props)
             action-buttons (if action-buttons action-buttons form/standard-action-buttons)]
         (div :.ui.container {:key (str (comp/get-ident form-instance))}
           (div :.ui.top.attached.segment
