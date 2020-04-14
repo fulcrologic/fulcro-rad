@@ -395,13 +395,13 @@
      "
      [sym arglist & args]
      (let [this-sym (first arglist)
-           options  (first args)]
+           options  (first args)
+           options  (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})]
        (req! &env sym options ::columns #(every? symbol? %))
        (req! &env sym options ::row-pk #(symbol? %))
        (req! &env sym options ::source-attribute keyword?)
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
-          options           (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})
           {::keys [BodyItem edit-form columns row-pk form-links
                    row-query-inclusion denormalize?
                    row-actions route] :as options} options
