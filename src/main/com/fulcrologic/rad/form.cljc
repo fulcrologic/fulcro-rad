@@ -332,7 +332,7 @@
         read-only? (?! (comp/component-options this ::read-only?) this)
         abandoned? (not= :state/editing (uism/get-active-state this id))
         dirty?     (and (not abandoned?) (fs/dirty? form-props))]
-    (log/spy :info (or read-only? (not dirty?)))))
+    (or read-only? (not dirty?))))
 
 (defn form-pre-merge
   "Generate a pre-merge for a component that has the given for attribute map. Returns a proper
