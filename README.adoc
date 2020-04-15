@@ -2,6 +2,8 @@
 
 A library for Fulcro that adds pre-written elements for standing up production applications quickly.
 
+WARNING: SNAPSHOT 16 moves rendering plugins to new libraries. This requires you update your project's dependencies.
+
 == Usage
 
 image:https://img.shields.io/clojars/v/com.fulcrologic/fulcro-rad.svg[link=https://clojars.org/com.fulcrologic/fulcro-rad]
