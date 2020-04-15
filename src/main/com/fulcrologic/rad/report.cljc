@@ -456,6 +456,8 @@
          `(do
             ~@defs)))))
 
+#?(:clj (s/fdef defsc-report :args ::comp/args))
+
 (def reload!
   "[report-instance]
 
