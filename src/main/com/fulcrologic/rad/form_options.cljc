@@ -194,3 +194,16 @@
   documentation for more details.
   "
   :com.fulcrologic.rad.form/triggers)
+
+(def enumerated-labels
+  "A map from qualified key of a form field to the string to use for it. May be a `(fn [] string?)` (e.g. for i18n).
+   Overrides ::attr/enumerated-labels."
+  :com.fulcrologic.rad.form/enumerated-labels)
+
+(def field-label
+  "ATTRIBUTE OPTION. String or `(fn [form-instance] string-or-element)`. Rendering plugins may require a string return
+  value.
+
+  Placing this on an attribute indicates a default for the label for the attribute on forms. The default is a
+  capitalized version of the attribute's key. See also `field-labels`."
+  :com.fulcrologic.rad.form/field-label)

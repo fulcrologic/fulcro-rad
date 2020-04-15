@@ -49,8 +49,40 @@
       (assoc ::qualified-key kw))))
 
 #?(:clj
-   (defmacro defattr
-     "Define a new attribute into a sym. Equivalent to (def sym (new-attribute k type m))."
+   (defmacro ^{:arglists '[[symbol qualified-keyword data-type options-map]]} defattr
+     "Define a new attribute into a sym.
+
+     WARNING: IF YOU ARE DOING FULL-STACK, THEN THESE MUST BE DEFINED IN CLJC FILES FOR RAD TO WORK! RAD actually supports
+     the idea of having rendering plugins that work just in the JVM, in which case all of your code can be CLJ. It can
+     also support client-side database adapters, which would mean that all of your code would be CLJS.
+
+     * `sym`: The name of the new var to create.
+     * `qualified-keyword`: The unique (keyword) name of this attribute.
+     * `data-type`: A supported data type (e.g. :int, :uuid, :ref, :instant).
+     * `options-map`: An open map (any data can be placed in here) of key-value pairs.
+
+     An attribute defines a logical bit of data in your graph model that may be stored in a database, derived by complex
+     logic, or simply generated out of thin air.  Attributes are the central place in RAD where information *about* your
+     desired data model is supplied.
+
+     The most common options to put in `options-map` are:
+
+     * `::attr/identities` - if persisted in storage, but NOT a table/row/entity key.
+     * `::attr/identity?` - if a PK or natural key
+     * `::attr/schema` - if persisted in storage
+     * `::attr/target` - if type `:ref`
+
+     See the `attributes-options` namespace for more details.
+
+     Attributes types are extensible (though there are many built in), and the concept of traversal to to-one and to-many
+     edges in either direction is very easily represented in a natural, database-independent, fashion (though database
+     adapters may require you to supply more information in order for them to actually do concrete work for you).
+
+     A attribute is required to have a *qualified key* that uniquely designates its name in the model, and a data
+     type. The options map is a completely open map of key-value pairs that can further describe the details of
+     an attribute. Some of those are standard options (found in the attributes-options namespace), and many more
+     are defined by reports, forms, database adapters, and rendering plugins. Look for `*-options` namespaces in
+     order to find vars with docstrings that describe the possible options."
      [sym & args]
      (let [[k type m] (if (string? (first args)) (rest args) args)]
        `(def ~sym (new-attribute ~k ~type ~m)))))
@@ -148,9 +180,8 @@
   [attributes]
   [::attributes => (s/map-of qualified-keyword? ::attribute)]
   (into {}
-    (map (fn [{::keys [qualified-key] :as a}]
-           [qualified-key a])
-      attributes)))
+    (map (fn [{::keys [qualified-key] :as a}] [qualified-key a]))
+    attributes))
 
 (defn make-attribute-validator
   "Creates a function that can be used as a form validator for any form that contains the given `attributes`.  If the

@@ -210,7 +210,7 @@
    {:parameters    [:actor/report :ui/parameters]
     :sort-params   [:actor/report :ui/parameters ::sort]
     :sort-by       [:actor/report :ui/parameters ::sort :sort-by]
-    :forward?      [:actor/report :ui/parameters ::sort :forward?]
+    :ascending?      [:actor/report :ui/parameters ::sort :ascending?]
     :filtered-rows [:actor/report :ui/cache :filtered-rows]
     :sorted-rows   [:actor/report :ui/cache :sorted-rows]
     :raw-rows      [:actor/report :ui/loaded-data]
@@ -269,17 +269,17 @@
         :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                                                    (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
                                                      (let [sort-by  (uism/alias-value env :sort-by)
-                                                           forward? (uism/alias-value env :forward?)
-                                                           forward? (if (= qualified-key sort-by)
-                                                                      (not forward?)
+                                                           ascending? (uism/alias-value env :ascending?)
+                                                           ascending? (if (= qualified-key sort-by)
+                                                                      (not ascending?)
                                                                       true)]
-                                                       (rad-routing/update-route-params! fulcro-app update ::sort merge {:forward? forward?
+                                                       (rad-routing/update-route-params! fulcro-app update ::sort merge {:ascending? ascending?
                                                                                                                          :sort-by  qualified-key})
                                                        (-> env
                                                          (uism/assoc-aliased
                                                            :busy? false
                                                            :sort-by qualified-key
-                                                           :forward? forward?)
+                                                           :ascending? ascending?)
                                                          (sort-rows)
                                                          (populate-current-page)))
                                                      env))}
