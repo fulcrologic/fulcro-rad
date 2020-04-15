@@ -6,7 +6,7 @@
 
   Database adapters use this to figure out what the IDs are, and forms/reports use them to understand how to uniquely
   access/address data."
-  :com.fulcrologic.rad.attributes/identities)
+  :com.fulcrologic.rad.attributes/identity?)
 
 (def identities
   "OPTIONAL/REQUIRED. Database adapters usually require this option for persisted attributes.

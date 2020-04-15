@@ -48,37 +48,37 @@
 (def standard-controls
   "The default value of ::control/controls for forms. Includes a ::done, ::undo, and ::save button."
   {::done {:type   :button
-                                :label  (fn [this]
-                                          (let [props           (comp/props this)
-                                                read-only-form? (?! (comp/component-options this ::read-only?) this)
-                                                dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
-                                            (if dirty? "Cancel" "Done")))
-                                :class  (fn [this]
-                                          (let [props  (comp/props this)
-                                                dirty? (or (:ui/new? props) (fs/dirty? props))]
-                                            (if dirty? "negative" "positive")))
-                                :action (fn [this] (cancel! {::master-form this}))}
-                        ::undo {:type      :button
-                                :disabled? (fn [this]
-                                             (let [props           (comp/props this)
-                                                   read-only-form? (?! (comp/component-options this ::read-only?) this)
-                                                   dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
-                                               (not dirty?)))
-                                :label     "Undo"
-                                :action    (fn [this] (undo-all! {::master-form this}))}
-                        ::save {:type      :button
-                                :disabled? (fn [this]
-                                             (let [props           (comp/props this)
-                                                   read-only-form? (?! (comp/component-options this ::read-only?) this)
-                                                   remote-busy?    (seq (::app/active-remotes props))
-                                                   dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
-                                               (or (not dirty?) remote-busy?)))
-                                :label     "Save"
-                                :class     (fn [this]
-                                             (let [props        (comp/props this)
-                                                   remote-busy? (seq (::app/active-remotes props))]
-                                               (when remote-busy? "loading")))
-                                :action    (fn [this] (save! {::master-form this}))}})
+           :label  (fn [this]
+                     (let [props           (comp/props this)
+                           read-only-form? (?! (comp/component-options this ::read-only?) this)
+                           dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                       (if dirty? "Cancel" "Done")))
+           :class  (fn [this]
+                     (let [props  (comp/props this)
+                           dirty? (or (:ui/new? props) (fs/dirty? props))]
+                       (if dirty? "negative" "positive")))
+           :action (fn [this] (cancel! {::master-form this}))}
+   ::undo {:type      :button
+           :disabled? (fn [this]
+                        (let [props           (comp/props this)
+                              read-only-form? (?! (comp/component-options this ::read-only?) this)
+                              dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                          (not dirty?)))
+           :label     "Undo"
+           :action    (fn [this] (undo-all! {::master-form this}))}
+   ::save {:type      :button
+           :disabled? (fn [this]
+                        (let [props           (comp/props this)
+                              read-only-form? (?! (comp/component-options this ::read-only?) this)
+                              remote-busy?    (seq (::app/active-remotes props))
+                              dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
+                          (or (not dirty?) remote-busy?)))
+           :label     "Save"
+           :class     (fn [this]
+                        (let [props        (comp/props this)
+                              remote-busy? (seq (::app/active-remotes props))]
+                          (when remote-busy? "loading")))
+           :action    (fn [this] (save! {::master-form this}))}})
 
 
 (>def ::form-env map?)
@@ -683,7 +683,7 @@
         FormClass        (uism/actor-class uism-env :actor/form)
         form-ident       (uism/actor->ident uism-env :actor/form)
         id               (second form-ident)
-        initial-state    (deep-merge (default-state FormClass id) form-overrides)
+        initial-state    (merge (default-state FormClass id) form-overrides)
         entity-to-merge  (fs/add-form-config FormClass initial-state)
         initialized-keys (all-keys initial-state)]
     (-> uism-env

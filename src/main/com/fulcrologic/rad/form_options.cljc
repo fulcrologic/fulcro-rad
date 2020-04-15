@@ -69,7 +69,7 @@
 
    An attribute-level key that can be used on an attribute to define the default visibility for an attribute on
    forms.  Forms may override the attribute-specific key with `fields-visible?`."
-  :com.fulcrologic.rad.form/fields-visible?)
+  :com.fulcrologic.rad.form/field-visible?)
 
 (def fields-visible?
   "OPTIONAL: A map from *qualified keyword* to a boolean or a `(fn [this])`. Makes fields statically or dynamically
