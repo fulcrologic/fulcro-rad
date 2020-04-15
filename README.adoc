@@ -1,141 +1,22 @@
 = Fulcro Rapid Application Development Tools
 
-This library is currently in an experimental phase. It should *not* be used in any kind of production
-system unless you feel ok about forking it and maintaining the fork.  Once the ideas have
-stabilized then I may do an official release with stable documentation and APIs.
+A library for Fulcro that adds pre-written elements for standing up production applications quickly.
 
-See the https://youtu.be/jkx9F-RIFiY[YouTube Video] for a demonstration of a working prototype.
+== Usage
 
-HELP WANTED: This project is more ambitious than my time will allow. If you have Clojure chops and are
-interested in helping, please let me know.
+image:https://img.shields.io/clojars/v/com.fulcrologic/fulcro-rad.svg[link=https://clojars.org/com.fulcrologic/fulcro-rad]
 
-== Goals
+Current SNAPSHOT CI status:
+image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop"]
 
-Here are the goals:
+Current RELEASE CI status:
+image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master"]
 
-* Build applications quickly, without serious compromises:
-** Minimal Boilerplate
-** Easily (and gradually) escape to custom code when your needs outgrow the system's abilities.
+Documentation is currently available in the docstrings of the namespaces, and you can refer to the
+https://github.com/fulcrologic/fulcro-rad-demo[Fulcro RAD Demo] project.
 
-The facets that this library are intended to address:
+== License and Copyright
 
-* OPEN model (via namespaced keywords and maps)
-** All declarative constructs use open maps in CLJC so that
-library extensions can easily add capabilities.
+This library is Copyright 2020 by Fulcrologic, LLC. All rights reserved.
 
-* Declarative data model to facilitate:
-** Generated database schema (if desired) with migration management.
-*** Database adapter makes it possible to use any database.
-** Generated demand-driven server APIs
-** Declarative (extensible) permissions model.
-
-* Authentication
-** Extensible system for obtaining and managing client authentication.
-** Demand-driven authentication (login pops if a screen needs to work with data that requires auth)
-
-* Forms
-** Declarative and extensible in all aspects: validation, rendering, permissions, etc.
-** Support for graph-based forms (nested forms with relations)
-** Automatic logic for complete data management Create/Update/Delete.
-** Integration with permissions (authorization)
-** Ability to generate UI with ability to incrementally override.
-** Pluggable UI generation system: Support web, native, etc., from a single declaration.
-
-* Reports
-** Input parameters
-** Pretty much everything from "Forms", but for read-only display.
-** Completely generated output, with ability to incrementally override.
-
-== Development
-
-At the moment I recommend checking out the source of fulcro-rad-demo, fulcro-rad, fulcro-rad-datomic (or sql) and
-adding the following to your global (i.e. `~/clojure`) `deps.edn` file:
-
-[source, clojure]
------------------
-{:aliases {:rad-dev {:override-deps {com.fulcrologic/fulcro-rad {:local/root "/path/to/fulcro-rad" }
-                                     com.fulcrologic/fulcro-rad-sql {:local/root "/path/to/fulcro-rad-sql"}
-                                     com.fulcrologic/fulcro-rad-datomic {:local/root "/path/to/fulcro-rad-datomic"}}}}}
------------------
-
-so that you can work on all of the libraries at once.
-
-Starting the CLJS build is then:
-
-[source, bash]
------------------
-npx shadow-cljs -A:rad-dev:dev server
------------------
-
-and then add the above projects as modules (if using Cursive).
-
-This will let you edit files in all of the relevate projects at the same time. See `development.clj`, where you may
-have to update the `set-refresh-dirs` to make sure CLJ source is updated when you restart the server.
-
-Use the same deps aliases in your CLJ REPL in addition to `-A:datomic` or `-A:sql`, and load the `development` namespace
-(in the respective source folder for either sql or datomic). The server start/restart functions are in there.
-
-You will, of course, have to have Datomic installed with a transactor running to use the Datomic back-end.
-
-=== More About Setup (Emacs centric)
-
-For any contributors wanting to run this, please see:
-https://docs.datomic.com/on-prem/storage.html#sql-database[Datomic SQL
-database] to provision a postgres database for Datomic. If you don't
-want to use postgres, you can pass a custom Datomic url atop the
-`Makefile`. Then follow these steps:
-
-* Install datomic
-* Supply the necessary variables at the top of the `Makefile`
-* Set the matching datomic peer dependency in `deps.edn`
-* Install `foreman`
-
-[source,bash]
------------------
-gem install foreman
------------------
-
-=== Startup
-
-* Start up all the necessary proceses:
-
-[source,bash]
------------------
-foreman start Procfile.dev
------------------
-
-* Connect to the nrepl server using your repl client, Emacs Cider is
-  supported.
-* From the repl, load in the dev code.
-
-This is done so that any compilation exceptions are thrown at runtime,
-instead of startup time which would make the repl crash.
-
-If some code won't compile, you can fix the issue and just try running
-`(dev)` again.
-
-[source,clojure]
------------------
-user=> (dev)
------------------
-
-*  If all code is loaded, run `(go)`.
-
-[source,clojure]
------------------
-development=> (go)
------------------
-
-* The system is started, visit
-  http://localhost:3000/index.html[localhost:3000/index.html]
-
-* If you make any changes to the clj side or in the configs, refresh
-  the namesaces and reset the system:
-
-[source,clojure]
------------------
-development=> (reset)
------------------
-
-* Some dir-locals are configured for emacs. The system will also reset
-  when running `M-x cider-ns-refresh`
+Formal licensing of this library has yet to be determined.
