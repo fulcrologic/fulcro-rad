@@ -152,7 +152,6 @@
 (defn- sort-rows
   "Sorts the filtered rows. Input is the cached intermediate filtered rows, output is cached sorted rows (not visible)"
   [{::uism/keys [state-map] :as uism-env}]
-  (log/spy :info (uism/alias-value uism-env :ascending?))
   (let [all-rows     (uism/alias-value uism-env :filtered-rows)
         compare-rows (report-options uism-env ::compare-rows)
         normalized?  (some-> all-rows (first) (eql/ident?))
