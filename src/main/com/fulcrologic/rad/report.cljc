@@ -376,6 +376,27 @@
         (start-report! app report-class {:route-params route-params})
         (comp/transact! app [(dr/target-ready {:target report-ident})])))))
 
+(s/def ::arglist (s/and vector?
+                        (fn [[this props]]
+                          (and (not= this props)
+                               (not= this '_)
+                               (not= props '_)))))
+
+(s/def ::columns (s/coll-of symbol? :kind vector?))
+(s/def ::row-pk symbol?)
+(s/def ::source-attribute keyword?)
+
+(s/def ::options (s/keys
+                   :req [::columns
+                         ::row-pk
+                         ::source-attribute]
+                   :opt []))
+
+(s/def ::report-args-extra (s/keys :req-un [::arglist ::options]))
+
+(s/def ::report-args
+  (s/and ::comp/args ::report-args-extra))
+
 #?(:clj
    (defmacro defsc-report
      "Define a report. Just like defsc, but you do not specify query/ident/etc.
@@ -393,13 +414,10 @@
 
      If you elide the body, one will be generated for you.
      "
-     [sym arglist & args]
-     (let [this-sym (first arglist)
-           options  (first args)
+     [& args]
+     (let [{:keys [sym arglist options]} (s/conform ::report-args args)
+           this-sym (first arglist)
            options  (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})]
-       (req! &env sym options ::columns #(every? symbol? %))
-       (req! &env sym options ::row-pk #(symbol? %))
-       (req! &env sym options ::source-attribute keyword?)
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
           {::keys [BodyItem edit-form columns row-pk form-links
@@ -456,7 +474,7 @@
          `(do
             ~@defs)))))
 
-#?(:clj (s/fdef defsc-report :args ::comp/args))
+#?(:clj (s/fdef defsc-report :args ::report-args))
 
 (def reload!
   "[report-instance]
