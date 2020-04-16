@@ -107,7 +107,7 @@
         path                (conj report-ident :ui/parameters)
         {history-params :params} (history/current-route fulcro-app)
         controls            (report-options env :com.fulcrologic.rad.control/controls)
-        initial-sort-params (or (report-options env ::initial-sort-params) {})
+        initial-sort-params (merge {:ascending? true} (report-options env ::initial-sort-params))
         initial-parameters  (reduce-kv
                               (fn [result control-key {:keys [default-value]}]
                                 (if default-value
@@ -152,6 +152,7 @@
 (defn- sort-rows
   "Sorts the filtered rows. Input is the cached intermediate filtered rows, output is cached sorted rows (not visible)"
   [{::uism/keys [state-map] :as uism-env}]
+  (log/spy :info (uism/alias-value uism-env :ascending?))
   (let [all-rows     (uism/alias-value uism-env :filtered-rows)
         compare-rows (report-options uism-env ::compare-rows)
         normalized?  (some-> all-rows (first) (eql/ident?))
@@ -210,7 +211,7 @@
    {:parameters    [:actor/report :ui/parameters]
     :sort-params   [:actor/report :ui/parameters ::sort]
     :sort-by       [:actor/report :ui/parameters ::sort :sort-by]
-    :ascending?      [:actor/report :ui/parameters ::sort :ascending?]
+    :ascending?    [:actor/report :ui/parameters ::sort :ascending?]
     :filtered-rows [:actor/report :ui/cache :filtered-rows]
     :sorted-rows   [:actor/report :ui/cache :sorted-rows]
     :raw-rows      [:actor/report :ui/loaded-data]
