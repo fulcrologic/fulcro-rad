@@ -102,12 +102,16 @@
   [uism-env & k-or-ks]
   (apply comp/component-options (uism/actor-class uism-env :actor/report) k-or-ks))
 
+(defn initial-sort-params-with-defaults
+  [env]
+  (merge {:ascending? true} (report-options env ::initial-sort-params)))
+
 (defn initialize-parameters [{::uism/keys [fulcro-app] :as env}]
   (let [report-ident        (uism/actor->ident env :actor/report)
         path                (conj report-ident :ui/parameters)
         {history-params :params} (history/current-route fulcro-app)
         controls            (report-options env :com.fulcrologic.rad.control/controls)
-        initial-sort-params (merge {:ascending? true} (report-options env ::initial-sort-params))
+        initial-sort-params (initial-sort-params-with-defaults env)
         initial-parameters  (reduce-kv
                               (fn [result control-key {:keys [default-value]}]
                                 (if default-value
@@ -313,7 +317,7 @@
                                           {:keys [params]} event-data
                                           path                (conj report-ident :ui/parameters)
                                           controls            (report-options env :com.fulcrologic.rad.control/controls)
-                                          initial-sort-params (or (report-options env ::initial-sort-params) {})
+                                          initial-sort-params (initial-sort-params-with-defaults env)
                                           initial-parameters  (reduce-kv
                                                                 (fn [result control-key {:keys [default-value]}]
                                                                   (if default-value
