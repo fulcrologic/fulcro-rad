@@ -91,7 +91,9 @@
         (history/-push-route! this route params))))
   (-back! [_]
     #?(:cljs
-       (.back js/history)))
+       (let []
+         (log/spy :debug ["Back to prior route" (some-> prior-route deref)])
+         (.back js/history))))
   (-add-route-listener! [_ listener-key f] (swap! listeners assoc listener-key f))
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
   (-current-route [_]

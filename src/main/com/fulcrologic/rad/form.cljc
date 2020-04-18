@@ -695,14 +695,16 @@
 
 (defn exit-form
   "Discard all changes, and attempt to change route. Exits the state machine (cleaning it up) if the new route takes effect."
-  [uism-env]
+  [{::uism/keys [fulcro-app] :as uism-env}]
   (let [Form         (uism/actor-class uism-env :actor/form)
         cancel-route (some-> Form comp/component-options ::cancel-route)]
     (let [form-ident (uism/actor->ident uism-env :actor/form)]
+      (when (history/history-support? fulcro-app)
+        (history/back! fulcro-app))
       (-> uism-env
         (uism/apply-action fs/pristine->entity* form-ident)
         (uism/activate :state/abandoned)
-        (uism/set-timeout :cleanup :event/exit {::new-route (or cancel-route :back)} 1)))))
+        (uism/set-timeout :cleanup :event/exit {} 1)))))
 
 (>defn calc-diff
   "Calculates the minimal form diff from the UISM env of the master form's state machine."
@@ -717,14 +719,7 @@
 
 (def global-events
   {:event/exit
-   {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
-                     (let [route (::new-route event-data)]
-                       (cond
-                         (and (= :back route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
-                         (and (nil? route) (history/history-support? fulcro-app)) (history/back! fulcro-app)
-                         (vector? route) (dr/change-route! fulcro-app route))
-                       (uism/exit env)))}
-
+   {::uism/handler (fn [env] (uism/exit env))}
    :event/route-denied
    {::uism/handler (fn [env] env)}})
 

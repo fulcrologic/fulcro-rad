@@ -222,7 +222,7 @@
 
    * `:sort-by` - The qualified key of the column that is the default sort order. This just marks the column heading.
    * `:sortable-columns` - A set (required) of the columns that should offer sort controls.
-   * `:ascending?` - A boolean indicating if the order should be ascending.
+   * `:ascending?` - A boolean indicating if the order should be ascending, default is true.
 
    ```
    ro/initial-sort-params {:sort-by :account/name
