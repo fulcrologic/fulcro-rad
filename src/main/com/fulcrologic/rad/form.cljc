@@ -18,7 +18,7 @@
     [com.fulcrologic.rad.control :as control]
     [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.application :as rapp]
     [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
     [com.fulcrologic.rad.type-support.integer :as int]
@@ -1018,7 +1018,11 @@
         identity?
         (?! read-only? form-instance attr)
         computed-value
-        (and (set? (?! read-only-fields form-instance)) (contains? read-only-fields qualified-key))))))
+        (and (set? (?! read-only-fields form-instance)) (contains? read-only-fields qualified-key))
+        ;; These answers need to be cached in a very fast way
+        (not (auth/can? form-instance {::auth/context form-instance
+                                       ::auth/subject `save-form
+                                       ::auth/action  :execute}))))))
 
 (>defn field-visible?
   "Should the `attr` on the given `form-instance` be visible? This is controlled:
@@ -1035,10 +1039,14 @@
   (let [form-field-visible? (?! (comp/component-options form-instance ::fields-visible? qualified-key) form-instance attr)
         field-visible?      (?! field-visible? form-instance attr)]
     (boolean
-      (or
-        (true? form-field-visible?)
-        (and (nil? form-field-visible?) (true? field-visible?))
-        (and (nil? form-field-visible?) (nil? field-visible?))))))
+      (and
+        (auth/can? form-instance {::auth/subject qualified-key
+                                  ::auth/action  :read
+                                  ::auth/context form-instance})
+        (or
+          (true? form-field-visible?)
+          (and (nil? form-field-visible?) (true? field-visible?))
+          (and (nil? form-field-visible?) (nil? field-visible?)))))))
 
 (defn view!
   "Route to the given form in read-only mode."

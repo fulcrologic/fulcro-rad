@@ -4,8 +4,9 @@
   #?(:cljs (:require-macros com.fulcrologic.rad.authorization))
   (:require
     [clojure.set :as set]
+    [clojure.spec.alpha :as s]
     [com.wsscode.pathom.core :as p]
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
+    [com.fulcrologic.guardrails.core :refer [>defn => ? >def]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
@@ -240,3 +241,55 @@
                 ~'factory (comp/computed-factory ~(get authority-map :local))]
             (~'factory ~'local {:visible? ~'authenticating?}))))))
 
+(>def ::action #{:read :write :execute})
+(>def ::context map?)
+(>def ::subject any?)
+(>def ::action-map (s/keys :req [::action ::subject] :opt ::context))
+
+(>defn read
+  "A read action. Used with `can?`."
+  ([subj context]
+   [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) map? => ::action-map]
+   (cond-> {::action  :read
+            ::subject subj}
+     context (assoc ::context context)))
+  ([subj]
+   [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) => ::action-map]
+   (read subj nil)))
+
+(>defn write
+  "A write action. Used with `can?`."
+  ([subj context]
+   [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) map? => ::action-map]
+   (cond-> {::action  :write
+            ::subject subj}
+     context (assoc ::context context)))
+  ([subj]
+   [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) => ::action-map]
+   (write subj nil)))
+
+(>defn execute
+  "A write action. Used with `can?`."
+  ([subj context]
+   [(s/or :sym qualified-symbol? :symset (s/coll-of qualified-symbol? :kind set?)) map? => ::action-map]
+   (cond-> {::action  :execute
+            ::subject subj}
+     context (assoc ::context context)))
+  ([subj]
+   [(s/or :sym qualified-symbol? :symset (s/coll-of qualified-symbol? :kind set?)) => ::action-map]
+   (execute subj nil)))
+
+#?(:cljs
+   (defn can?
+     "CLJS authorization check. Must be passed a component instance or the app, and an action map. The action
+     map should be generated using one of the action generators `read`, `write`, or `execute`.
+
+     Returns a cache-a-bool"
+     [this-or-app action-map]
+     (log/spy :info ["CAN?" action-map])
+     true)
+   :clj
+   (defn can?
+     "CLJ authorization check. Must be passed the current pathom env (i.e. mutation env). The action
+     map should be generated using one of the action generators `read`, `write`, or `execute`."
+     [env action-map] true))
