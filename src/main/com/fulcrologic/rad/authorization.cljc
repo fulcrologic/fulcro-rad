@@ -244,20 +244,22 @@
 (>def ::action #{:read :write :execute})
 (>def ::context map?)
 (>def ::subject any?)
-(>def ::action-map (s/keys :req [::action ::subject] :opt ::context))
+(>def ::action-map (s/keys :req [::action ::subject] :opt [::context]))
 
-(>defn read
+(>defn Read
   "A read action. Used with `can?`."
   ([subj context]
-   [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) map? => ::action-map]
+   [(s/or
+      :sym qualified-keyword?
+      :symset (s/coll-of qualified-keyword? :kind set?)) map? => ::action-map]
    (cond-> {::action  :read
             ::subject subj}
      context (assoc ::context context)))
   ([subj]
    [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) => ::action-map]
-   (read subj nil)))
+   (Read subj nil)))
 
-(>defn write
+(>defn Write
   "A write action. Used with `can?`."
   ([subj context]
    [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) map? => ::action-map]
@@ -266,9 +268,9 @@
      context (assoc ::context context)))
   ([subj]
    [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) => ::action-map]
-   (write subj nil)))
+   (Write subj nil)))
 
-(>defn execute
+(>defn Execute
   "A write action. Used with `can?`."
   ([subj context]
    [(s/or :sym qualified-symbol? :symset (s/coll-of qualified-symbol? :kind set?)) map? => ::action-map]
@@ -277,7 +279,7 @@
      context (assoc ::context context)))
   ([subj]
    [(s/or :sym qualified-symbol? :symset (s/coll-of qualified-symbol? :kind set?)) => ::action-map]
-   (execute subj nil)))
+   (Execute subj nil)))
 
 #?(:cljs
    (defn can?

@@ -73,7 +73,7 @@
     (fn [route params]
       (if (or
             (not (dr/can-change-route? app))
-            (auth/can? app (auth/execute `com.fulcrologic.rad.routing/route-to! {:path route})))
+            (auth/can? app (auth/Execute `com.fulcrologic.rad.routing/route-to! {:path route})))
         (do
           (log/warn "Browser routing event was denied.")
           (undo! app route params))

@@ -32,7 +32,7 @@
         app-root        (app/root-class app)
         path-components (dr/resolve-path-components app-root RouteTarget)
         path            (dr/resolve-path path-components route-params)]
-    (auth/can? app-or-component (auth/execute `route-to! {::path-components path-components
+    (auth/can? app-or-component (auth/Execute `route-to! {::path-components path-components
                                                           ::path            path}))))
 
 (defn route-to!

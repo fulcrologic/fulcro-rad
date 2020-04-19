@@ -3,6 +3,7 @@
   (:require
     [clojure.spec.alpha :as s]
     [clojure.set :as set]
+    [com.fulcrologic.rad.type-support.cache-a-bools :as cb]
     [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
@@ -1036,17 +1037,19 @@
   [form-instance {::keys      [field-visible?]
                   ::attr/keys [qualified-key] :as attr}]
   [comp/component? ::attr/attribute => boolean?]
+  #_(...)
   (let [form-field-visible? (?! (comp/component-options form-instance ::fields-visible? qualified-key) form-instance attr)
-        field-visible?      (?! field-visible? form-instance attr)]
-    (boolean
-      (and
-        (auth/can? form-instance {::auth/subject qualified-key
-                                  ::auth/action  :read
-                                  ::auth/context form-instance})
-        (or
-          (true? form-field-visible?)
-          (and (nil? form-field-visible?) (true? field-visible?))
-          (and (nil? form-field-visible?) (nil? field-visible?)))))))
+        field-visible?      (?! field-visible? form-instance attr)
+        answer              (cb/And
+                              (auth/can? form-instance (auth/Read qualified-key {::form-instance form-instance}))
+                              (cb/Or
+                                (cb/True? form-field-visible?)
+                                (and (nil? form-field-visible?) (cb/True? field-visible?))
+                                (and (nil? form-field-visible?) (nil? field-visible?))))]
+    #_(when (cacheable? answer)
+      (set! (.-private-field form-instance) answer))
+    (cb/as-boolean answer)))
+
 
 (defn view!
   "Route to the given form in read-only mode."
