@@ -11,7 +11,8 @@
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.rad.attributes :as attr :refer [new-attribute]]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.rad.type-support.cache-a-bools :as cb]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; PUBLIC API
@@ -288,10 +289,9 @@
 
      Returns a cache-a-bool"
      [this-or-app action-map]
-     (log/spy :info ["CAN?" action-map])
-     true)
+     cb/CT)
    :clj
    (defn can?
      "CLJ authorization check. Must be passed the current pathom env (i.e. mutation env). The action
      map should be generated using one of the action generators `read`, `write`, or `execute`."
-     [env action-map] true))
+     [env action-map] cb/CT))

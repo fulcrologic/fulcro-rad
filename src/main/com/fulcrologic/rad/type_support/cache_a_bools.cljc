@@ -6,7 +6,8 @@
              [com.fulcrologic.rad.type-support.cache-a-bools
               :refer [True? False? as-boolean And cacheable?]]))
   (:require
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.fulcro.components :as comp]))
 
 (def cachably-true ::cacheably-true)
 (def CT cachably-true)
@@ -82,3 +83,28 @@
     (and (True? a)) (if (cacheable? a) CF UF)
     (and (False? a)) (if (cacheable? a) CT UT)))
 
+(defn Cnil?
+  "Returns a cacheable answer for `nil?`."
+  [a]
+  (if (nil? a) CT CF))
+
+(defn Cnil
+  "Returns cacheably-false answer when `a` is nil, otherwise returns `a`."
+  [a]
+  (if (nil? a) CF a))
+
+#?(:clj
+   (defmacro with-app-cache
+     "Run a body that evaluates to a cache-a-bool, and cache the result in the app's runtime atom if
+      the answer is cacheable. Returns the result of the `body` expression, or the cached value of it."
+     [app-ish k & body]
+     `(let [app#            (comp/any->app ~app-ish)
+            ra#             (-> app# :com.fulcrologic.fulcro.application/runtime-atom)
+            path#           [::app-cache ~k]
+            existing-value# (get-in (deref ra#) path# ::not-found)]
+        (if (= ::not-found existing-value#)
+          (let [value# (do ~@body)]
+            (if (cacheable? value#)
+              (swap! ra# assoc-in path# value#)
+              value#))
+          existing-value#))))

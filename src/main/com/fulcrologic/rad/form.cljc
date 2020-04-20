@@ -993,7 +993,7 @@
   (let [asm-id (comp/get-ident master-form)]
     (uism/trigger! master-form asm-id :event/delete-row env)))
 
-(>defn read-only?
+(defn read-only?
   "Returns true if the given attribute is meant to show up as read only on the given form instance. Attributes
   configure this by placing a boolean value (or function returning boolean) on the attribute at `::attr/read-only?`.
 
@@ -1008,24 +1008,27 @@
   as you'd expect."
   [form-instance {::attr/keys [qualified-key identity? read-only? computed-value] :as attr}]
   [comp/component? ::attr/attribute => boolean?]
-  (let [{::keys          [read-only-fields]
-         read-only-form? ::read-only?} (comp/component-options form-instance)
-        master-form       (comp/get-computed form-instance ::master-form)
-        master-read-only? (some-> master-form (comp/component-options ::read-only?))]
-    (boolean
-      (or
-        (?! read-only-form? form-instance)
-        (?! master-read-only? master-form)
-        identity?
-        (?! read-only? form-instance attr)
-        computed-value
-        (and (set? (?! read-only-fields form-instance)) (contains? read-only-fields qualified-key))
-        ;; These answers need to be cached in a very fast way
-        (not (auth/can? form-instance {::auth/context form-instance
-                                       ::auth/subject `save-form
-                                       ::auth/action  :execute}))))))
+  (cb/as-boolean
+    (cb/with-app-cache form-instance [::read-only? qualified-key]
+      (let [{::keys          [read-only-fields]
+             read-only-form? ::read-only?} (comp/component-options form-instance)
+            master-form       (comp/get-computed form-instance ::master-form)
+            master-read-only? (some-> master-form (comp/component-options ::read-only?))]
+        (cb/Or
+          (cb/Cnil (?! read-only-form? form-instance))
+          (cb/Cnil (?! master-read-only? master-form))
+          (and identity? cb/CT)
+          (cb/Cnil (?! read-only? form-instance attr))
+          (cb/Cnil computed-value)
+          (cb/Or
+            (cb/Not (cb/Cnil? read-only-fields))
+            (and (set? (?! read-only-fields form-instance)) (contains? read-only-fields qualified-key)))
+          ;; These answers need to be cached in a very fast way
+          (cb/Not (auth/can? form-instance {::auth/context form-instance
+                                            ::auth/subject `save-form
+                                            ::auth/action  :execute})))))))
 
-(>defn field-visible?
+(defn field-visible?
   "Should the `attr` on the given `form-instance` be visible? This is controlled:
 
   * On the attribute at `::form/field-visible?`. A boolean or `(fn [form-instance attr] boolean?)`
@@ -1037,19 +1040,17 @@
   [form-instance {::keys      [field-visible?]
                   ::attr/keys [qualified-key] :as attr}]
   [comp/component? ::attr/attribute => boolean?]
-  #_(...)
-  (let [form-field-visible? (?! (comp/component-options form-instance ::fields-visible? qualified-key) form-instance attr)
-        field-visible?      (?! field-visible? form-instance attr)
-        answer              (cb/And
-                              (auth/can? form-instance (auth/Read qualified-key {::form-instance form-instance}))
-                              (cb/Or
-                                (cb/True? form-field-visible?)
-                                (and (nil? form-field-visible?) (cb/True? field-visible?))
-                                (and (nil? form-field-visible?) (nil? field-visible?))))]
-    #_(when (cacheable? answer)
-      (set! (.-private-field form-instance) answer))
-    (cb/as-boolean answer)))
-
+  (cb/as-boolean
+    (cb/with-app-cache form-instance [::field-visible? qualified-key]
+      (let [form-field-visible? (?! (comp/component-options form-instance ::fields-visible? qualified-key) form-instance attr)
+            field-visible?      (?! field-visible? form-instance attr)
+            answer              (cb/And
+                                  (auth/can? form-instance (auth/Read qualified-key {::form-instance form-instance}))
+                                  (cb/Or
+                                    form-field-visible?
+                                    (cb/And (cb/Cnil? form-field-visible?) field-visible?)
+                                    (cb/And (cb/Cnil? form-field-visible?) (cb/Cnil? field-visible?))))]
+        answer))))
 
 (defn view!
   "Route to the given form in read-only mode."
