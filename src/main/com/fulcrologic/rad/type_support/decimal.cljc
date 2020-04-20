@@ -27,7 +27,7 @@
   #?(:clj  (decimal? v)
      :cljs (ct/bigdec? v)))
 
-(>defn numeric?
+(defn numeric?
   "Predicate for clj(s) dynamic number (n or bigdecimal). Returns true if the given value is a numeric
   in the current computing context (primitive or BigDecimal)."
   [v]
@@ -67,7 +67,7 @@
        :clj  (str bd))
     ""))
 
-(>defn numeric
+(defn numeric
   "Coerce to a numeric from an arbitrary type (number, string, or numeric)."
   [s]
   [any? => ::numeric]
@@ -81,13 +81,13 @@
             #?(:clj  (new java.math.BigDecimal (.toString s))
                :cljs (ct/bigdec (strip-zeroes (.toString s)))))))
 
-(>defn positive?
+(defn positive?
   "Predicate for clj(s) positive bigdecimal"
   [v]
   [any? => boolean?]
   (< 0 (numeric v)))
 
-(>defn negative?
+(defn negative?
   "Predicate for clj(s) negative bigdecimal"
   [v]
   [any? => boolean?]

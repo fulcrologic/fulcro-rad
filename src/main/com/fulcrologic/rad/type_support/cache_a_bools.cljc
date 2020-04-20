@@ -104,7 +104,7 @@
             existing-value# (get-in (deref ra#) path# ::not-found)]
         (if (= ::not-found existing-value#)
           (let [value# (do ~@body)]
-            (if (cacheable? value#)
-              (swap! ra# assoc-in path# value#)
-              value#))
+            (when (cacheable? value#)
+              (swap! ra# assoc-in path# value#))
+            value#)
           existing-value#))))
