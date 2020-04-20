@@ -10,6 +10,7 @@
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.rad.type-support.cache-a-bools :as cb]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.authorization :as auth]
@@ -71,13 +72,13 @@
   (swap! (::app/runtime-atom app) assoc ::history history)
   (add-route-listener! app ::rad-route-control
     (fn [route params]
-      (if (or
-            (not (dr/can-change-route? app))
-            (auth/can? app (auth/Execute `com.fulcrologic.rad.routing/route-to! {:path route})))
+      (if (and
+            (dr/can-change-route? app)
+            (cb/as-boolean (auth/can? app (auth/Execute `com.fulcrologic.rad.routing/route-to! {:path route}))))
+        (dr/change-route! app route params)
         (do
           (log/warn "Browser routing event was denied.")
-          (undo! app route params))
-        (dr/change-route! app route params)))))
+          (undo! app route params))))))
 
 (>defn push-route!
   "Push the given route onto the route history (if history is installed)."
