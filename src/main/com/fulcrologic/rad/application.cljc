@@ -83,7 +83,7 @@
     (merge
       #?(:clj {}
          :cljs
-              (let [token (when (exists? js/fulcro_network_csrf_token)
+              (let [token (when-not (undefined? js/fulcro_network_csrf_token)
                             js/fulcro_network_csrf_token)]
                 {:remotes {:remote (net/fulcro-http-remote {:url                "/api"
                                                             :request-middleware (secured-request-middleware {:csrf-token token})})}}))
