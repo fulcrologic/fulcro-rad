@@ -4,12 +4,12 @@
   <groupId>com.fulcrologic</groupId>
   <artifactId>fulcro-rad</artifactId>
   <packaging>jar</packaging>
-  <version>0.0.1-alpha-17-SNAPSHOT</version>
+  <version>0.0.2-alpha</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
   <name>Fulcro RAD</name>
-  <description>A library for building full-stack SPA webapps Rapidly using Fulcro</description>
+  <description>A library for rapid application development in Fulcro</description>
   <url>https://github.com/fulcrologic/fulcro-rad</url>
   <licenses>
     <license>
