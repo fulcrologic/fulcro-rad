@@ -6,6 +6,7 @@
              [com.fulcrologic.rad.type-support.cache-a-bools
               :refer [True? False? as-boolean And cacheable?]]))
   (:require
+    [clojure.spec.alpha :as s]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.components :as comp]))
 
@@ -83,7 +84,7 @@
     (and (True? a)) (if (cacheable? a) CF UF)
     (and (False? a)) (if (cacheable? a) CT UT)))
 
-(defn Cnil?
+(defn Nil?
   "Returns a cacheable answer for `nil?`."
   [a]
   (if (nil? a) CT CF))

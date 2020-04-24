@@ -1021,7 +1021,7 @@
           (cb/Cnil (?! read-only? form-instance attr))
           (cb/Cnil computed-value)
           (cb/Or
-            (cb/Not (cb/Cnil? read-only-fields))
+            (cb/Not (cb/Nil? read-only-fields))
             (and (set? (?! read-only-fields form-instance)) (contains? read-only-fields qualified-key)))
           ;; These answers need to be cached in a very fast way
           (cb/Not (auth/can? form-instance {::auth/context form-instance
@@ -1048,8 +1048,8 @@
                                   (auth/can? form-instance (auth/Read qualified-key {::form-instance form-instance}))
                                   (cb/Or
                                     form-field-visible?
-                                    (cb/And (cb/Cnil? form-field-visible?) field-visible?)
-                                    (cb/And (cb/Cnil? form-field-visible?) (cb/Cnil? field-visible?))))]
+                                    (cb/And (cb/Nil? form-field-visible?) field-visible?)
+                                    (cb/And (cb/Nil? form-field-visible?) (cb/Nil? field-visible?))))]
         answer))))
 
 (defn view!

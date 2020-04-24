@@ -6,7 +6,9 @@
     #?(:cljs [goog.object :as gobj])
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.rad.routing :as routing]
+    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [base64-encode base64-decode]]
     [com.fulcrologic.rad.routing.history :as history :refer [RouteHistory]]
     [clojure.string :as str]
@@ -63,6 +65,22 @@
       (map (fn [[k v]]
              (str (encode-uri-component (name k)) "=" (encode-uri-component (str v)))) string-key-values))))
 
+(defn url->route
+  "Convert the current browser URL into a route path and parameter map. Returns:
+
+   ```
+   {:route [\"path\" \"segment\"]
+    :params {:param value}}
+   ```
+  "
+  []
+  #?(:cljs
+     (let [path   (.. js/document -location -pathname)
+           route  (vec (drop 1 (str/split path #"/")))
+           params (or (some-> (.. js/document -location -search) (query-params)) {})]
+       {:route  route
+        :params params})))
+
 (defrecord HTML5History [listeners generator current-uid prior-route]
   RouteHistory
   (-push-route! [this route params]
@@ -103,22 +121,6 @@
              route  (vec (drop 1 (str/split path #"/")))]
          {:route  route
           :params params}))))
-
-(defn url->route
-  "Convert the current URI into a route path and parameter map. Returns:
-
-   ```
-   {:route [\"path\" \"segment\"]
-    :params {:param value}}
-   ```
-  "
-  []
-  #?(:cljs
-     (let [path   (.. js/document -location -pathname)
-           route  (vec (drop 1 (str/split path #"/")))
-           params (or (some-> (.. js/document -location -search) (query-params)) {})]
-       {:route  route
-        :params params})))
 
 (defn html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API."
