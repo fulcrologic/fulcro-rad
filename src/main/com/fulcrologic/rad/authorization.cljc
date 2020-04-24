@@ -368,15 +368,37 @@
      NOTE: Most decisions in RAD are designed to be made synchronously. The primary exception is context-free routing,
      where several steps (including authentication) may be necessary. Use `determine` in those cases.
 
+     If you have not installed authorization, then this function always returns cacheably-true.
+
      Returns a cache-a-bool"
      [this-or-app action-map]
-     cb/CT)
+     (if-let [authorization (some-> this-or-app comp/any->app ::app/runtime-atom deref ::authorization)]
+       (authorization this-or-app action-map)
+       cb/CT))
    :clj
    (defn can?
      "CLJ authorization check. Must be passed the current pathom env (i.e. mutation env). The action
-     map should be generated using one of the action generators `Read`, `Write`, or `Execute`."
+     map should be generated using one of the action generators `Read`, `Write`, or `Execute`.
+
+     If you have not installed authorization, then this function always returns cacheably-true."
      [env action-map]
-     cb/CT))
+     (if-let [authorization (some-> env ::authorization)]
+       (authorization env action-map)
+       cb/CT)))
+
+(defn install-authorization!
+  "Install your own implementation of `can?` on the given RAD application. Your
+  `can-fn` must be a `(fn [env action-map] cache-a-bool)`. See `can?`."
+  [app can-fn]
+  (swap! (::app/runtime-atom app) assoc ::authorization can-fn))
+
+(defn pathom-plugin
+  "A pathom plugin that installs the given implementation of `can-fn` for the parser authorization. Your
+   `can-fn` must be a `(fn [env action-map] cache-a-bool)`. See `can?`."
+  [can-fn]
+  (p/env-wrap-plugin
+    (fn [env]
+      (assoc env ::authorization can-fn))))
 
 (defn readable?
   [env a]
@@ -390,7 +412,8 @@
           (and permissions (contains? (set (permissions env)) :read)))))))
 
 (defn redact
-  "Creates a post-processing plugin that redacts attributes that are marked as non-readable"
+  "Creates a post-processing plugin that redacts attributes that have ::permissions (a set or `(fn [env] set?)`)
+   which does not include :read, or for which the general `(auth/can? env (Read attr))` indicates false."
   [{attr-map ::attr/key->attribute
     :as      env} query-result]
   (p/transduce-maps (map (fn [[k v]]

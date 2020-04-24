@@ -19,6 +19,8 @@
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [edn-query-language.core :as eql]
     [com.fulcrologic.rad.type-support.decimal :as math]
+    [com.fulcrologic.rad.type-support.cache-a-bools :as cb]
+    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
@@ -272,13 +274,13 @@
 
         :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                                                    (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
-                                                     (let [sort-by  (uism/alias-value env :sort-by)
+                                                     (let [sort-by    (uism/alias-value env :sort-by)
                                                            ascending? (uism/alias-value env :ascending?)
                                                            ascending? (if (= qualified-key sort-by)
-                                                                      (not ascending?)
-                                                                      true)]
+                                                                        (not ascending?)
+                                                                        true)]
                                                        (rad-routing/update-route-params! fulcro-app update ::sort merge {:ascending? ascending?
-                                                                                                                         :sort-by  qualified-key})
+                                                                                                                         :sort-by    qualified-key})
                                                        (-> env
                                                          (uism/assoc-aliased
                                                            :busy? false
@@ -493,14 +495,21 @@
   {:edit-form FormClass
    :entity-id id-of-entity-to-edit}
   ```
+
+  Subject to permission `can? Execute routing/route-to!`. See `routing/authorized-route?`.
+
+  This context will add the row props under `::report/row-props`.
   "
   [report-instance row-props column-key]
   (let [{::keys [form-links]} (comp/component-options report-instance)
         cls    (get form-links column-key)
-        id-key (some-> cls (comp/component-options ::form/id ::attr/qualified-key))]
-    (when cls
+        id-key (some-> cls (comp/component-options ::form/id ::attr/qualified-key))
+        id     (get row-props id-key)]
+    (if (and cls (rad-routing/authorized-target? report-instance cls {:id         id
+                                                                      :action     form/edit-action
+                                                                      ::row-props row-props}))
       {:edit-form cls
-       :entity-id (get row-props id-key)})))
+       :entity-id id})))
 
 (defn link
   "Get a regular lambda link for a given (column) key.

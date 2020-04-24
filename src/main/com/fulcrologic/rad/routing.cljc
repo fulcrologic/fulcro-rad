@@ -10,6 +10,7 @@
   (:require
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.rad.type-support.cache-a-bools :as cb]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.authorization :as auth]
@@ -28,12 +29,10 @@
   "Returns true if the user is allowed to route to the given RouteTarget with the given route-params under the
    currently installed authorization system."
   [app-or-component RouteTarget route-params]
-  (let [app             (comp/any->app app-or-component)
-        app-root        (app/root-class app)
-        path-components (dr/resolve-path-components app-root RouteTarget)
-        path            (dr/resolve-path path-components route-params)]
-    (auth/can? app (auth/Execute `route-to! {::path-components path-components
-                                             ::path            path}))))
+  (let [app    (comp/any->app app-or-component)
+        target (comp/class->registry-key RouteTarget)]
+    (cb/True? (auth/can? app (auth/Execute `route-to! {::target target
+                                                       ::params route-params})))))
 
 (defn route-to!
   "Change the UI to display the route to the specified class, with the additional parameter map as route params. If
@@ -41,13 +40,15 @@
   authorization system."
   [app-or-component RouteTarget route-params]
   (if-let [path (absolute-path app-or-component RouteTarget route-params)]
-    (when (authorized-target? app-or-component RouteTarget route-params)
-      (when-not (every? string? path)
-        (log/warn "Insufficient route parameters passed. Resulting route is probably invalid."
-          (comp/component-name RouteTarget) route-params))
-      (history/push-route! app-or-component path route-params)
-      (dr/change-route! app-or-component path route-params))
-    (log/error "Route permission denied, or cannot find path for" (comp/component-name RouteTarget))))
+    (if (authorized-target? app-or-component RouteTarget route-params)
+      (do
+        (when-not (every? string? path)
+          (log/warn "Insufficient route parameters passed. Resulting route is probably invalid."
+            (comp/component-name RouteTarget) route-params))
+        (history/push-route! app-or-component path route-params)
+        (dr/change-route! app-or-component path route-params))
+      (log/error "Permission denied."))
+    (log/error "Cannot find path for" (comp/component-name RouteTarget))))
 
 (defn back!
   "Attempt to navigate back to the last point in history. Returns true if there is history support, false if

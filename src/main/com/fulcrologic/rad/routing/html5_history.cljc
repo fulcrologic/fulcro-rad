@@ -151,5 +151,6 @@
   (let [this (history/active-history app)
         {:keys [route params]} (url->route)]
     (if (and this (seq route))
-      (dr/change-route! app route params)
+      (let [target (dr/resolve-target app route)]
+        (routing/route-to! app target params))
       (routing/route-to! app default-page default-params))))
