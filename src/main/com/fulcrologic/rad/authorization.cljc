@@ -1,88 +1,38 @@
 (ns com.fulcrologic.rad.authorization
-  "Authentication and Authorization Support. ALPHA. SUBJECT TO CHANGES.
+  "Authentication and Authorization Support.
 
-  RAD's authorization/authentication system is meant to support ideas and interfaces
-  sufficient to protect the vast majority of applications in an extensible fashion.
+  WARNING: This part of RAD will not be standardized for some time. You will need to roll your own particular auth
+  system, which can easily plug into the various hooks in Forms and Reports (e.g. field formatters, read-only checks, etc).
+  If necessary you can simply make new wrapper macros around these if/when boilerplate becomes an issue. After all, forms
+  and reports are just very thin macros around Fulcro's `defsc` that pre-fill component options for you.
+  We hope the community will provide plugins for this, but generalized Auth is simply beyond the scope of RAD at this time due
+  to time/resource constraints. Community members are highly encouraged to write their own auth plugin libraries for
+  RAD, and we'll be glad to link to them on the main project pages.
 
-  The authentication step supports both session initiation (e.g. with credentials) and resumption. The identity of
-  the user and any amount of extended data can be stored in the session for use by the authorization mechanism.
-  RAD recognizes that the authentication may require things like redirects, where we must be able to resume
-  attempting an action after an authentication step has completed even though our application may have just reloaded.
-  The login and session checks (which you implement) should return any session data necessary for your authorization
-  mechanism to function properly.
+  The implementation in this namespace is only partially written, and can satisfy some simple needs. The original idea
+  was that each attribute would be under some authority (the owner of that data). These would be identified by
+  user-generated keyword names.
 
-  NOTE: The authentication mechanism included is half-baked. You will need to write you own in a real application
-  that properly handles the various cases you need handled.
+  The state machine in this namespace was then meant to be used as a way to check which authorities had been authenticated
+  against, so that incremental data access could be obtained over time as the user moved among features in the application.
+  Each authority requires that the developer provide a component that can be used as the source of the mutation names
+  and (optionally) UI for obtaining data from the user like passwords.
 
-  The authorization system is fully designed, but mostly optional, and you can easily set up alternative systems
-  on top of RAD as you see fit.
+  This at least gives you the ability to control if the current user is at least *known* to the authority in question, but
+  even this requires some integration with the network remotes of your application (are you using cookies? JWT? etc.).
 
-  Note that the primary method of the public authorization API (`can?`)  must be synchronous. In a CLJS environment this means
-  authorization information for the user must be loaded at well-defined moments (e.g. login, auth promotion, prior
-  to routing) and cached by the underlying implementation. The calculation of authorization can be as complex as it needs to be
-  (for example a rules-based system), and the return value uses `cache-a-bool`s to allow such calculations to be
-  easily cached to prevent undue overhead at runtime.
+  Also: *Real* Data access has to be ultimately controlled by the data owner. Therefore much of the real work needs to be
+  done work at the network/database layer.
 
-  This also means that any implementation must define a representation that is sufficiently compact (for complete
-  transmission to the client) and expressive to answer the questions that the application will ask of it, or must be
-  prepared to insert an auth promotion step or obtain information before the actual code needs to call `can?`.
+  Securing a real application needs the following (most of which RAD does NOT provide a default implementation for):
 
-  Another way to look at this system's design is to consider the following points:
+  * A way to auth against a server to establish a session.
+  * A Pathom parser plugin that can check the query/mutation to see if it should be allowed.
+  ** Optionally: granular query security, where individual attributes can be redacted. This would allow the same
+  UI to be shown for users in different roles, and simple elision at the server can then easily be used to affect field/column
+  visibility in the client.
 
-  * The UI must be fast. Waiting for round-trips to answer an auth question during render is unacceptable.
-  * The API must be simple-to-use:
-  ** Mixing async code into the UI makes things complex very quickly, and is undesirable if it can be avoided.
-  * We assert that a client can pre-load the information necessary to make decisions about authorization at well-defined
-  moments when credentials are presented, and the extensible data model itself can solve the cases in which
-  the synchronous nature of `can?` seems to be insufficient.
-  * In some cases, we can rely on the server's refusal to supply data as an indication that an action wasn't allowed for
-  some reason.
-
-  One might assert that this is insufficient because the server has a very large amount of data, and any
-  portion of that information might be required in order to make a decision. We cannot possibly know *in advance*
-  which bits will be required. While this is a true statement, we must remember that RAD always allows additional
-  information to be included when accessing a particular bit of information, and there are very few interactions
-  where one cannot plan ahead for the information that will be needed.
-
-  Take the questions related to working on an arbitrary thing, say \"invoice 99\". You might want to ask questions
-  about this:
-
-  . When the user uses HTML5 routing to access a form for invoice 99. (can user route to form for invoice 99?)
-  ** Requires an async interaction. We don't even know if the user is logged in if this was just pasted
-  into a URL bar. However, the async details can be hidden in the routing layer itself.
-  . When the user tries to click on a link to form for invoice 99. (can user route to form for invoice 99?)
-  . When making a decision about showing an link for invoice 99 in a report. (can user route to a form for invoice 99?)
-  . When deciding if the overall form for invoice 99 is in read-only mode (can user save the form for invoice 99?).
-  . When rendering a form field, to decide if that attribute for invoice 99 is even visible (can user read attribute X of invoice 99?).
-
-  We assert that *no-context navigation* is the only case the requires asynchronous operation.
-  *Contextual* routing and UI-layer decisions around data that is *already present* is always solvable with foresight
-  (when that data was originally loaded).
-
-  Narrowed keyword resolvers can be generated on the server that use server-side `can?` to answer permission questions. For
-  example `:invoice/date` can have an additional auto-generated resolver for `:invoice.date/permissions` (which has a
-  `::pc/input` of `:invoice/id`) can return the value `:read`, `:write`, `:none`. Thus, a form for invoices can simply
-  auto-include these additional keys to pre-pull server-side permission information when the form is loaded. Alternative
-  resolver schemes are equally simple (`:invoice/field-permissions {:x :write :y :read :z :none}`).
-
-  The same thing works for reports. A narrowed keyword on an ID attribute such as `:invoice.id/permissions` can indicate
-  general details about the user's general level of access to that entity in the database. Such an attribute can be
-  included in a report's query and then used in UI code to decide when to present a user with a link or plain text.
-
-  These details, of course, can be abstracted into configuration layers so that forms can be easily configured to query
-  for the additional properties so that the `can?` interface will find the information to be present.
-
-  If you now follow this pattern through your entire application you come up with the following logic:
-
-  * Top-level menu items are always contextual, and based on information we know (i.e. we don't show a top level navigation unless the
-    user is known to be allowed to do that kind of action). This is a finite and small set of information that is either
-    hard-coded in the application or can be easily loaded at authentication-time.
-  * Contextual links (from report columns, form field labels, dynamic menus) are always the result of a query,
-    and such a query can easily include narrowed keywords that answer permissions questions before they are ever shown. Thus, dynamic
-    links in the application can load general permissions information when the information for the link itself is loaded.
-  * Non-contextual permission questions (e.g. HTML5 route given during load which assumes a session cookie will resume
-    prior session) can always be treated as a request for general navigation. The navigation system is already async in
-    nature, and can easily support async permission checks.
+  Some ideas around possible implementations can be found in this package's source directory as auth.adoc.
   "
   #?(:cljs (:require-macros com.fulcrologic.rad.authorization))
   (:require
@@ -94,8 +44,7 @@
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.rad.attributes :as attr :refer [new-attribute]]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.rad.type-support.cache-a-bools :as cb]))
+    [taoensso.timbre :as log]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; PUBLIC API
@@ -325,95 +274,16 @@
 (>def ::subject any?)
 (>def ::action-map (s/keys :req [::action ::subject] :opt [::context]))
 
-(>defn Read
-  "A read action. Used with `can?`."
-  ([subj context]
-   [(s/or
-      :sym qualified-keyword?
-      :symset (s/coll-of qualified-keyword? :kind set?)) map? => ::action-map]
-   (cond-> {::action  :read
-            ::subject subj}
-     context (assoc ::context context)))
-  ([subj]
-   [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) => ::action-map]
-   (Read subj nil)))
-
-(>defn Write
-  "A write action. Used with `can?`."
-  ([subj context]
-   [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) map? => ::action-map]
-   (cond-> {::action  :write
-            ::subject subj}
-     context (assoc ::context context)))
-  ([subj]
-   [(s/or :sym qualified-keyword? :symset (s/coll-of qualified-keyword? :kind set?)) => ::action-map]
-   (Write subj nil)))
-
-(>defn Execute
-  "A write action. Used with `can?`."
-  ([subj context]
-   [(s/or :sym qualified-symbol? :symset (s/coll-of qualified-symbol? :kind set?)) map? => ::action-map]
-   (cond-> {::action  :execute
-            ::subject subj}
-     context (assoc ::context context)))
-  ([subj]
-   [(s/or :sym qualified-symbol? :symset (s/coll-of qualified-symbol? :kind set?)) => ::action-map]
-   (Execute subj nil)))
-
-#?(:cljs
-   (defn can?
-     "Synchronous CLJS authorization check. Must be passed a component instance or the app, and an action map. The action
-     map should be generated using one of the action generators `Read`, `Write`, or `Execute`.
-
-     NOTE: Most decisions in RAD are designed to be made synchronously. The primary exception is context-free routing,
-     where several steps (including authentication) may be necessary. Use `determine` in those cases.
-
-     If you have not installed authorization, then this function always returns cacheably-true.
-
-     Returns a cache-a-bool"
-     [this-or-app action-map]
-     (if-let [authorization (some-> this-or-app comp/any->app ::app/runtime-atom deref ::authorization)]
-       (authorization this-or-app action-map)
-       cb/CT))
-   :clj
-   (defn can?
-     "CLJ authorization check. Must be passed the current pathom env (i.e. mutation env). The action
-     map should be generated using one of the action generators `Read`, `Write`, or `Execute`.
-
-     If you have not installed authorization, then this function always returns cacheably-true."
-     [env action-map]
-     (if-let [authorization (some-> env ::authorization)]
-       (authorization env action-map)
-       cb/CT)))
-
-(defn install-authorization!
-  "Install your own implementation of `can?` on the given RAD application. Your
-  `can-fn` must be a `(fn [env action-map] cache-a-bool)`. See `can?`."
-  [app can-fn]
-  (swap! (::app/runtime-atom app) assoc ::authorization can-fn))
-
-(defn pathom-plugin
-  "A pathom plugin that installs the given implementation of `can-fn` for the parser authorization. Your
-   `can-fn` must be a `(fn [env action-map] cache-a-bool)`. See `can?`."
-  [can-fn]
-  (p/env-wrap-plugin
-    (fn [env]
-      (assoc env ::authorization can-fn))))
 
 (defn readable?
   [env a]
-  (let [{::attr/keys [qualified-key]
-         ::keys      [permissions]} a]
-    (cb/as-boolean
-      (cb/And
-        (can? env (Read qualified-key))
-        (or
-          (nil? permissions)
-          (and permissions (contains? (set (permissions env)) :read)))))))
+  (let [{::keys [permissions]} a]
+    (boolean
+      (or (nil? permissions)
+        (and permissions (contains? (set (permissions env)) :read))))))
 
 (defn redact
-  "Creates a post-processing plugin that redacts attributes that have ::permissions (a set or `(fn [env] set?)`)
-   which does not include :read, or for which the general `(auth/can? env (Read attr))` indicates false."
+  "Creates a post-processing plugin that redacts attributes that are marked as non-readable"
   [{attr-map ::attr/key->attribute
     :as      env} query-result]
   (p/transduce-maps (map (fn [[k v]]
@@ -422,4 +292,3 @@
                                [k v]
                                [k ::REDACTED]))))
     query-result))
-

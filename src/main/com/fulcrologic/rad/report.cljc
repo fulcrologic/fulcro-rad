@@ -19,8 +19,6 @@
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [edn-query-language.core :as eql]
     [com.fulcrologic.rad.type-support.decimal :as math]
-    [com.fulcrologic.rad.type-support.cache-a-bools :as cb]
-    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
@@ -495,21 +493,14 @@
   {:edit-form FormClass
    :entity-id id-of-entity-to-edit}
   ```
-
-  Subject to permission `can? Execute routing/route-to!`. See `routing/authorized-route?`.
-
-  This context will add the row props under `::report/row-props`.
   "
   [report-instance row-props column-key]
   (let [{::keys [form-links]} (comp/component-options report-instance)
         cls    (get form-links column-key)
-        id-key (some-> cls (comp/component-options ::form/id ::attr/qualified-key))
-        id     (get row-props id-key)]
-    (if (and cls (rad-routing/authorized-target? report-instance cls {:id         id
-                                                                      :action     form/edit-action
-                                                                      ::row-props row-props}))
+        id-key (some-> cls (comp/component-options ::form/id ::attr/qualified-key))]
+    (when cls
       {:edit-form cls
-       :entity-id id})))
+       :entity-id (get row-props id-key)})))
 
 (defn link
   "Get a regular lambda link for a given (column) key.
