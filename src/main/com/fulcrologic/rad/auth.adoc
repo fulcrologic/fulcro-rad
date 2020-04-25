@@ -1,0 +1,166 @@
+= Spitballing around Auth
+
+This document contains ramblings around things you could do for an auth plugin for RAD. It does not represent
+anything that is currently implemented in RAD itself.
+
+== Goals
+
+An authorization/authentication system for RAD should support ideas and interfaces
+sufficient to protect the vast majority of applications in an extensible fashion.
+
+The authentication step supports both session initiation (e.g. with credentials) and resumption. The identity of
+the user and any amount of extended data can be stored in the session for use by the authorization mechanism.
+RAD recognizes that the authentication may require things like redirects, where we must be able to resume
+attempting an action after an authentication step has completed even though our application may have just reloaded.
+The login and session checks (which you implement) should return any session data necessary for your authorization
+mechanism to function properly.
+
+== Idea 1: `can?`
+
+The question is: can we get the support we need from a clean interface where code can ask something like:
+
+[source, clojure]
+-----
+;; in the client layer
+(let [field-visible? (can? this (Read qualified-key))] ...)
+
+;; in a Pathom resolver
+(let [allow? (can? pathom-env (Read qualified-key))] ...)
+-----
+
+Note that `can?`  must be synchronous. In a CLJS environment this means
+authorization information for the user must be loaded at well-defined moments (e.g. login, auth promotion, prior
+to routing) and cached by the underlying implementation. The calculation of authorization can be as complex as it needs to be.
+
+This also means that any implementation must define a representation that is sufficiently compact (for complete
+transmission to the client) and expressive to answer the questions that the application will ask of it, or must be
+prepared to insert an auth promotion step or obtain information before the actual code needs to call `can?`.
+
+Another way to look at this design is to consider the following points:
+
+* The UI must be fast. Waiting for round-trips to answer an auth question during render is unacceptable.
+* The API must be simple-to-use:
+** Mixing async code into the UI makes things complex very quickly, and is undesirable if it can be avoided.
+* We assert that a client can pre-load the information necessary to make decisions about authorization at well-defined
+moments when credentials are presented, and the extensible data model itself can solve the cases in which
+the synchronous nature of `can?` seems to be insufficient.
+* In some cases, we can rely on the server's refusal to supply data as an indication that an action wasn't allowed for
+some reason.
+
+To explore the assertion about preloaded information, we consider that the server has a very large amount of data, and any
+portion of that information might be required in order to make a decision. We cannot possibly know *in advance*
+which bits will be required. While this is a true statement, we must remember that RAD always allows additional
+information to be included when accessing a particular bit of information, and there are very few interactions
+where one cannot plan ahead for the information that will be needed.
+
+Take the questions related to working on an arbitrary thing, say "invoice 99". You might want to ask questions
+about this:
+
+. When the user uses HTML5 routing to access a form for invoice 99. (can user route to form for invoice 99?)
+** Requires an async interaction. We don't even know if the user is logged in if this was just pasted
+into a URL bar. However, the async details can be hidden in the routing layer itself.
+. When the user tries to click on a link to form for invoice 99. (can user route to form for invoice 99?)
+. When making a decision about showing an link for invoice 99 in a report. (can user route to a form for invoice 99?)
+. When deciding if the overall form for invoice 99 is in read-only mode (can user save the form for invoice 99?).
+. When rendering a form field, to decide if that attribute for invoice 99 is even visible (can user read attribute X of invoice 99?).
+
+It looks as if *context-free navigation* is the only case the requires asynchronous operation.
+*Contextual* routing and UI-layer decisions around data that is *already present* is always solvable with foresight
+(when that data was originally loaded).
+
+Narrowed keyword resolvers can be generated on the server that use server-side `can?` to answer permission questions. For
+example `:invoice/date` can have an additional auto-generated resolver for `:invoice.date/permissions` (which has a
+`::pc/input` of `:invoice/id`) can return the value `:read`, `:write`, `:none`. Thus, a form for invoices can simply
+auto-include these additional keys to pre-pull server-side permission information when the form is loaded. Alternative
+resolver schemes are equally simple (`:invoice/field-permissions {:x :write :y :read :z :none}`).
+
+The same thing works for reports. A narrowed keyword on an ID attribute such as `:invoice.id/permissions` can indicate
+general details about the user's general level of access to that entity in the database. Such an attribute can be
+included in a report's query and then used in UI code to decide when to present a user with a link or plain text.
+
+These details, of course, can be abstracted into configuration layers so that forms can be easily configured to query
+for the additional properties so that the `can?` interface will find the information to be present.
+
+If you now follow this pattern through your entire application you come up with the following logic:
+
+* Top-level menu items are always contextual, and based on information we know (i.e. we don't show a top level navigation unless the
+user is known to be allowed to do that kind of action). This is a finite and small set of information that is either
+hard-coded in the application or can be easily loaded at authentication-time.
+* Contextual links (from report columns, form field labels, dynamic menus) are always the result of a query,
+and such a query can easily include narrowed keywords that answer permissions questions before they are ever shown. Thus, dynamic
+links in the application can load general permissions information when the information for the link itself is loaded.
+* Non-contextual permission questions (e.g. HTML5 route given during load which assumes a session cookie will resume
+prior session) can always be treated as a request for general navigation. The navigation system is already async in
+nature, and can easily support async permission checks.
+
+=== Problems
+
+The approach above was attempted in experiments.  The primary difficult aspect that was discovered was that contextual
+routes can be bookmarked when using HTML5 routes. This means that the assertion that the output of reports and forms
+could include links that can pre-calculate permissions is false: Sending such a bookmark to an arbitrary user does
+not carry with it the necessary security context.
+
+It is true that much of the above model works quite well in forms and reports when accessed in a predictable fashion,
+but the existence of an externally-mutable controller (the browser URL), leads to scenarios where the necessary contextual
+information is simply not present when it is needed.
+
+The simplest example is as follows: You make a permissions check that says "A user can only route to the AccountForm
+for accounts that are marked active.". Accounts have an ID, so this rule is never going to be invoked by links in
+your UI that can't also preload the active flag. Everything is fine.  However, as soon as someone bookmarks an
+account form that person has a way to attempt navigation without any preloaded context: The naive rule fails to find the active
+flag at all *and fails for all users* (no data about users is even loaded in the client when you just pasted a
+URL into the bar and started the app with it).
+
+So, while this is a promising approach it would need some additions to help do async loading of contextual information
+on route changes in order to be fully-functional.
+
+
+== Idea: Using attributes to define basic permissions
+
+NOTE: This exists and is used.
+
+This is a very simple idea to implement that can be used on a server to do redaction. The idea is to add a
+`::auth/permissions (fn [env] #{:read :write})` to each attribute, where logic can be used against the environment
+to decide if that attribute is readable in the context of `env`.
+
+Then a Pathom post-processing plugin can be used to replace attributes that are not reported to be readable so that
+the UI simply receives `::auth/REDACTED` (which could be used by rendering to hide columns, form fields, etc.).
+
+[source, clojure]
+-----
+(ns com.fulcrologic.rad.authorization
+  (:require
+    [com.wsscode.pathom.core :as p]))
+
+(defn readable?
+  [env attribute]
+  (let [{::keys [permissions]} attribute]
+    (or
+      (nil? permissions)
+      (and permissions (contains? (set (permissions env)) :read)))))
+
+(defn redact
+  "Creates a post-processing plugin that redacts attributes that have ::permissions (a set or `(fn [env] set?)`)
+   which does not include :read, or for which the general `(auth/can? env (Read attr))` indicates false."
+  [{attr-map ::attr/key->attribute
+    :as      env} query-result]
+  (p/transduce-maps (map (fn [[k v]]
+                           (let [a (get attr-map k)]
+                             (if (readable? env a)
+                               [k v]
+                               [k ::REDACTED]))))
+    query-result))
+-----
+
+=== Problems
+
+This can work well enough when decisions about an attribute's permissions can be made with little more than the session info in
+the parsing `env`. Unfortunately the decisions have to be made without knowing the *identity* of the entity/doc/row holding
+the attribute, which makes this approach too weak in many circumstances.
+
+== Future Work
+
+We hope that the community will step up with auth plugins for RAD. At the moment the authors of RAD currently use
+in-house solutions to this problem that work well, but we do not have the time to refine them into something that is
+more generally applicable and well-documented.
+

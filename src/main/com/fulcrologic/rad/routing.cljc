@@ -12,7 +12,6 @@
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.rad.routing.history :as history]
-    [com.fulcrologic.rad.authorization :as auth]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.application :as app]))
 
@@ -24,30 +23,19 @@
         app-root (app/root-class app)]
     (dr/resolve-path app-root RouteTarget route-params)))
 
-(defn authorized-target?
-  "Returns true if the user is allowed to route to the given RouteTarget with the given route-params under the
-   currently installed authorization system."
-  [app-or-component RouteTarget route-params]
-  (let [app             (comp/any->app app-or-component)
-        app-root        (app/root-class app)
-        path-components (dr/resolve-path-components app-root RouteTarget)
-        path            (dr/resolve-path path-components route-params)]
-    (auth/can? app-or-component (auth/Execute `route-to! {::path-components path-components
-                                                          ::path            path}))))
-
 (defn route-to!
   "Change the UI to display the route to the specified class, with the additional parameter map as route params. If
   route history is installed, then it will be notified of the change. This function is also integrated into the RAD
   authorization system."
   [app-or-component RouteTarget route-params]
   (if-let [path (absolute-path app-or-component RouteTarget route-params)]
-    (when (authorized-target? app-or-component RouteTarget route-params)
+    (do
       (when-not (every? string? path)
         (log/warn "Insufficient route parameters passed. Resulting route is probably invalid."
           (comp/component-name RouteTarget) route-params))
       (history/push-route! app-or-component path route-params)
       (dr/change-route! app-or-component path route-params))
-    (log/error "Route permission denied, or cannot find path for" (comp/component-name RouteTarget))))
+    (log/error "Cannot find path for" (comp/component-name RouteTarget))))
 
 (defn back!
   "Attempt to navigate back to the last point in history. Returns true if there is history support, false if

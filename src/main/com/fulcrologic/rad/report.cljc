@@ -272,13 +272,13 @@
 
         :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                                                    (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
-                                                     (let [sort-by  (uism/alias-value env :sort-by)
+                                                     (let [sort-by    (uism/alias-value env :sort-by)
                                                            ascending? (uism/alias-value env :ascending?)
                                                            ascending? (if (= qualified-key sort-by)
-                                                                      (not ascending?)
-                                                                      true)]
+                                                                        (not ascending?)
+                                                                        true)]
                                                        (rad-routing/update-route-params! fulcro-app update ::sort merge {:ascending? ascending?
-                                                                                                                         :sort-by  qualified-key})
+                                                                                                                         :sort-by    qualified-key})
                                                        (-> env
                                                          (uism/assoc-aliased
                                                            :busy? false

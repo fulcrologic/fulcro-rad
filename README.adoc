@@ -1,10 +1,57 @@
 = Fulcro Rapid Application Development Tools
 
-A library for Fulcro that adds pre-written elements for standing up production applications quickly.
+A library using Fulcro and Pathom to create full-stack single-page web, mobile, and
+desktop applications with a rich (and potentially federated) data model quickly.
 
-WARNING: SNAPSHOT 16 moves rendering plugins to new libraries. This requires you update your project's dependencies.
+WARNING: This library is marked Alpha. It is not intended for the light-hearted at this monent. We *will intentionally
+make breaking changes until the Alpha marking is removed*. Once out of Alpha we will follow the Clojure community standard
+of only adding features or reducing requirements. Bigger version numbers will just mean "better", and bigger changes
+in the version number will simply indicate the subjective magnitude of the improvement.
+
+The general goals of this project are:
+
+. Establish extensible patterns with pre-written components where almost any aspect of RAD can be tuned to fit your
+needs, and can also be escaped from entirely with minimal impact to your project when the pre-written
+components prove insufficient to your needs. RAD is built to be easy to grow, and easy to leave if you manage to outgrow it.
+** The only aspect of RAD that is "core" is the description of your data model in attributes. Those are
+nothing more than fully-open maps describing your data model, and it is difficult to imagine those causing harm since
+they tie your program to nothing more than your own global description of your data.
+. Provide a central data model around the concept of *attributes*. An attribute in RAD is pretty much just like
+a Datomic attribute: it has a fully-qualified name (e.g. `:account/email`) that can be globally distinct in its meaning,
+a type, a cardinality, and must be combined with an identity and value to fully represent a fact in the world.
+** Identity itself (e.g. `:account/id`) is nothing more than an attribute that can help you find others.
+** Non-identity attributes may appear under any number of identities, making for an open data model.
+** Attributes can represent virtual things: edges in the graph that are not reified (require queries to calculate),
+   values in reports that are aggregates, etc.
+** All attributes can be given an arbitrary set of user/plugin defined information, which can be used by your code
+or the code of plugins to provide features around the data model (they can even define how to obtain or calculate the data itself).
+** They define the structure for fully federated data systems: that is to say your data can live in any number of places,
+and can be seamlessly combined into the user-interface. Most of this is accomplished by the combined abilities of
+raw Fulcro and Pathom, but attributes play a central role in describing your data model to RAD itself.
+. Provide the ability to use an automated database layer that:
+** is *easy to escape from*. If you outgrow it, the layer won't lock you in.
+** can generate some amount of schema that is useful for at least early-stage projects.
+** allows you to leverage your own schema.
+** can integrate into RAD in order to *serve and save* data around common forms and reports.
+. Provide a system for the rendering and interaction with forms and reports.
+** A Form is any screen where a tree of data is loaded and saved "together", and where validation and free-form inputs are
+common.
+** A Report is any screen where the data contains a mix of read-only, derived, and aggregate data. This data may be
+organized in many ways (graphically, in columns, in rows, as a kanban board). Interactions with the data commonly include
+linking (navigation), filtering, pagination, and abstract actions that can affect arbitrary things (e.g. delete this item,
+move that card, zoom that chart).
+. Any generated rendering must be easy to escape, but when used it must also be extensible in four dimensions: data type,
+  data style, visual appearance, and platform.
+** Data type: If you extend the data model with a new type, you can also extend the rendering system to support it.
+** Data style: A single type (e.g. decimal) may represent different visual things: USD, percentage, etc.
+** Visual appearance: Beyond simple data style: a report might need to be a chart, or you may simply want to take
+fine-grained control of rendering.
+** Platform: Assuming you're having RAD generate UI, it should be possible to specify the platform (e.g. Mobile vs Web).
+This allows RAD to stand up apps with different targets with minimal changes to your application code.
 
 == Usage
+
+At the moment your best bet for understanding usage is to look at the https://github.com/fulcrologic/fulcro-rad-demo[RAD Demo project].
 
 image:https://img.shields.io/clojars/v/com.fulcrologic/fulcro-rad.svg[link=https://clojars.org/com.fulcrologic/fulcro-rad]
 
@@ -17,10 +64,11 @@ image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master.svg?style=svg["
 The RAD project has ambitious goals, but only one primary contributor who is very busy.
 
 Documentation is currently available in the docstrings of the namespaces (most up-to-date), and you can refer to the
-https://github.com/fulcrologic/fulcro-rad-demo[Fulcro RAD Demo] project (status varies).
+https://github.com/fulcrologic/fulcro-rad-demo[Fulcro RAD Demo] project (status varies, but is an accurate representation
+of what is working).
 There is a (likely inaccurate and out of date) start on a book at http://book.fulcrologic.com/RAD.html.
 
-Unpaid questions or requests cannot be supported at this time.
+Unpaid questions, issue reports, or requests cannot be supported at this time.
 
 Paid support for RAD and related libraries is available from http://www.fulcrologic.com[Fulcrologic, LLC].
 You may ask questions on the #fulcro channel of http://clojurians.net/[Clojurians Slack].

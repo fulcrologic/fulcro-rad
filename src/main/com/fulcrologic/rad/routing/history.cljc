@@ -10,7 +10,6 @@
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.type-support.cache-a-bools :as cb]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.authorization :as auth]
@@ -22,7 +21,7 @@
    current top of the stack.
 
    A history implementation *may* be hooked to some external source of events (i.e. browser back/forward buttons, phone
-   native navigation). These events (e.g. HTML5 popstate events) are only expected when there is an *external* change
+   native navigation). These events (e.g. like HTML5 popstate events) are only expected when there is an *external* change
    to the route that your application did not initiate with its own API (not that A tags in HTML with URIs will cause
    these events, since it is the browser, not your app, that is technically initiating the change). Such an implementation
    *must* honor the add/remove calls to hook up a listener to these external events.
@@ -34,7 +33,7 @@
   (-undo! [history new-route params]
     "Attempt to undo the given (last) change to history that was reported to listeners. `new-route` and `params` are the
      parameters that were passed to the listener. This can only be done once,
-     and will fail silently if no such notification just happened.")
+     and will fail silently if no such notification just happened (or isn't possible).")
   (-add-route-listener! [history listener-key f]
     "Add the callback `f` to the list of listeners. That listener will be known as `listener-key`. You should namespace that key to prevent conflicts.")
   (-remove-route-listener! [history listener-key] "Remove the listener named `listener-key`.")
@@ -72,9 +71,7 @@
   (swap! (::app/runtime-atom app) assoc ::history history)
   (add-route-listener! app ::rad-route-control
     (fn [route params]
-      (if (and
-            (dr/can-change-route? app)
-            (cb/as-boolean (auth/can? app (auth/Execute `com.fulcrologic.rad.routing/route-to! {:path route}))))
+      (if (dr/can-change-route? app)
         (dr/change-route! app route params)
         (do
           (log/warn "Browser routing event was denied.")
