@@ -72,6 +72,8 @@
    {:route [\"path\" \"segment\"]
     :params {:param value}}
    ```
+
+   You can save this value and later use it with `apply-route!`.
   "
   []
   #?(:cljs
@@ -143,14 +145,26 @@
        (catch :default e
          (log/error e "Unable to create HTML5 history.")))))
 
+(defn apply-route!
+  "Apply the given route and params to the URL and routing system. `saved-route` is in the format of
+   the return value of `url->route`. Returns true if it is able to route there."
+  [app {:keys [route params] :as saved-route}]
+  (if-let [target (dr/resolve-target app route)]
+    (do
+      (routing/route-to! app target params)
+      true)
+    (do
+      (log/error "Saved route did not resolve to a UI target" saved-route)
+      false)))
+
 (defn restore-route!
   "Attempt to restore the route given in the URL. If that fails, simply route to the default given (a class and map).
 
    WARNING: This should not be called until the HTML5 history is installed in your app."
   [app default-page default-params]
-  (let [this (history/active-history app)
-        {:keys [route params]} (url->route)]
-    (if (and this (seq route))
-      (let [target (dr/resolve-target app route)]
-        (routing/route-to! app target params))
+  (let [this      (history/active-history app)
+        url-route (url->route)]
+    (if (and this (seq (:route url-route)))
+      (when-not (apply-route! app url-route)
+        (routing/route-to! app default-page default-params))
       (routing/route-to! app default-page default-params))))

@@ -26,14 +26,19 @@
 (defn route-to!
   "Change the UI to display the route to the specified class, with the additional parameter map as route params. If
   route history is installed, then it will be notified of the change. This function is also integrated into the RAD
-  authorization system."
+  authorization system.
+
+  You may include `::rad-routing/replace-route? true` in route-params as a hint to the history that you'd prefer to
+  replace the top history element instead of pushing a new one."
   [app-or-component RouteTarget route-params]
   (if-let [path (absolute-path app-or-component RouteTarget route-params)]
     (do
       (when-not (every? string? path)
         (log/warn "Insufficient route parameters passed. Resulting route is probably invalid."
           (comp/component-name RouteTarget) route-params))
-      (history/push-route! app-or-component path route-params)
+      (if (::replace-route? route-params)
+        (history/replace-route! app-or-component path route-params)
+        (history/push-route! app-or-component path route-params))
       (dr/change-route! app-or-component path route-params))
     (log/error "Cannot find path for" (comp/component-name RouteTarget))))
 
