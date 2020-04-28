@@ -18,7 +18,6 @@
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [edn-query-language.core :as eql]
-    [com.fulcrologic.rad.type-support.decimal :as math]
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad :as rad]
@@ -520,34 +519,21 @@
       {:edit-form cls
        :entity-id (get row-props id-key)})))
 
-;; TASK: More default type formatters
-(defn inst->human-readable-date
-  "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string."
-  ([inst]
-   #?(:cljs
-      (when (inst? inst)
-        (.toLocaleDateString ^js inst js/undefined #js {:weekday "short" :year "numeric" :month "short" :day "numeric"})))))
-
-(defn format-column [v]
-  (cond
-    (string? v) v
-    (inst? v) (str (inst->human-readable-date v))
-    (math/numeric? v) (math/numeric->str v)
-    :else (str v)))
-
 (defn formatted-column-value
   "Given a report instance, a row of props, and a column attribute for that report:
    returns the formatted value of that column using the field formatter(s) defined
    on the column attribute or report. If no formatter is provided a default formatter
    will be used."
-  [report-instance row-props {::keys      [field-formatter]
+  [report-instance row-props {::keys      [field-formatter type]
                               ::attr/keys [qualified-key] :as column-attribute}]
   (let [value                  (get row-props qualified-key)
         report-field-formatter (comp/component-options report-instance ::field-formatters qualified-key)
+        {::app/keys [runtime-atom]} (comp/any->app report-instance)
+        default-formatter      (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->formatter type)
         formatted-value        (or
                                  (?! report-field-formatter report-instance value)
                                  (?! field-formatter report-instance value)
-                                 (format-column value)
+                                 (?! default-formatter report-instance value)
                                  (str value))]
     formatted-value))
 
