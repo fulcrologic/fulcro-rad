@@ -516,20 +516,20 @@
       {:edit-form cls
        :entity-id (get row-props id-key)})))
 
-;; TASK: More default type formatters
 (defn inst->human-readable-date
   "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string."
-  ([inst]
-   #?(:cljs
-      (when (inst? inst)
-        (.toLocaleDateString ^js inst js/undefined #js {:weekday "short" :year "numeric" :month "short" :day "numeric"})))))
+  [inst]
+  #?(:cljs
+     (when (inst? inst)
+       (.toLocaleDateString ^js inst js/undefined #js {:weekday "short" :year "numeric" :month "short" :day "numeric"}))
+     :clj (str inst)))
 
-(defn format-column [v]
-  (cond
-    (string? v) v
-    (inst? v) (str (inst->human-readable-date v))
-    (math/numeric? v) (math/numeric->str v)
-    :else (str v)))
+(def default-type->formatter
+  {:string  (fn [report-instance value] value)
+   :instant (fn [report-instance value] (inst->human-readable-date value))
+   :int     (fn [report-instance value] (math/numeric->str value))
+   :decimal (fn [report-instance value] (math/numeric->str value))
+   :boolean (fn [report-instance value] (if value "true" "false"))})
 
 (defn formatted-column-value
   "Given a report instance, a row of props, and a column attribute for that report:
@@ -537,15 +537,30 @@
    on the column attribute or report. If no formatter is provided a default formatter
    will be used."
   [report-instance row-props {::keys      [field-formatter]
-                              ::attr/keys [qualified-key] :as column-attribute}]
+                              ::attr/keys [qualified-key type] :as column-attribute}]
   (let [value                  (get row-props qualified-key)
         report-field-formatter (comp/component-options report-instance ::field-formatters qualified-key)
+        {::app/keys [runtime-atom]} (comp/any->app report-instance)
+        default-formatter      (or (some-> runtime-atom deref ::type->formatter type)
+                                   (default-type->formatter type))
         formatted-value        (or
                                  (?! report-field-formatter report-instance value)
                                  (?! field-formatter report-instance value)
-                                 (format-column value)
+                                 (?! default-formatter report-instance value)
                                  (str value))]
     formatted-value))
+
+(defn install-formatter!
+  "Override the default value formatter for the given type.
+  This should be called before mounting your app.
+
+  Ex.:
+  ```clojure
+  (install-formatter! app :boolean (fn [report-instance value] (if value \"yes\" \"no\")))
+  ```"
+  [app type fn]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc-in [::type->formatter type] fn)))
 
 (defn current-rows
   "Get a vector of the current rows that should be shown by the renderer (sorted/paginated/filtered). `report-instance`
