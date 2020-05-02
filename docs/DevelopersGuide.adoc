@@ -145,7 +145,7 @@ RAD defines a few central component types, with the following generalized meanin
 * Forms: A form is a (potentially recursive) UI element that loads data from any number of sources, keeps track
 of changes to that data over time (including validating it), and allows the user to save/undo their work as a unit. Note
 that a form *need not* use traditional inputs. The main purpose of a form is to load/manage a cluster of persistent data
-over a fixed time period (typically while on screen). A kanban board *could* be considered a form.
+over a fixed time period (typically while on screen).
 
 * Forms:
 ** Obtain data from source(s) for the primary purpose of editing that data.
@@ -184,9 +184,8 @@ can behave very much like a form.
 
 == Required Dependencies
 
-Your database adapter may require that you add additional dependencies to your project. RAD is tuned to work
-best with the `shadow-cljs` build tool. It requires that you add the following js dependencies to your
-`package.json` when working with `shadow-cljs`:
+See the README files on the various libraries and plugins you use for the correct set of dependencies. The
+core library supplies CLJC code that requires at least:
 
 [source, json]
 ----
@@ -196,17 +195,12 @@ best with the `shadow-cljs` build tool. It requires that you add the following j
     "js-joda": "1.11.0",
     "js-joda-timezone": "2.1.1",
     "@js-joda/locale_en-us": "2.0.1",
-    "react": "^16.12.0",
-    "react-dom": "^16.12.0",
-    "semantic-ui-react": "^0.88.2",
-    "shadow-cljs": "2.8.83"
+    "react": "^16.12.0"
   }
 }
 ----
 
-Many of these will *not* impact your build size unless you use the features they provide. For example, if you do
-not use the UI the semantic UI controls for the web, then semantic-ui-react will not be included. This is a normal
-feature of the CLJS and shadow-cljs build tools.
+If you target the web, then you'll also need `react-dom` and any other UI libraries it might use, etc.
 
 == Attribute-Centric
 
@@ -232,7 +226,7 @@ A minimal attribute will look something like this:
 
 (defattr id :item/id :uuid 
   {::attr/identity? true 
-   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+   ::attr/schema :production})
 ----
 
 The `defattr` macro really just assigns a plain map to the provided symbol (`id` in this case), but it also ensures that
@@ -243,13 +237,40 @@ you've provided a name for the attribute (`:item/id` in this case), and a type. 
 (def id {::attr/qualified-key :item/id 
          ::attr/type :uuid 
          ::attr/identity? true 
-         :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+         ::attr/schema :production})
 ----
 
 The various plugins and facilities of RAD define keys that allow you to describe how your new data attribute should
 behave in the system.  In the example above the `identity?` marker indicates that the attribute identifies groups of
 other facts (is a primary key for data), and the datomic-namespaced `schema` is used by the Datomic database plugin to
 indicate the schema that the attribute should be associated with.
+
+=== Attribute Options – Documentation and Autocomplete
+
+The standard in RAD is for libraries to define an `*-options` namespace that defines vars for each configurable
+key that they support. This allows these vars to be used instead of raw keywords, leading to much easier development.
+
+For example, the `attributes` namespace defines `attributes-options`. This namespace includes all of the legal keys
+that RAD *itself* defines that can be placed in an attribute's map. The `form` namespace defines `form-options`, etc.
+
+This allows you to write an attribute like so:
+
+[source]
+-----
+(ns com.example.model.item (:require
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.attributes :refer [defattr]]))
+
+(defattr id :item/id :uuid
+  {ao/identity? true
+   ao/schema :production})
+-----
+
+which helps you ensure that you're using a key that has *not* been mis-typed, and also gives you docstring access
+in your IDE.
+
+Most of the useful documentation in RAD and libraries should generally be concentrated into these options namespace
+to assist in ease of use.
 
 === Extensibility
 
@@ -274,19 +295,35 @@ with this aspect of RAD.
 === Resolvers
 
 Resolvers are part of the pathom library.  Resolvers figure out how to get from a context to data that is needed by the
-client.  Attributes describe the data model, so storage plugins can usually generate resolvers and provide a base EQL
-API for your data model.  All you have to do is hook it into your server's middleware.
+client.  Attributes describe the data model, so storage plugins can _usually_ generate resolvers (if your schema conforms
+to something it can understand) and provide a base EQL API for your data model.  All you have to do is hook it into
+your server's middleware.
 
 === Security
 
 Statements about security can also be co-located on attributes, which means that RAD can generate protections around
-your data model.
+your data model. RAD does *not* pre-supply a security model at this time, since something that is fully generalized
+would have the scope of something like AWS IAM, and is simply more open source work than we can afford to provide.
+
+That said, most application can implement something quite a bit more narrow in scope: is the user authenticated, and
+do they "own" the thing they are trying to read/write.  Most systems write these rules around the network operations. In
+RAD the vast majority of your saves will go through the save middleware, meaning you can concentrate your rules and
+logic there.
+
+For reads: Resolvers are the unit of readable data in RAD, and you can often place security in the Pathom parser as
+a plugin.
+
+If you want some guidance on implementing security in RAD, please contact Fulcrologic, LLC for paid
+help crafting a solution that meets you needs.
 
 == Forms
 
-Many features of web applications can be classified as some kind of form.  For our purposes a form is a UI for a group
-of attributes that are persisted in a long-term storage.  A form could be anything from a simple set of input fields to
-a kanban board.  Most applications have the need to generate quite a few simple forms around the base data model in
+Many features of web applications can be classified as some kind of form.  For our purposes a form is
+any screen where a tree of data is loaded and saved "together", and where validation and free-form inputs are
+common.
+A form could be anything from a simple set of input fields to
+a kanban board (which could also be considered a report with actions).  Most applications have the need to generate
+quite a few simple forms around the base data model in
 order to do customer support and general data administration.  Simple forms are also a common feature in user-facing
 content.
 
@@ -297,17 +334,26 @@ Forms in RAD are a mechanism around reading and writing specific sub-graphs of y
 
 == Reports
 
-Reports are similar to forms, but are not about writing anything in the data model: they are about pulling data from
-your data model.  They may include derived data, aggregations, etc.
+A Report is any screen where the data contains a mix of read-only, derived, and aggregate data. This data may be
+organized in many ways (graphically, in columns, in rows, as a kanban board). Interactions with the data commonly include
+linking (navigation), filtering, groupings, pagination, and abstract actions that can affect arbitrary things (e.g. delete this item,
+move that card, zoom that chart).
 
-You typical report will have:
+Reports are about pulling data from your data model so that the user can view or interact with it in some way.
+
+The primary difference between a form and a report is that: on a form, the majority of the data has an existence in
+a persistent store that is (roughly) a one-to-one correlation with a control on screen and a fact in a database.
+Reports, on the other hand, may include derived data, aggregations, etc. Interactions with a report that result in
+changes on the server must be encoded as more abstract operations.
+
+The most common report we think of a simple list or table of values that has:
 
 * Input Parameters
 * A query for the results
 * A UI, often tabular.
 
-Most reports are generated by adding additional pathom resolvers to your model, so that you can simply query for the
-various facets that your report needs.
+In RAD reports are generated by adding additional "virtual attributes" to your model that have hand-written
+Pathom resolvers.
 
 Report plugins should be able to provide just about anything you can imagine in the context of a report, such as:
 
@@ -324,6 +370,20 @@ to do the specific rendering for the report when no plugin exists that works for
 Fulcro works quite well on the web, in React Native, and in Electron.  Notice that the core of RAD is built around
 auto-generation of UI, meaning that many features of RAD will work equally well in any of these settings.
 
+It is our hope that the community will build libraries of UI controls for these various platforms so that the same
+core RAD source could be used to generate applications on any of these targets with no need to manually write UI
+code.  That said, RAD will already work on any of these targets with no modification: you'll just have to write
+the UI bodies of the forms/reports yourself. This still gives you a *lot* of pre-written support for:
+
+* Your database model
+* Loading/saving/controlling form data
+* Loading/manipulating report data.
+
+In fact, as your application grows it is *our expectation and design* that you almost take over much of detailed code
+in your application. It is *not* the intention of RAD to do everything in your final production application. The point
+of RAD is to make it possible to rapidly stand up your application, and then gradually take over the parts that
+make sense while not having to worry over a bunch of boilerplate.
+
 = Attributes  [[Attributes]]
 
 The recommended setup of attributes is as follows:
@@ -337,6 +397,8 @@ certainly exist, but you should not constrain your thinking about them.
 `com.yourcompany.model.account`. Use CLJC!
 * At the end of each file include a `def` for `attributes` and `resolvers`. Each should be a vector containing
 all of the attributes and Pathom resolvers defined in that file.
+** Resolvers should generally be `mutations`.  Use attributes with co-located resolver logic for reads so that
+   you can treat them like normal attributes everywhere.
 * Create a central model namespace that has all attributes. I.e. `com/yourcompany/model.cljc` containing
 a `def` for `all-attributes`.
 
@@ -364,13 +426,15 @@ The first thing you'll typically create will be namespaces like this:
 -----
 (ns com.example.model.account
   (:require
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.attributes :refer [defattr]]))
 
 (defattr id :account/id :uuid
-  {::attr/identity? true})
+  {ao/identity? true})
 
 (defattr name :account/name :string
-  {::attr/required? true})
+  {ao/required? true
+   ao/identities #{:account/id}})
 
 (def attributes [id name])
 (def resolvers [])
@@ -383,30 +447,32 @@ collection for use in APIs that need to know them all.
 == Identity Attributes
 
 Each type of entity/table/document in your database will need a primary key.  Each attribute that you
-define that acts as a primary key will serve as a way to contextually find attributes that indicate
-they can be found via that key.  This is very similar to what you're used to in typical databases where
+define that acts as a primary key will serve as a way to contextually find attributes *that indicate
+they can be found via that key*.  This is very similar to what you're used to in typical databases where
 a primary key gives you, say, a row.  RAD's data model does not constrain an attribute to live in just
 one place, as you'll see in a moment.
 
-The `::attr/identity?` boolean marker on an attribute marks it as a "primary key" (really that it is
+The `ao/identity?` boolean marker on an attribute marks it as a "primary key" (really that it is
 a key by which a distinct entity/row/document can be found).
 
 [source]
 -----
 (ns com.example.model.account
   (:require
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]))
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.attributes :refer [defattr]))
 
 (defattr id :account/id :uuid
-  {::attr/identity?                                      true})
+  {ao/identity? true})
 -----
 
-== Computed Attributes (may be renamed...)
+== Data Types
 
-An attribute can be marked as `::attr/computed? true`, indicating that it is purely a UI concern that is computed from
-other values at render time. Such an attribute needs to be declared for form rendering, but this marker indicates that
-the attribute should not participate in any other I/O. That is to say that it will be rendered as read-only, and
-will not be included in form validation, queries, or saves.
+The data types in RAD are not constrained by RAD itself, though only a limited number of them are supplied by
+database adapter and UI libraries. Extending the type system simply requires that you make a name for your type, and
+then supply logic to handle that type at various layers.
+
+TODO: A chapter on adding a data type.
 
 == Scalar Attributes
 
@@ -424,56 +490,48 @@ A RAD attribute to store a string might look like this:
 
 but such an attribute only be usable if you hand-generate resolvers on your server that can obtain
 the value, and can store it based on the ID you give a form.  So, such an attribute isn't useless,
-but it is made much more powerful when you add data for other plugins.
+but it is made much more powerful when you add information for other plugins.
 
 == Attribute Clusters (Entities/Tables/Documents)
 
-RAD itself does not define how attributes cluster together (in tables/documents/entities), since that
-is database-specific. For example, Datomic uses entities that have a single `:db/id` attribute, but
-users often use a domain-specific UUID attribute to obtain certain modelling advantages.
+RAD recognizes that different storage technologies group facts together in different ways.
+(in tables/documents/entities). The common theme that RAD tries to unify is the idea that
+a particular fact is reachable through either itself (i.e. it is itself a primary key of things), or
+via some identifying information.
 
-So, plugins like database adapters will have you add data to an attribute that informs it of your intended
-(or existing) database organization. This allows the database adapter to figure out how to do things like
-generate query resolvers, generate save logic for forms, check schema conformance, autogenerate schema, etc.
-
-Here is how the Datomic database adapter would have you define things to cluster "account" attributes
-into an account entity:
+Now, since we recognize something like a `:password/hashed-value` might live on multiple *kinds* of things
+in your database, the generalization is to simply tell RAD *which identities* can be used to reach that kind
+of fact:
 
 [source]
 -----
-(ns com.example.model.account
-  (:refer-clojure :exclude [name])
-  (:require
-    #?@(:clj
-        [[com.wsscode.pathom.connect :as pc :refer [defmutation]]
-         [com.example.model.authorization :as exauth]
-         [com.example.components.database-queries :as queries]]
-        :cljs
-        [[com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]])
-    [clojure.string :as str]
-    [com.wsscode.pathom.connect :as pc]
-    [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
-    [com.fulcrologic.rad.authorization :as auth]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.rad.type-support.date-time :as datetime]))
-
 (defattr id :account/id :uuid
-  {::attr/identity?                                      true})
+  {ao/identity? true})
 
 (defattr name :account/name :string
-  {:com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:account/id}
-   ::attr/required?                                          true})
+  {ao/required? true
+   ao/identities #{:account/id}})
+
+(defattr name :account/email :string
+  {ao/required? true
+   ao/identities #{:account/id}})
+
+;; Account, files, and SFTP endpoints have passwords
+(defattr password-hash :password/hash :string
+  {ao/required? true
+   ao/identities #{:account/id :file/id :sftp-endpoint/id}})
 -----
 
-In this case the Datomic adapter defines a plugin-namespaced key (`entity-ids`) which takes a set of "primary keys" that
-can be used to find an attribute. This has the effect of "placing" `:account/name` on entities that can be found by
-`:account/id`.  Note that this allows an attribute to exist on any number of entity "types", which is in alignment
-with the flexible nature of Datomic.
+This simple generalization leads to a lot of potential in libraries.
 
-A document database like Firebase might do a similar thing, but a more stringent schema-based system like SQL might
-lead you more towards declaring things that map to well-known tables (through RAD can easily adapt such systems
-into a more flexible attribute model).
+An SQL database could use this to know it should add `:password/hash` to the `ACCOUNT`, `FILE`, and `SFTP_ENDPOINT` tables,
+while any database driver can know to generate resolvers that can find `:password/hash` if supplied
+with an `:account/id`, `:file/id`, or `:sftp-endpoint/id`; and that `:account/email` is easily reachable if an `:account/id`
+is known.
+
+Remember that our graph resolver (Pathom) is also intelligent about "connecting the dots". Thus, if there is some bit
+of information known (i.e. an SFTP hostname) that can be used to resolve an `:sftp-endpoint/id`, then the network API
+*will automatically be able to derive* that `:sftp-endpoint/hostname` can be used to find a `:password/hash`.
 
 == Referential Attributes
 
@@ -483,8 +541,16 @@ to "flex" the shape of your data model at runtime through custom resolvers (i.e.
 views of your data that have alternate shapes from the way the data is stored).  Therefore the reference declarations
 in RAD can define a concrete (i.e. represented in storage) or virtual link.
 
-If an attribute represents a concrete link in storage then it will include database adapter-specific entries that
-define that linkage. If an attribute represents a virtual link it will typically include a lambda (resolver) that
+When an attribute is declared with type `:ref` and it represents a concrete link in storage then it will
+include database adapter-specific entries that
+define the reification of that linkage (e.g. does it hold an ID of a foreign table/document/entity, does it use
+a join table, is it a back reference from a foreign table, or is it simply a nested map in a document?).
+
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+TASK: Continue updating docs. Out of date below here.
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+If an attribute represents a virtual link it will typically include a lambda (resolver) that
 runs the appropriate logic to "invent" that linkage. For example, your customers might have multiple addresses,
 and you might want a virtual reference to the address you've most often shipped items to.  You can easily
 assign that a name like `:customer/most-likely-address`, but you'll most likely need to run a query of order history

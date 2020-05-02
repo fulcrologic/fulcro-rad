@@ -384,16 +384,12 @@
    (defmacro defsc-report
      "Define a report. Just like defsc, but you do not specify query/ident/etc.
 
-     Instead:
+     Instead, use report-options (aliased as ro below):
 
-     ::report/BodyItem FulcroClass?
-     ::report/columns (every? attribute? :kind vector?)
-     ::report/column-key attribute?
-     ::report/source-attribute keyword?
-     ::report/route string?
-     ::report/parameters (map-of ui-keyword? rad-data-type?)
-
-     NOTE: Parameters MUST have a `ui` namespace, like `:ui/show-inactive?`.
+     ro/columns
+     ro/route
+     ro/row-pk
+     ro/source-attribute
 
      If you elide the body, one will be generated for you.
      "
@@ -615,3 +611,27 @@
                     ::attr/keys [qualified-key] :as attr}]
   (let [rpt-column-class (comp/component-options report-instance ::column-classes qualified-key)]
     (or rpt-column-class column-class)))
+
+(comment
+
+  (let [data         [{:category "Gross Receipts" :subcategory "Merchandise" :amount 99.33M}
+                      {:category "Gross Receipts" :subcategory "Services" :amount 19.99M}
+                      {:category "Gross Receipts" :subcategory "Returns" :amount -10.00M}
+                      {:category "Gross Receipts" :subcategory "Tax" :amount 9.11M}
+                      {:category "Net Sales" :subcategory "Merchandise" :amount 99.33M}
+                      {:category "Net Sales" :subcategory "Services" :amount 19.99M}
+                      {:category "Net Sales" :subcategory "Returns" :amount -10.00M}]
+        grouped-data (group-by :category data)
+        group-rows   (reduce-kv
+                       (fn [m group-label rows]
+                         (conj m {:aggregate-row [group-label (reduce (fn [result {:keys [amount]}] (+ result amount)) 0 rows)]
+                                  :rows          rows}))
+                       []
+                       grouped-data)]
+    group-rows)
+
+  ;; TODO: Report that supports defining custom derived named values (in :ui/cache) along with a function over the report
+  ;; data that can generate those values. Then, a simple layout declaration that can be used to add a table that
+  ;; displays the given values nicely.
+
+  )

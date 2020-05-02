@@ -247,3 +247,4 @@
 
   Rendering plugins may or may not allow non-string return values from the function version."
   :com.fulcrologic.rad.report/column-heading)
+
