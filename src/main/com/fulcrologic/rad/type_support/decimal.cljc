@@ -93,18 +93,22 @@
   [any? => boolean?]
   (not (positive? v)))
 
-(defn numeric->currency-str [n]
-  #?(:clj
-     (.format (NumberFormat/getCurrencyInstance (Locale. "en" "US")) (numeric n))
-     :cljs
-     (when n
-       (let [n         (js/parseFloat (numeric->str (numeric n)))
-             negative? (neg? n)
-             n         (if negative? (clojure.core/* -1 n) n)
-             result    (.toLocaleString n "en-US" #js {:style "currency" :currency "USD"})]
-         (if negative?
-           (str "-" result)
-           result)))))
+(defn numeric->currency-str
+  "Convert a numeric into a locale-specific currency string. The defaults are `en`, `US`, and `USD`."
+  ([n]
+   (numeric->currency-str n "en" "US" "USD"))
+  ([n language country currency-code]
+   #?(:clj
+      (.format (NumberFormat/getCurrencyInstance (Locale. language country)) (numeric n))
+      :cljs
+      (when n
+        (let [n         (js/parseFloat (numeric->str (numeric n)))
+              negative? (neg? n)
+              n         (if negative? (clojure.core/* -1 n) n)
+              result    (.toLocaleString n (str language "-" country) #js {:style "currency" :currency currency-code})]
+          (if negative?
+            (str "-" result)
+            result))))))
 
 (defn numeric->percent-str [n]
   #?(:clj

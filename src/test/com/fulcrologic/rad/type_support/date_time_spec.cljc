@@ -3,6 +3,7 @@
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [cljc.java-time.instant]
     [cljc.java-time.local-date :as ld]
+    [cljc.java-time.format.date-time-formatter :as dtf]
     [fulcro-spec.core :refer [assertions specification behavior]]
     #?@(:clj  []
         :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
@@ -52,7 +53,7 @@
       (dt/html-datetime-string->inst "America/Los_Angeles" "2019-04-01T11:30") => la-1130)))
 
 (specification "inst->local-datetime"
-  (let [tm (datetime/new-date (instant/to-epoch-milli (cljc.java-time.instant/parse "2019-03-05T12:00:00Z")))
+  (let [tm          (datetime/new-date (instant/to-epoch-milli (cljc.java-time.instant/parse "2019-03-05T12:00:00Z")))
         expected-LA (cljc.java-time.local-date-time/of 2019 3 5 4 0 0)
         expected-NY (cljc.java-time.local-date-time/of 2019 3 5 7 0 0)]
     (assertions
@@ -69,3 +70,22 @@
     (assertions
       "and can be overridden with binding"
       (str datetime/*current-timezone*) => "America/Los_Angeles")))
+
+(specification "inst->human-readable-date"
+  (behavior "formats dates based on the currently-set time zone"
+    (let [tm #inst "2020-03-04T06:00:00Z"]
+      (datetime/set-timezone! "UTC")
+      (assertions
+        "UTC"
+        (datetime/inst->human-readable-date tm) => "Wed, Mar 4, 2020")
+      (datetime/set-timezone! "America/New_York")
+      (assertions
+        "NY"
+        (datetime/inst->human-readable-date tm) => "Wed, Mar 4, 2020")
+      (datetime/set-timezone! "America/Los_Angeles")
+      (assertions
+        "LA"
+        (datetime/inst->human-readable-date tm) => "Tue, Mar 3, 2020"))))
+
+(comment
+  (dtf/format (dtf/of-pattern "HH:mm") (dt/now)))

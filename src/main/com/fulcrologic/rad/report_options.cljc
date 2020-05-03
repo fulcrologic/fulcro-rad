@@ -21,8 +21,35 @@
 
 (def columns
   "A vector of *attributes* that describe the columns of the report (when tabular). In non-tabular reports this
-  is still needed, but the renderer can choose to use the per-row data however it wants (points on a graph, etc)."
+  is still needed, but the renderer can choose to use the per-row data however it wants (points on a graph, etc).
+
+  The columns are treated as the authoritative definition of the attributes, meaning that you can assoc things like
+  `at/style` on a column to override something like style."
   :com.fulcrologic.rad.report/columns)
+
+(def column-styles
+  "A map from column (qualified keyword) to a formatter style, which is either a keyword or a
+   `(fn [report-instance] keyword)`. Chooses an alternate rendering style for the column (if supported by
+   installed formatters).
+
+   Columns are formatted by `field-formatters`. You can manually set a field formatter using
+   `ro/field-formatter` or `ro/field-formatters`. If you do *not* set the formatter, then a formatter
+   will be selected from an installed set of predefined formatters, which are organized by
+   data type and style.
+
+   This option allows you to pick among the pre-installed (via `report/install-formatter!`)
+   formatters without having to define your own. The style of control selected will
+   depend on:
+
+   * This option.
+   * The `ao/style` set on the attribute of the column.
+   * A default value of `:default`.
+
+   WARNING: This option is ignored if the column has an explicit `field-formatter`.
+
+   See `report/install-formatter!`.
+   See also `field-formatter` and `field-formatters`."
+  :com.fulcrologic.rad.report/column-styles)
 
 (def source-attribute
   "A *qualified keyword* that will be used as the entry-point key for the query. The data source server must
@@ -66,7 +93,7 @@
 
    A global default can be specified with `::report/field-formatter` on the attribute, which is just a `fn` (not a map).
 
-   See also `link`, `form-links`, `row-query-inclusion`, and `field-formatter`.
+   See also `column-styles`, `attr/style`, `link`, `form-links`, `row-query-inclusion`, and `field-formatter`.
    "
   :com.fulcrologic.rad.report/field-formatters)
 
