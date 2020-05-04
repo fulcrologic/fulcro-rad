@@ -77,20 +77,25 @@
   :com.fulcrologic.rad.form/fields-visible?)
 
 (def field-style
-  "ATTRIBUTE KEY. OPTIONAL: A *qualified keyword*
+  "ATTRIBUTE KEY. OPTIONAL: A *keyword* (or `(fn [form-instance] kw)`)
    that changes the style of the control that is rendered for the given field. If not found, the renderer will
-   revert to `:default`.
+   revert to `:default`. If the attribute has a `::attr/style` then that will be attempted as a backup to this
+   option.
 
    Forms can override this with `::form/field-styles`."
   :com.fulcrologic.rad.form/field-style)
 
 (def field-styles
-  "OPTIONAL: A map from *qualified keyword* to pick an input style (keyword defined by your rendering plugin).
+  "OPTIONAL: A map from *qualified keyword* of the attribute to the *style* (a keyword) desired for the renderer of that
+  attribute (a keyword defined by your rendering plugin).
+
+  The values in this map can be `(fn [form-instance] keyword)`.
 
    Changes the style of the control that is rendered for the given field. If not found, the renderer will
    revert to `:default`.
 
-   Attributes can set a default for this with ::form/field-style.
+   Attributes can set a default for this with ::form/field-style, and an attribute's `ao/style` will be treated as
+   a last resort place to find a style.
 
    See also `field-options`."
   :com.fulcrologic.rad.form/field-styles)

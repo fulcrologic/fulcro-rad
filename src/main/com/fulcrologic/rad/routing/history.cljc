@@ -65,17 +65,25 @@
 (declare add-route-listener! undo!)
 
 (>defn install-route-history!
-  "Installs an implementation of RouteHistory onto the given Fulcro app."
-  [app history]
-  [(s/keys :req [::app/runtime-atom]) ::RouteHistory => any?]
-  (swap! (::app/runtime-atom app) assoc ::history history)
-  (add-route-listener! app ::rad-route-control
-    (fn [route params]
-      (if (dr/can-change-route? app)
-        (dr/change-route! app route params)
-        (do
-          (log/warn "Browser routing event was denied.")
-          (undo! app route params))))))
+  "Installs an implementation of RouteHistory onto the given Fulcro app.
+
+  `route-predicate` is an optional `(fn [app route params])` that should return true
+  if the route change is allowed, and false otherwise. The default value is
+  `(fn [app _ _] (dr/can-change-route? app))`."
+  ([app history route-predicate]
+   [(s/keys :req [::app/runtime-atom]) ::RouteHistory fn? => any?]
+   (swap! (::app/runtime-atom app) assoc ::history history)
+   (add-route-listener! app ::rad-route-control
+     (fn [route params]
+       (if (route-predicate app route params)
+         (dr/change-route! app route params)
+         (do
+           (log/warn "Browser routing event was denied.")
+           (undo! app route params))))))
+  ([app history]
+   [(s/keys :req [::app/runtime-atom]) ::RouteHistory => any?]
+   (install-route-history! app history (fn [app _ _]
+                                         (dr/can-change-route? app)))))
 
 (>defn push-route!
   "Push the given route onto the route history (if history is installed)."

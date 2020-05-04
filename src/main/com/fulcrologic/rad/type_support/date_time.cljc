@@ -6,25 +6,30 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
     [clojure.spec.alpha :as s]
+    [com.fulcrologic.rad.locale :as locale]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [cljc.java-time.instant :as instant]
     [cljc.java-time.day-of-week :as java-time.day-of-week]
     [cljc.java-time.local-date-time :as ldt]
     [cljc.java-time.local-date :as ld]
     [cljc.java-time.zoned-date-time :as zdt]
-    cljc.java-time.format.date-time-formatter
+    [cljc.java-time.format.date-time-formatter :as dtf]
     [cljc.java-time.zone-id :as zone-id]
+    [taoensso.timbre :as log]
     [cljc.java-time.month :refer [january february march april may june july august september october
                                   november december]]
     #?@(:clj  []
-        :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
+        :cljs [[goog.object :as gobj]
+               [java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
+               [java.time.format :refer [DateTimeFormatter]]
                [com.fulcrologic.rad.type-support.ten-year-timezone]
                [goog.date.duration :as g-duration]]))
   #?(:clj (:import java.io.Writer
-                   [java.util Date]
+                   [java.util Date Locale]
                    [java.time DayOfWeek Duration Instant LocalDate LocalDateTime LocalTime Month MonthDay
                               OffsetDateTime OffsetTime Period Year YearMonth ZonedDateTime ZoneId ZoneOffset]
                    [java.time.zone ZoneRules]
+                   [java.time.format DateTimeFormatter]
                    [java.time.temporal TemporalAdjusters ChronoField ChronoUnit]
                    [com.cognitect.transit TransitFactory WriteHandler ReadHandler])))
 
@@ -58,11 +63,21 @@
    (defonce ^:dynamic *current-timezone* nil))
 
 #?(:clj
+   (def ^:dynamic *current-zone-name*
+     "The current time zone for all date time operations. Defaults to nil. Should be set using
+     `set-timezone!` in cljs, and should be thread-bound to a processing request using `binding` in CLJ.
+     The value of this var is a java.time.ZoneId, which can be obtained from a string with cljc.time.zone-id/of."
+     nil)
+   :cljs
+   (defonce ^:dynamic *current-zone-name* nil))
+
+#?(:clj
    (defmacro with-timezone
      "Set the (thread-local) \"current time zone\"to the given `zone-name` (a string zone id) for the duration of the rest of the
      `body`. Simply a short-hand for `(binding [*current-timezone* (zone-id/of zone-name)] ...)`."
      [zone-name & body]
-     `(binding [*current-timezone* (zone-id/of ~zone-name)]
+     `(binding [*current-zone-name* ~zone-name
+                *current-timezone*  (zone-id/of ~zone-name)]
         ~@body)))
 
 (>defn set-timezone!
@@ -72,6 +87,8 @@
   CLJ code will do a `(binding [*current-timezone* (z/of user-zone)] ...)`. "
   [zone-name]
   [::zone-name => any?]
+  #?(:cljs    (set! *current-zone-name* zone-name)
+     :default (alter-var-root (var *current-zone-name*) (constantly zone-name)))
   #?(:cljs    (set! *current-timezone* (zone-id/of zone-name))
      :default (alter-var-root (var *current-timezone*) (constantly (zone-id/of zone-name)))))
 
@@ -156,7 +173,7 @@
   ([inst]
    [(s/or :inst inst?
       :instant ::instant) => ::local-date-time]
-   (inst->local-datetime nil inst))
+   (inst->local-datetime *current-zone-name* inst))
   ([zone-name inst]
    [(? ::zone-name) (s/or :inst inst?
                       :instant ::instant) => ::local-date-time]
@@ -193,3 +210,53 @@
        (ldt/format ldt formatter))
      (catch #?(:cljs :default :clj Exception) e
        nil))))
+
+(defn ^DateTimeFormatter formatter
+  "Constructs a DateTimeFormatter out of either a
+  * format string - \"YYYY/mm/DD\" \"YYY HH:MM\" etc.
+  or
+  * formatter name - :iso-instant :iso-local-date etc
+
+  and a Locale, which is optional."
+  ([fmt]
+   (formatter
+     fmt
+     #?(:clj  (Locale/getDefault)
+        :cljs (try
+                (some->
+                  (gobj/get js/JSJodaLocale "Locale")
+                  (gobj/get "US"))
+                (catch js/Error e)))))
+  ([fmt locale]
+   (let [^DateTimeFormatter fmt (cond (instance? DateTimeFormatter fmt) fmt
+                                      (string? fmt) (if (nil? locale)
+                                                      (throw
+                                                        #?(:clj  (Exception. "Locale is nil")
+                                                           :cljs (js/Error. (str "Locale is nil, try adding a require '[tick.locale-en-us]"))))
+                                                      (.. DateTimeFormatter
+                                                        (ofPattern fmt)
+                                                        (withLocale locale))))]
+     fmt)))
+
+(let [get-format (memoize (fn [format locale]
+                            (formatter format locale)))]
+  (defn tformat [format inst]
+    (try
+      (let [ldt       (inst->local-datetime inst)
+            formatter (get-format format (locale/current-locale))]
+        (ldt/format ldt formatter))
+      (catch #?(:clj Exception :cljs :default) e
+        (log/error e)
+        nil))))
+
+(defn inst->human-readable-date
+  "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string.
+
+  Uses locale from `locale/current-locale`."
+  [inst]
+  (tformat "E, MMM d, yyyy" inst))
+
+(comment
+  (set-timezone! "America/New_York")
+  (tformat "HH:mm" (now)))
+

@@ -152,3 +152,15 @@
    of this value should not be allowed.  Enforcement is an optional feature. See you database adapter and rendering
    plugin for details."
   :com.fulcrologic.rad.attributes/read-only?)
+
+(def style
+  "A keyword or `(fn [context] keyword)`, where context will typically be a component instance that is attempting
+   to apply the style.
+
+   Indicates the general style for formatting this particular attribute in forms and reports. Forms
+   and reports include additional more fine-grained options for customizing formatting, but this setting
+   can be used as a hint to all plugins and libraries as to how you'd like the value to be styled.
+
+   Examples that might be defined include `:USD`, `:password`, `:currency`, etc. Support for this attribute
+   will depend on the specific RAD artifact, and may have no effect at all."
+  :com.fulcrologic.rad.attributes/style)

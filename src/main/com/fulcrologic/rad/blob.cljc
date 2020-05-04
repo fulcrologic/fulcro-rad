@@ -295,7 +295,10 @@
        [url-resolver progress-resolver status-resolver])))
 
 #?(:clj
-   (defn wrap-blob-service [handler base-path blob-store]
+   (defn wrap-blob-service
+     "Middleware that can serve a blob-store file at URI `base-path`/SHA from `blob-store`. A query parameter of `filename`
+      should be included in the request so that the user-visible filename is sent as that instead of the SHA."
+     [handler base-path blob-store]
      (fn [{:keys [uri params] :as req}]
        (if (str/starts-with? uri base-path)
          (let [sha      (last (str/split uri #"/"))

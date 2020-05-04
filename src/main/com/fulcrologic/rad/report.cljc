@@ -24,6 +24,7 @@
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.locale :as locale]
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
@@ -373,6 +374,17 @@
            (uism/trigger! app asm-id :event/run)
            (uism/trigger! app asm-id :event/filter)))))))
 
+(defn default-compare-rows
+  [{:keys [sort-by ascending?]} a b]
+  (try
+    (let [av (get a sort-by)
+          bv (get b sort-by)]
+      (if ascending?
+        (compare av bv)
+        (compare bv av)))
+    (catch #?(:clj Exception :cljs :default) _
+      0)))
+
 (defn report-will-enter [app route-params report-class]
   (let [report-ident (comp/get-ident report-class {})]
     (dr/route-deferred report-ident
@@ -384,16 +396,12 @@
    (defmacro defsc-report
      "Define a report. Just like defsc, but you do not specify query/ident/etc.
 
-     Instead:
+     Instead, use report-options (aliased as ro below):
 
-     ::report/BodyItem FulcroClass?
-     ::report/columns (every? attribute? :kind vector?)
-     ::report/column-key attribute?
-     ::report/source-attribute keyword?
-     ::report/route string?
-     ::report/parameters (map-of ui-keyword? rad-data-type?)
-
-     NOTE: Parameters MUST have a `ui` namespace, like `:ui/show-inactive?`.
+     ro/columns
+     ro/route
+     ro/row-pk
+     ro/source-attribute
 
      If you elide the body, one will be generated for you.
      "
@@ -421,7 +429,7 @@
                              [df/marker-table '(quote _)]]
           nspc              (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
           fqkw              (keyword (str nspc) (name sym))
-          options           (assoc options
+          options           (assoc (merge {::compare-rows `default-compare-rows} options)
                               :route-segment (if (vector? route) route [route])
                               :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
                               ::BodyItem ItemClass
@@ -520,36 +528,62 @@
       {:edit-form cls
        :entity-id (get row-props id-key)})))
 
-;; TASK: More default type formatters
-(defn inst->human-readable-date
-  "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string."
-  ([inst]
-   #?(:cljs
-      (when (inst? inst)
-        (.toLocaleDateString ^js inst js/undefined #js {:weekday "short" :year "numeric" :month "short" :day "numeric"})))))
-
-(defn format-column [v]
-  (cond
-    (string? v) v
-    (inst? v) (str (inst->human-readable-date v))
-    (math/numeric? v) (math/numeric->str v)
-    :else (str v)))
+(defn built-in-formatter [type style]
+  (get-in
+    {:string  {:default (fn [_ value] value)}
+     :instant {:default         (fn [_ value] (dt/inst->human-readable-date value))
+               :short-timestamp (fn [_ value] (dt/tformat "MMM d, h:mma" value))
+               :timestamp       (fn [_ value] (dt/tformat "MMM d, yyyy h:mma" value))
+               :date            (fn [_ value] (dt/tformat "MMM d, yyyy" value))
+               :time            (fn [_ value] (dt/tformat "h:mma" value))}
+     :int     {:default (fn [_ value] (math/numeric->str value))}
+     :decimal {:default    (fn [_ value] (math/numeric->str value))
+               :currency   (fn [_ value] (math/numeric->str (math/round value 2)))
+               :percentage (fn [_ value] (math/numeric->percent-str value))
+               :USD        (fn [_ value] (math/numeric->currency-str value))}
+     :boolean {:default (fn [_ value] (if value "true" "false"))}}
+    [type style]))
 
 (defn formatted-column-value
   "Given a report instance, a row of props, and a column attribute for that report:
    returns the formatted value of that column using the field formatter(s) defined
    on the column attribute or report. If no formatter is provided a default formatter
    will be used."
-  [report-instance row-props {::keys      [field-formatter]
-                              ::attr/keys [qualified-key] :as column-attribute}]
+  [report-instance row-props {::keys      [field-formatter column-styles]
+                              ::attr/keys [qualified-key type style] :as column-attribute}]
   (let [value                  (get row-props qualified-key)
         report-field-formatter (comp/component-options report-instance ::field-formatters qualified-key)
-        formatted-value        (or
-                                 (?! report-field-formatter report-instance value)
-                                 (?! field-formatter report-instance value)
-                                 (format-column value)
-                                 (str value))]
+        {::app/keys [runtime-atom]} (comp/any->app report-instance)
+        formatter              (if report-field-formatter
+                                 report-field-formatter
+                                 (let [style                (or
+                                                              (get column-styles qualified-key)
+                                                              style
+                                                              :default)
+                                       installed-formatters (some-> runtime-atom deref ::type->style->formatter)
+                                       formatter            (get-in installed-formatters [type style])]
+                                   (or
+                                     formatter
+                                     (built-in-formatter type style)
+                                     (fn [_ v] (str v)))))
+        formatted-value        (formatter report-instance value)]
     formatted-value))
+
+(defn install-formatter!
+  "Install a formatter for the given data type and style. The data type must match a supported data type
+   of attributes, and the style can either be `:default` or a user-defined keyword the represents the
+   style you want to support. Some common styles have predefined support, such as `:USD` for US Dollars.
+
+   This should be called before mounting your app.
+
+   Ex.:
+
+   ```clojure
+   (install-formatter! app :boolean :default (fn [report-instance value] (if value \"yes\" \"no\")))
+   ```"
+  [app type style formatter]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc-in [::type->style->formatter type style] formatter)))
 
 (defn current-rows
   "Get a vector of the current rows that should be shown by the renderer (sorted/paginated/filtered). `report-instance`
@@ -615,3 +649,28 @@
                     ::attr/keys [qualified-key] :as attr}]
   (let [rpt-column-class (comp/component-options report-instance ::column-classes qualified-key)]
     (or rpt-column-class column-class)))
+
+(comment
+
+  (let [data         [{:category "Gross Receipts" :subcategory "Merchandise" :amount 99.33M}
+                      {:category "Gross Receipts" :subcategory "Services" :amount 19.99M}
+                      {:category "Gross Receipts" :subcategory "Returns" :amount -10.00M}
+                      {:category "Gross Receipts" :subcategory "Tax" :amount 9.11M}
+                      {:category "Net Sales" :subcategory "Merchandise" :amount 99.33M}
+                      {:category "Net Sales" :subcategory "Services" :amount 19.99M}
+                      {:category "Net Sales" :subcategory "Returns" :amount -10.00M}]
+        grouped-data (group-by :category data)
+        group-rows   (reduce-kv
+                       (fn [m group-label rows]
+                         (conj m {:aggregate-row [group-label (reduce (fn [result {:keys [amount]}] (+ result amount)) 0 rows)]
+                                  :rows          rows}))
+                       []
+                       grouped-data)]
+    group-rows)
+
+  ;; TODO: Report that supports defining custom derived named values (in :ui/cache) along with a function over the report
+  ;; data that can generate those values. Then, a simple layout declaration that can be used to add a table that
+  ;; displays the given values nicely.
+
+  )
+

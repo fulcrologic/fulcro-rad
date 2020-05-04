@@ -159,13 +159,15 @@
   has precedence, followed by the form it actually appears on) or
   using ::form/field-style on the attribute itself."
   [{::keys [form-instance master-form]} {::attr/keys [type qualified-key]
-                                         ::keys      [field-style] :as attr}]
+                                         ::keys      [field-style style] :as attr}]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
-        field-style (or
-                      (some-> master-form comp/component-options ::field-styles qualified-key)
-                      (some-> form-instance comp/component-options ::field-styles qualified-key)
-                      field-style
-                      :default)
+        field-style (?! (or
+                          (some-> master-form comp/component-options ::field-styles qualified-key)
+                          (some-> form-instance comp/component-options ::field-styles qualified-key)
+                          field-style
+                          style
+                          :default)
+                      form-instance)
         control-map (some-> runtime-atom deref ::rad/controls ::type->style->control)
         control     (or
                       (get-in control-map [type field-style])
