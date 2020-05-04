@@ -62,20 +62,17 @@ endif::[]
 </style>
 ++++
 
-* TODO: ::form/field-style-config(s): :input/props, :sorted-set -> :sorted-set/valid-values
-* TODO: Form validator is always used from MASTER form
-* TODO: Form validation messages use merge of MASTER overrides FORM overrides ATTRIBUTE
-* TODO: Importance of defaults on attributes, which can be values or fns
-* TODO: ::form/query-inclusion
-* TODO: ::form/sort-children
-* TODO: :semantic-ui/add-position
+TODO:
+
+* :sorted-set -> :sorted-set/valid-values
+* Form validator is always used from MASTER form
+* Form validation messages use merge of MASTER overrides FORM overrides ATTRIBUTE
+* Importance of defaults on attributes, which can be values or fns. Mark complete behavior.
+* ::form/query-inclusion
+* ::form/sort-children
+* :semantic-ui/add-position
 
 = Introduction
-
-BREAKING CHANGES (March 23rd): The following keywords were renamed recently: `::datomic/entities-ids` to `::attr/identities` and
-`::sql/schema` and `::datomic/schema` were both folded into the name `::attr/schema`.  The `::sql/table-names` was
-replaced by giving the table name on the identity attribute as `::sql/table string`, and the `::attr/identities` is
-enough information from there to get the proper table name(s) for an attribute.
 
 WARNING: Fulcro RAD is in early stages of development. The documented features are somewhat stable
 and should not change much over time; however, until RAD reaches a formal release (beyond an alpha)
