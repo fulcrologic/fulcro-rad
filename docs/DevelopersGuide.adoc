@@ -1,6 +1,6 @@
 = Fulcro RAD Developer's Guide
 :author: Tony Kay
-:revdate: April 9, 2020
+:revdate: May 3, 2020
 :lang: en
 :encoding: UTF-8
 :doctype: book
@@ -546,10 +546,6 @@ include database adapter-specific entries that
 define the reification of that linkage (e.g. does it hold an ID of a foreign table/document/entity, does it use
 a join table, is it a back reference from a foreign table, or is it simply a nested map in a document?).
 
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-TASK: Continue updating docs. Out of date below here.
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
 If an attribute represents a virtual link it will typically include a lambda (resolver) that
 runs the appropriate logic to "invent" that linkage. For example, your customers might have multiple addresses,
 and you might want a virtual reference to the address you've most often shipped items to.  You can easily
@@ -563,17 +559,22 @@ often implied by co-location in the same document, and in Datomic it is handled 
 Again, RAD attributes allow the database adapter to define namespaced keys that can be placed on an attribute
 to indicate how that attribute should behave.
 
-When using references in Forms you'll typically have to include a bit of extra information to the form itself for
-it to know which kind of behavior should be modelled for the user.
+When using references in Forms you'll typically also have to include a bit of extra information for the form itself
+to know which kind of behavior should be modelled for the user, since it will not be aware of the ins-and-outs of your
+low-level database.
+
 For example an invoice's line item needs to point to something defined in your inventory. An invoice form might show that
 as a dropdown that lets you autocomplete a selection from the inventory items.
 
 == Attribute Types and Details
 
-There are a number of predefined attribute types and information markers that are defined by the central RAD system.
-Each add-on or plugin can define any number of additional namespaced keys that could also be declared on an attribute.
+There are a number of predefined attribute types defined by the central RAD system.
+*Add-on libraries can define more*. There is nothing in RAD core itself that either implements these types or supports
+them. They are opaque to core, and we predefine common primitive ones as a starting point.  Database adapters can
+define more, and these custom types will sometimes require that you write an input control or field to support such
+a type.
 
-The supported attribute types include:
+The core predefined attribute types include (this list is not complete yet, but most of these are present):
 
 `:string`:: A variable-length string.
 `:enum `:: An enumerated list of values. Support varies by db adapter.
@@ -587,29 +588,33 @@ The supported attribute types include:
 `:ref`:: A reference to another entity/table/document. Indicates traversal of the attribute graph.
 `:uuid`:: A UUID.
 
-The following additional keys can be placed in the attribute map:
+See the various docstrings in the `*-options.cljc` namespaces for predefined things that can be put into
+an attribute's map. Here are some examples for `attributes-options`:
 
-`::attr/identity?`:: A boolean. When true it indicates that this attribute can be used as a PK to find
-an entity/document/table row.
-`::attr/required?`:: A boolean. Indicates that the system should constrain interactions such that
-entities/rows/documents that contain this attribute are considered invalid if they do not have it.
-Affects things like schema generation, form interactions, etc.
-`::attr/target`:: A keyword. Required when the type of the attribute is `:ref`. It must be the qualified keyword
-name of the attribute that can be used to look up instances of the target of the ref. For example
-`:account/addresses` might have a target of `:address/id`.
-`::attr/cardinality`:: Required when the type of the attribute is `:ref`.
-Either :one or :many. Defines the expected cardinality of the relation.
-`::attr/enumerated-values`:: Only when type is `:enum`. A set of keywords that represent the legal possible values when the
-   type is `:enum`. Constraints on this may vary based on the db adapter chosen.
-`::attr/enumerated-labels`:: Only when type is `:enum`. A map from enumerated keywords (in `enumerated-values`) to the
-user string that should be shown for that enumerated value. Used in Form UI generation.
+`ao/identity?`:: A boolean. When true it indicates that this attribute is to be used as the PK to find
+  an entity/document/table row.
+`ao/required?`:: A boolean. Indicates that the system should constrain interactions such that
+  entities/rows/documents that contain this attribute are considered invalid if they do not have it.
+  Affects things like schema generation, form interactions, etc.
+`ao/target`:: A keyword. Required when the type of the attribute is `:ref`. It must be the qualified keyword
+  name of an `identity? true` attribute. For example
+  `:account/addresses` might have a target of `:address/id`.
+`ao/cardinality`:: Defines the expected cardinality of the attribute. Supported when the type of the attribute is `:ref`,
+   and some database adapters may support it on other types. Defaults to :one, but can also be :many.
+`ao/enumerated-values`:: Only when type is `:enum`. A set of keywords that represent the legal possible values when the
+   type is `:enum`. Constraints on this may vary based on the db adapter chosen. Typically you will use narrowed
+   keywords for this (e.g. `:account/type` might have values `:account.type/user`, etc.).
+`ao/enumerated-labels`:: Only when type is `:enum`. A map from enumerated keywords (in `enumerated-values`) to the
+   user string that should be shown for that enumerated value. Used in Form UI generation.
 
 == All Attributes
 
-There is a central attribute registry that you must set up for proper overall operation. We are in the
-process of phasing this out.  In the meantime many of the APIs require a list of all of the attributes
-in the system. If you've followed our recommendation of including a `def` of `attributes` at the
-bottom of each model namespace, then you can easily create this like so:
+RAD often needs to know what attributes are in your model. Early versions tried using a registry, but the side-effect
+nature of such a thing is simply quite annoying (order-dependent, you can forgot requires, etc.).
+
+When building a RAD application you should manually build up a list of all of the attributes in your model. The
+recommended pattern is to include a `def` of `attributes` at the
+bottom of each model namespace, then you can easily a list of all attributes like this:
 
 [source]
 -----
@@ -630,23 +635,14 @@ bottom of each model namespace, then you can easily create this like so:
                            line-item/attributes)))
 -----
 
+The list of all attributes is required in a number of places in RAD: automatic resolver generation, schema support,
+save-middleware, etc.
+
 = Server Setup
 
 A RAD server must have an EQL API endpoint, typically at `/api`. This is standard Fulcro stuff, and you should refer
 to the http://book.fulcrologic.com[Fulcro Developer's Guide] for full details, with most of the elements that RAD
 needs described below.
-
-== Register the Attributes
-
-RAD requires that you install all of your declared attributes in a registry. This is a manual process to prevent
-things like order-dependent operation and other strange behavior. It also allows you to prevent circular references
-in code since you can use the registry to look up an attribute that itself uses something from the ns in which
-it will is used.
-
-Thus, you must call `(attr/register-attributes! all-attributes)` somewhere in the startup sequence of your server,
-and this *must* be done *before* you initialize database adapters and parsers.
-
-A good place to do this is in the component that starts first, such as your config loader.
 
 == Configuration Files
 
@@ -664,12 +660,10 @@ Here is the recommended config component using `mount`:
 -----
 (ns com.example.components.config
   (:require
-    [clojure.pprint :refer [pprint]]
-    [com.fulcrologic.fulcro.server.config :as fserver]
+    [com.fulcrologic.fulcro.server.config :as fulcro-config]
     [com.example.lib.logging :as logging]
     [mount.core :refer [defstate args]]
     [taoensso.timbre :as log]
-    [clojure.string :as str]
     [com.example.model :as model]
     [com.fulcrologic.rad.attributes :as attr]))
 
@@ -677,9 +671,8 @@ Here is the recommended config component using `mount`:
   "The overrides option in args is for overriding configuration in tests."
   :start (let [{:keys [config overrides]
                 :or   {config "config/dev.edn"}} (args)
-               loaded-config (merge (fserver/load-config {:config-path config}) overrides)]
+               loaded-config (merge (fulcro-config/load-config {:config-path config}) overrides)]
            (log/info "Loading config" config)
-           (attr/register-attributes! model/all-attributes)
            ;; set up Timber to proper levels, etc...
            (logging/configure-logging! loaded-config)
            loaded-config))
@@ -696,7 +689,7 @@ of Fulcro for more information on how these configurations are merged, using val
 == Form Middleware
 
 Forms support middleware that allows plugins to hook into the I/O subsystem of forms. This allows
-RAD form support plugins be inserted into the chain to do things like save form data to a particular
+RAD form support plugins to be inserted into the chain to do things like save form data to a particular
 database. They use a pattern similar to Ring middleware.
 
 There are currently two middlewares that must be created: save and delete.
@@ -714,6 +707,7 @@ like so:
     [com.fulcrologic.rad.middleware.save-middleware :as r.s.middleware]
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]
     [com.example.components.datomic :refer [datomic-connections]]
+    [com.fulcrologic.rad.blob :as blob]
     [com.example.model :as model]))
 
 (def middleware
@@ -729,7 +723,7 @@ Very similar to save middleware, but is invoked during a request to delete an en
 [source]
 -----
 (ns com.example.components.delete-middleware
-(:require
+  (:require
     [com.fulcrologic.rad.database-adapters.datomic :as datomic]))
 
 (def middleware (datomic/wrap-datomic-delete))
@@ -737,10 +731,12 @@ Very similar to save middleware, but is invoked during a request to delete an en
 
 == Pathom Parser
 
-You will normally use Pathom to provide the processing for the network API. RAD has some logic to generate resolvers, and many of
-the resolvers will be generated by a RAD storage plugin like Fulcro RAD Datomic.
+You will normally use Pathom to provide the processing for the network API on your server (Pathom supports CLJ
+and CLJS, so you can use the JVM or node). RAD has some logic to convert virtual attributes to resolvers, and many more
+resolvers can be auto-generated by a RAD storage plugins like Fulcro RAD Datomic.
 
-So first, you'll generate a stateful list of all of the generated resolvers:
+So first, you'll generate a stateful list of all of the attributes that convert to resolvers (these will include
+`::path-connect/resolve` keys):
 
 [source]
 -----
@@ -756,8 +752,8 @@ So first, you'll generate a stateful list of all of the generated resolvers:
   (vec (res/generate-resolvers all-attributes))
 -----
 
-then you'll set up a stateful parser that installs these resolvers along with a few standard ones any you've created elsewhere.
-The result will look like this:
+then you'll set up a stateful parser that installs various plugins and resolvers along with a
+few standard ones any you've created elsewhere. The result will look something like this:
 
 [source]
 -----
@@ -766,24 +762,27 @@ The result will look like this:
     [com.example.components.auto-resolvers :refer [automatic-resolvers]]
     [com.example.components.config :refer [config]]
     [com.example.components.datomic :refer [datomic-connections]]
-    [com.example.components.save-middleware :as save]
     [com.example.components.delete-middleware :as delete]
-    [com.example.model.account :as account]
+    [com.example.components.save-middleware :as save]
     [com.example.model :refer [all-attributes]]
+    [com.example.model.account :as account]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.blob :as blob]
+    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.pathom :as pathom]
-    [mount.core :refer [defstate]]
-    [com.fulcrologic.rad.database-adapters.datomic :as datomic]))
+    [mount.core :refer [defstate]]))
 
 (defstate parser
   :start
   (pathom/new-parser config
-    [(form/pathom-plugin save/middleware delete/middleware)
-     (datomic/pathom-plugin (fn [env] {:production (:main datomic-connections)}))]
-    [automatic-resolvers
-     form/resolvers
-     account/login
-     account/check-session]))
+    [(attr/pathom-plugin all-attributes) ; required to populate standard things in the parsing env
+     (form/pathom-plugin save/middleware delete/middleware) ; installs form save/delete middleware
+     (datomic/pathom-plugin (fn [env] {:production (:main datomic-connections)})) ; db-specific adapter
+    [automatic-resolvers ; the resolvers generated from attributes
+     form/resolvers      ; predefined resolvers for form support (save/delete)
+     account/resolvers   ; custom resolvers you wrote, etc.
+     ...]))
 -----
 
 The supplied constructor for pathom parsers is not required, you can use the source to see what it includes
@@ -800,7 +799,7 @@ The resulting minimal server will be a Ring-based system with middleware like th
 
 [source]
 -----
-(ns com.example.components.middleware
+(ns com.example.components.ring-middleware
   (:require
     [com.fulcrologic.fulcro.server.api-middleware :as server]
     [mount.core :refer [defstate]]
@@ -808,7 +807,8 @@ The resulting minimal server will be a Ring-based system with middleware like th
     [com.example.components.config :as config]
     [com.example.components.parser :as parser]
     [taoensso.timbre :as log]
-    [ring.util.response :as resp]))
+    [ring.util.response :as resp]
+    [clojure.string :as str]))
 
 (defn wrap-api [handler uri]
   (fn [request]
@@ -834,6 +834,9 @@ The resulting minimal server will be a Ring-based system with middleware like th
       (wrap-defaults defaults-config))))
 -----
 
+See the RAD Demo project for the various extra bits you might want to define around your middleware. You will
+need to add middleware to support things like file upload, CSRF protection, etc.
+
 == The Server
 
 At this point the server is just a standard Ring server like this (here using Immutant):
@@ -846,7 +849,7 @@ At this point the server is just a standard Ring server like this (here using Im
     [mount.core :refer [defstate]]
     [taoensso.timbre :as log]
     [com.example.components.config :refer [config]]
-    [com.example.components.middleware :refer [middleware]]))
+    [com.example.components.ring-middleware :refer [middleware]]))
 
 (defstate http-server
   :start
@@ -861,20 +864,48 @@ At this point the server is just a standard Ring server like this (here using Im
 
 = Client Setup
 
-Fulcro RAD can be used with any Fulcro application. The only global configuration that is required for all features
-is to initialize the attribute registry.  RAD applications that use UI generation will also need to configure the
-UI generation control set (web/native/styles/etc.).
+Fulcro RAD can be used with any Fulcro application. The only global configuration that is required
+is to initialize the attribute registry, but the more feature you use, the more you'll want
+to configure. RAD applications that uses HTML5 routing and UI generation, for example, will also
+need to configure those.
 
-Thus, a minimal RAD client looks something like this:
+Here is what a client might look like that also includes some logging output improvements and
+supports hot code reload at development time:
 
 [source]
 -----
-(defonce app (app/fulcro-app {:remotes {:remote (http/fulcro-http-remote {:url "/api"})}}))
+(ns com.example.client
+  (:require
+    [com.example.ui :refer [Root]]
+    [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.rad.application :as rad-app]
+    [com.fulcrologic.rad.rendering.semantic-ui.semantic-ui-controls :as sui]
+    [com.fulcrologic.fulcro.algorithms.timbre-support :refer [console-appender prefix-output-fn]]
+    [taoensso.timbre :as log]
+    [com.fulcrologic.rad.type-support.date-time :as datetime]
+    [com.fulcrologic.rad.routing.html5-history :refer [html5-history]]
+    [com.fulcrologic.rad.routing.history :as history]))
+
+(defonce app (rad-app/fulcro-rad-app
+               {:client-did-mount (fn [app]
+                                    ;; Adds improved logging support to js console
+                                    (log/merge-config! {:output-fn prefix-output-fn
+                                                        :appenders {:console (console-appender)}}))}))
+
+(defn refresh []
+  ;; hot code reload of installed controls
+  (log/info "Reinstalling controls")
+  (rad-app/install-ui-controls! app sui/all-controls)
+  (app/mount! app Root "app"))
 
 (defn init []
   (log/info "Starting App")
-  (form/install-ui-controls! app ui/all-controls)
-  (attr/register-attributes! model/all-attributes)
+  ;; a default tz, for date/time support
+  (datetime/set-timezone! "America/Los_Angeles")
+  ;; Optional HTML5 history support
+  (history/install-route-history! app (html5-history))
+  ;; Install UI plugin that can auto-render forms/reports
+  (rad-app/install-ui-controls! app sui/all-controls)
   (app/mount! app Root "app"))
 -----
 
@@ -897,333 +928,217 @@ Additional features, of course, could be supplied such as the ability to:
 . Pool database network connections.
 . Isolate development changes from the real database (i.e. database interaction mocking)
 
-== The Datomic Adapter
+NOTE: The documentation for the database adapters will contain the most recent details, and should be
+preferred over this book.
+
+== Database Adapters
 
 The RAD Datomic database adapter has the following features:
 
-. Datomic Schema generation from attributes.
+. Datomic Schema generation (or just validation) from attributes.
 . Support for multiple database schemas.
 . Form save automation.
-. Automatic generation of a full network API that can pull from the database(s).
+. Automatic generation of a full network API that can pull from the database(s) by ID.
 . Database sharding.
 
 See the README of the adapter for information on dependencies and project setup. You will need to add dependencies
 for the version of Datomic you're using and any storage drivers (e.g. PostgreSQL JDBC driver) for the back-end you
 choose.
 
-=== Configuration
+NOTE: Other database adapters are in progress. There is a mostly-working SQL adapter, and a REDIS adapter is
+also on the way. Adapters are not terribly difficult to write, as the data format of RAD and Fulcro is normalized
+and straightforward.
 
-Configuring the Datomic adapter currently requires Datomic on-prem (free or starter). Cloud support
-is planned but not written. The elements to configure are:
+== The Server-side Resolvers
 
-. Add your database definitions to your application config.
-. Start the adapter when your server starts, and save the result.
-. Add the auto-generated resolvers into your API parser.
-. Add the normal RAD form handlers (save/delete) into your API parser.
-. Insert the datomic env into your parser env (which adds support for save), which must also resolve
-the correct database connection(s) (shard/schema) for the incoming request using the request details and
-the result from (2).
-
-This sounds like a long list, but each is typically just a line or two of code.
-
-==== Application Configuration for Datomic
-
-The database configuration looks like this:
-
-[source]
------
- :com.fulcrologic.rad.database-adapters.datomic/databases
-                                    {:main {:datomic/schema           :production
-                                            :datomic/driver           :postgresql
-                                            :datomic/database         "example"
-                                            :datomic/prevent-changes? true
-                                            :postgresql/host          "localhost"
-                                            :postgresql/port          5432
-                                            :postgresql/user          "datomic"
-                                            :postgresql/password      "datomic"
-                                            :postgresql/database      "datomic"}}
------
-
-The keys of the map are the shard name (in this case there is only one real database and schema). Each
-shard must name which `:datomic/schema` it is intended to provide, which in turn must match a
-`::datomic/schema` entry on attributes:
-
-[source]
------
-;; This attribute lives in the production schema
-(defattr id :address/id :uuid
-  {::attr/identity?                                      true
-   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
------
-
-If you wanted to have multiple databases with the same schema you'd just have multiple shard names
-in the map as keys, and database connection details as the values.
-
-==== Starting the Database Adapter
-
-If you're using `mount`, then starting the database adapter is as simple as:
-
-[source]
------
-(ns com.example.components.datomic
-  (:require
-    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
-    [mount.core :refer [defstate]]
-    [com.example.model :refer [all-attributes]]
-    [com.example.components.config :refer [config]]))
-
-(defstate ^{:on-reload :noop} datomic-connections
-  :start
-  (datomic/start-databases all-attributes config))
------
-
-The call needs a flat vector of all attribute definition in the system, and the config (as shown
-in the prior section). It does the following things, according to the configutation:
-
-* Connects to the databases
-* Optionally wraps the connections with a mocked connection so that no changes persist to the real
-database (useful during development).
-* Optionally generates schema for each.
-* Optionally applies schema to each.
-
-It returns a map from database name (i.e. `:main`) to Datomic connections.
-
-==== Add Generated Resolvers [[DatomicResolvers]]
-
-Your application will have a combination of auto-generated resolvers. Some might come from
-pure attribute definitions, and others will come from adapters like this one. Typically
-you'll combine them all in some central stateful place, like this:
-
-[source]
------
-(ns com.example.components.auto-resolvers
-  (:require
-    [com.example.model :refer [all-attributes]]
-    [mount.core :refer [defstate]]
-    [com.fulcrologic.rad.resolvers :as res]
-    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
-    [taoensso.timbre :as log]))
-
-(defstate automatic-resolvers
-  :start
-  (vec
-    (concat
-      (res/generate-resolvers all-attributes)
-      (datomic/generate-resolvers all-attributes :production))))
------
-
-Again note the use of the `all-attributes`, which is simply a collection of all of your
-various attribute definitions.
-
-==== Set up The Parser
-
-You will be generating a Pathom parser on your back-end. You must modify it to include two things:
-
-. Provide a function that augments the `env` using the `datomic/add-datomic-env` function, which in
-turns needs you to provide a resolution to which connection a given schema will use on the current
-request.
-. Add the automatic resolvers (some of which were generated by the datomic generator discussed
-earlier).
-
-The sharding resolution for (1) is simple: you'll pass in a map that has one key for each
-_schema_ that points to the connection of the exact database instance that should be used
-for that schema. In our example the schema on our persisted attributes is called `:production`,
-and our config created a database we called `:main`.  So, we simply pull the connection
-for `:main` from our started databases map, and create a new map with that connection keyed
-to the correct schema. If you were sharding by account you might have had 2 or more database connections
-to databases with the same schema, and you would have looked up which shard the given account
-used in order to make the resulting map.  This function gets called on each request, so the
-incoming request (which is pre-supplied in `env` in this example) could be used to make
-such decisions.
-
-If you're using `mount` for server state management this will look something like this:
-
-[source]
------
-(ns com.example.components.parser
-  (:require
-    [com.example.components.auto-resolvers :refer [automatic-resolvers]]
-    [com.example.components.config :refer [config]]
-    [com.example.components.datomic :refer [datomic-connections]]
-    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
-    [com.fulcrologic.rad.pathom :as pathom]
-    [mount.core :refer [defstate]]
-    [datomic.api :as d]
-    [com.fulcrologic.rad.form :as form]
-    [com.example.model.account :as account]))
-
-(defstate parser
-  :start
-  (pathom/new-parser config
-    [(form/pathom-plugin save/middleware delete/middleware)
-     ;; you must create a map from SCHEMA name to the database that should serve that
-     ;; schema for this request.
-     (datomic/pathom-plugin (fn [env] {:production (:main datomic-connections)}))]
-    [automatic-resolvers
-     ;; Standard form hooks, which know how to use the database plugin
-     form/resolvers
-     ...]))
------
-
-== The SQL Adapter
-
-The RAD SQL adapter is meant to provide storage services on top of any standard SQL server.  See the documentation
-in that project for the current setup instructions.
-
-TODO: Be nice to have an overview here...
-
-= Forms
-
-Forms are a central element of Fulcro. A form:
-
-* Is a route target in Fulcro's dynamic routing system.
-* Has automatic state management, and runs a state machine while on screen.
-* Is integrated with Fulcro's form-state namespace, which handles things like tracking
-changes and tri-state validation.
-* Is itself a Fulcro and React component.
-* Uses attribute definitions, local form declarations, and pluggable UI generators.
-* Uses a standard mutation and delta format for saves, so that persistence is trivial across data storage
-technologies.
-
-Note that since forms are Fulcro components they will each have an ident. That ident is required to match a
-primary key attribute of the entitiy/document/table that the form edits.  If you need a form that edits more than
-one thing at a time then you will create a form component for each of the possible things, and relate those form
-components together. The actual appearance of the resulting form will depend on the nature of the relations and
-can of course be customized to any degree, since you can always hand-write the rendering logic of the form.
-
-== Setup
-
-In order to get a basic form working in RAD you need the following:
-
-* <<Attributes, Declarations of the attributes>> that will be part of the form.
-* Resolvers that can pull that form's data from the server (usually auto-generated from one or more plugins).
-* A save mutation that can save the form (pre-defined, but requires save middleware and a parser plugin for each database)
-* (optional) Configuration of the ui rendering to auto-generate the UI (you may also hand-design the UI with
-normal Fulcro/React code).
-* (optional) Code that sets the time zone (usually based on the active user's session) if you will be storing
-date/times in your database.
-* (optional) Transit readers/writers for all extended data types that you wish to use.
-
-The server-side operation of the form is largely handled by a storage plugin and normal Fulcro plumbing, as shown in
-the demo project.
-
-=== The Server-side Resolvers
-
-The resolvers you need are https://wilkerlucio.github.io/pathom/#_resolvers[Pathom Resolvers] that can pull the data
+The EQL network API of RAD is supplied by [Pathom Resolvers] that can pull the data
 of interest from your database. Typically you'll need to have at least one
 resolver for each top-level entity that can be pulled by ID, and custom resolvers that can satisfy various other
 queries (e.g. all accounts, current user, etc.). Forms need to be able to at least resolve entities by
-their ID.
+their ID, and reports need to be able to uniquely identify rows (either through real or generated values).
 
-Most db adapters can <<DatomicResolvers, automatically generate>> these resolvers, but legacy applications
+DB adapters can often automatically generate many of these resolvers, but legacy applications
 can simply ensure all of the attributes a form might need can be resolved via an ident-based Fulcro
 query against that form (e.g. `[{[:account/id id] [:account/name]}]`).
+
+Fulcro and EQL defines the read/write model, and RAD just leverages it. You can use as much or as little
+RAD automation as you want. It is just doing what you would do for Fulcro applications.
 
 == Form Middleware
 
 Forms support middleware that allows plugins to hook into the I/O subsystem of forms. This allows
-RAD form support plugins be inserted into the chain to do things like save form data to a particular
+RAD plugins to be inserted into the processing chain to do things like save form data to a particular
 database. They use a pattern similar to Ring middleware.
 
-There are currently two middlewares that must be created: save and delete.
+There are currently two middlewares that must be created: save and delete. The documentation of your plugin will
+indicate if it supplies such middleware, and how to install it.
+
+=== The Parser `env`
+
+Form save/delete is run in the context of Pathom, meaning that the `env` that is available to any plugin
+is whatever is configured for Pathom itself. *All middleware should leverage this in order to provide
+runtime information*.
+
+Database plugins should require that you add some kind of plugin to your parser. Mostly what these plugs are
+doing is adding content to the `env` under namespaced keys: database connections, URLs, etc.  Whatever is necessary
+to accomplish the real task at runtime will be in `env`.
+
+The save and delete middlware that you install in the parser is the *logic* for accomplishing a save or delete.
+
+The `env` in pathom is the *state* necessary for it to do so.
 
 === Save Middleware
 
-The save middleware is simply a function that will receive the Pathom mutation `env`, which
-is augmented with `::form/params`.  Usually you will just compose a set of pre-supplied middleware
-like so:
+The save middleware is simply a function that will receive the Pathom mutation `env`. The env will include:
+
+* `::form/params` The minimal diff of the form being saved
+* `::attr/key->attribute` A map from qualified keyword to attribute definition
+* All other pathom env entries.
+
+Creating a middleware chain is done as in Ring: create a `wrap` function that optionally receives a handler and returns
+middleware. The Datomic wrapper looks like this:
 
 [source]
 -----
-(ns com.example.components.save-middleware
-  (:require
-    [com.fulcrologic.rad.middleware.save-middleware :as r.s.middleware]
-    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
-    [com.example.components.datomic :refer [datomic-connections]]
-    [com.example.model :as model]))
-
-(def middleware
-  (->
-    (datomic/wrap-datomic-save)
-    (r.s.middleware/wrap-rewrite-values)))
+(defn wrap-datomic-save
+  "Form save middleware to accomplish Datomic saves."
+  ([]
+   (fn [{::form/keys [params] :as pathom-env}]
+     (let [save-result (save-form! pathom-env params)]
+       save-result)))
+  ([handler]
+   (fn [{::form/keys [params] :as pathom-env}]
+     (let [save-result    (save-form! pathom-env params)
+           handler-result (handler pathom-env)]
+       (deep-merge save-result handler-result)))))
 -----
+
+==== Form Params
+
+Forms are saved in a normalized diff format that looks like this:
+
+[source]
+-----
+{[:account/id 1] {:account/name {:before "Joe" :after "Sally"} :account/address {:after [:address/id 2]}}
+ [:address/id 2] {:address/street ...}}
+-----
+
+The keys of the map are Fulcro `idents` (like Datomic lookup refs): The id keyword and an ID.
+The values of the map are the diff on the attributes that "group under" that entity/ID.
+
+Your middleware can *modify* the `env` (so that handlers further up the chain see the effects), side effect (save
+long strings to an alternate store), check security (possibly throwing exceptions or removing things from the
+params), etc.
+
+This simple construct allows an infinite variety of complexity to be added to your saves.
 
 === Delete Middleware
 
-Very similar to save middleware, but is invoked during a request to delete an entity.
+This is very similar to save middleware, but is invoked during a request to delete an entity.
+
+== UI Rendering
+
+RAD macros generate Fulcro components. RAD will always include code in these components that helps automate the
+management of state. Forms will manage the client-side load, save, dirty checking, validation, etc. You can simply use
+the helper functions like `form/save!` to ask the form system to do such operations for you, and write the
+actual rendering of the form by hand.
+
+BUT, eliminating the need to write all of this boilerplate UI code
+can be a huge win early in your project. So, if you do *not* include a render body, then RAD will attempt to generate
+one for you, but *only if you install a render plugin*.
+
+RAD depends on `React`, but does *not* directly use any DOM or native code. Thus, UI plugins can target both a
+*look* and *platform* for UI generation.
+
+At the time of this writing only a web plugin exists, and it uses Semantic UI CSS to provide the general look-and-feel
+(though semantic UI is easy to theme, so that is easy to style without having to resort to code). Perhaps by the
+time you read this there will also be plugins for React native.
+
+=== Attribute and Context-Specific Style
+
+Once you've selected the UI plugin for generating UI, you still have a lot of control over the site-specific style
+of a given control or format via "style".  This is nothing more than the ability to give a hint
+as to the kind of information an attribute represents so that the UI plugin (or your own control) can
+change to suit a particular need.
+
+For example, an `:instant` in the database might be a epoch-based timestamp, but perhaps you just care to use it
+with a constant time (say midnight in the user's time zone). You might then hint that the attribute should
+have the style of a "date at midnight", which you could just invent a keyword name for: `:date-at-midnight`.
+
+RAD supports the ability to set and override a control style at many levels. The attribute itself can
+be given a style:
 
 [source]
 -----
-(ns com.example.components.delete-middleware
-(:require
-    [com.fulcrologic.rad.database-adapters.datomic :as datomic]))
-
-(def middleware (datomic/wrap-datomic-delete))
+(defattr :account/created-on :instant
+ {ao/style :long-timestamp
+  ...})
 -----
 
-=== Server-side Save and Delete Mutations
+and forms and reports will allow you to override that style via things like `formatters` and field style overrides.
+See the `form-options` and `report-options` namespaces for particular details.
 
-The form system comes with predefined save and delete mutations which you should install on your Pathom parser. These
-mutations look in the pathom `env` to find and use additional database adapter handlers to accomplish the actual saves.
+=== Installing Controls
 
-This will look like this in your server code (assuming you're using `defstate` from `mount` for your state management):
-
-[source]
------
-(defstate parser
-  :start
-  (pathom/new-parser config
-    [(form/pathom-plugin save/middleware delete/middleware)
-     ...]
-    [...
-     form/resolvers
-     ...]))
------
-
-=== Configuring the Client
-
-One of the advantages of RAD is that you can quickly build forms and reports without having to write any state management
-logic, control logic, or even UI.  For state management and control logic requires no additional global setup, but
-the UI rendering system does need you to provide some details.
-
-First, you need to install rendering implementations. This configuration is, as with most things in RAD, a map.
-The top-level keys for forms are `:com.fulcrologic.rad.form/style->layout` and
-`:com.fulcrologic.rad.form/type->style->control`. The first allows a form to select, via a generic style key, the
-layout controller. This controller will be a simple function that can look in the form's component options for
-additional configuration parameters that tell it how to control the layout.
-
-[[ControlStyles]]
-The second key holds a map that can look up how to render a control for a particular type, using potentially
-customized styles.
-
-Here is a sample from the current version of the Semantic UI Control set:
+RAD places the definition of controls inside of the Fulcro application itself (which has a location for
+just such extensible data). The map for UI element lookup looks something like this (subject to change and
+customization in UI plugins):
 
 [source]
 -----
 (def all-controls
   {;; Form-related UI
-   :com.fulcrologic.rad.form/style->layout                  {:default sui-form/ui-render-layout}
-   :com.fulcrologic.rad.form/type->style->control           {:layout        {:default sui-form/ui-render-layout}
-                                                             :text          {:default text-field/render-field}
-                                                             :enum          {:default enumerated-field/render-field}
-                                                             :string        {:default text-field/render-field}
-                                                             :int           {:default int-field/render-field}
-                                                             :decimal       {:default decimal-field/render-field}
-                                                             :boolean       {:default boolean-field/render-field}
-                                                             :instant       {:default      instant/render-field
-                                                                             :date-at-noon instant/render-date-at-noon-field}
-                                                             :entity-picker {:default sui-form/ui-render-entity-picker}}
-   ...})
+   ;; completely configurable map...element types are malleable as are the styles. Plugins will need to doc where
+   ;; they vary from the "standard" set.
+   :com.fulcrologic.rad.form/element->style->layout
+   {:form-container      {:default      sui-form/standard-form-container
+                          :file-as-icon sui-form/file-icon-renderer}
+    :form-body-container {:default sui-form/standard-form-layout-renderer}
+    :ref-container       {:default sui-form/standard-ref-container
+                          :file    sui-form/file-ref-container}}
+
+   :com.fulcrologic.rad.form/type->style->control
+   {:text    {:default text-field/render-field}
+    :enum    {:default      enumerated-field/render-field
+              :autocomplete autocomplete/render-autocomplete-field}
+    :string  {:default                              text-field/render-field
+              :autocomplete                         autocomplete/render-autocomplete-field
+              :viewable-password                    text-field/render-viewable-password
+              :password                             text-field/render-password
+              :sorted-set                           text-field/render-dropdown
+              :com.fulcrologic.rad.blob/file-upload blob-field/render-file-upload}
+    :int     {:default int-field/render-field}
+    :long    {:default int-field/render-field}
+    :decimal {:default decimal-field/render-field}
+    :boolean {:default boolean-field/render-field}
+    :instant {:default       instant/render-field
+              :date-at-noon  instant/render-date-at-noon-field}
+    :ref     {:pick-one  entity-picker/to-one-picker
+              :pick-many entity-picker/to-many-picker}}
+
+   ;; Report-related controls
+   :com.fulcrologic.rad.report/style->layout
+   {:default sui-report/render-table-report-layout
+    :list    sui-report/render-list-report-layout}
+
+   :com.fulcrologic.rad.report/control-style->control
+   {:default sui-report/render-standard-controls}
+
+   :com.fulcrologic.rad.report/row-style->row-layout
+   {:default sui-report/render-table-row
+    :list    sui-report/render-list-row}
+
+   :com.fulcrologic.rad.control/type->style->control
+   {:boolean {:toggle  boolean-input/render-control
+              :default boolean-input/render-control}
+    :string  {:default text-input/render-control
+              :search  text-input/render-control}
+    :picker  {:default picker-controls/render-control}
+    :button  {:default action-button/render-control}}})
 -----
 
-If you want to combine your own custom control for a given style you simple assoc it into the map before you pass it
-into RAD:
-
-[source]
------
-(def my-controls (assoc-in all-controls [::form/type->style->control :instant :date-at-midnight]
-                   my-controls/render-date-at-midnight))
------
+The idea is that layouts and controls should be pluggable and extensible simply by inventing new ones and adding them
+to the map installed in your application.
 
 The map also allows you to minimize your CLJS build size by only configuring the controls you use. Thus a library of
 controls might include a very large number of styles and type support, but because you can centralize the inclusion
@@ -1231,36 +1146,29 @@ and requires for those items into one minimized map you can much more easily con
 from one location. These are the primary reasons we do not use some other mechanism for this like multi-methods, which
 cannot be dead-code eliminated and are hard to navigate in source.
 
-[[ClientInit]]
-Once you have the final map of control you must set it on your Fulcro app.
+UI Plugin libraries should come with a function that can install all of their controls at once.
 
-[source]
------
-(defonce app (app/fulcro-app {:remotes {:remote (http/fulcro-http-remote {:url "/api"})}}))
+The report namespace allows you to define (or override) field formatters via `report/install-formatter!`.
 
-(defn init []
-  (log/info "Starting App")
-  (form/install-ui-controls! app sui/all-controls)
-  (attr/register-attributes! model/all-attributes)
-  (app/mount! app Root "app"))
------
-
-== Making a Form
+== Forms
 
 A form is really just a Fulcro component. RAD includes the macro `defsc-form` that can auto-generate the various component options
-(query, ident, route target parameters, etc.) from your already-declared attributes.
+(query, ident, route target parameters, etc.) from your already-declared attributes. The `fo` namespace is an alias
+for the `com.fulcrologic.rad.form-options` namespace.
 
-A minimal form should have a minimum of 4 attributes:
+A form should have a minimum of 2 attributes:
 
-`::form/id`:: An attribute (not keyword) that represents the primary key of the entity/document/table being edited.
-`::form/attributes`:: A vector of attributes (not keywords) that represent the attributes to be edited in the form. These
-can be scalar or reference attributes, but *must* have a resolver that can resolve them from the `::form/id` attribute,
-and must _also_ be capable of being saved using that ID.
-`::form/cancel-route`:: A vector of strings (most easily generated using `dr/path-to`) of the route to show if the user
-aborts the form. If not supplied then the form will not have a cancel button.
-`::form/route-prefix`:: A single string. Every form ends up with two routes: `[prefix "create" :id]` and
-`[prefix "edit" :id]`.  The `form` namespace includes helpers `edit!` and `create!` to trigger these routes, but
-simply routing to them will invoke the action (edit/create).
+`fo/id`:: An attribute (not keyword) that represents the primary key of the entity/document/table being edited.
+`fo/attributes`:: A vector of attributes (not keywords) that represent the attributes to be edited in the form. These
+  can be scalar or reference attributes, but *must* have a resolver that can resolve them from the `::form/id` attribute,
+  and must _also_ be capable of being saved using that ID.
+
+Most forms that are used directly (and not just as sub-forms) must also include a route prefix to make them
+capable of direct use:
+
+`fo/route-prefix`:: A single string. Every form ends up with two routes: `[prefix "create" :id]` and
+  `[prefix "edit" :id]`.  The `form` namespace includes helpers `edit!` and `create!` to trigger these routes, but
+  simply routing to them will invoke the action (edit/create).
 
 If you have configured UI generation then that is all you need. Thus a minimal form that is using
 the maximal amount of RAD plugins and automation is quite small:
@@ -1268,23 +1176,17 @@ the maximal amount of RAD plugins and automation is quite small:
 [source]
 ----
 (form/defsc-form AccountForm [this props]
-  {::form/id                account/id
-   ::form/attributes        [account/name]
-   ::form/cancel-route      (dr/path-to LandingPage)
-   ::form/route-prefix      "address"})
+  {fo/id                account/id
+   fo/attributes        [account/name account/email account/enabled?]
+   fo/route-prefix      "account"})
 ----
-
-If you wish to create a new account, you need simple use Fulcro's `change-route` to go to this form:
-`(dr/change-route (dr/path-to AccountForm {:action form/create-action
-                                           :id (random-uuid)}))`
 
 There are pre-written functions in the `form` ns for the common actions:
 
 `(form/create! app-ish FormClass)`:: Create a new instance of an entity using the given form class.
 `(form/edit! app-ish FormClass id)`:: Edit the given entity with `id` using `FormClass`
-`(form/delete! app-ish qualified-id-keyword id)`:: Delete an entity.
-
-Of course you'll also need to configure the overall application and make a root with a top-level router.
+`(form/delete! app-ish qualified-id-keyword id)`:: Delete an entity. Should not be done while *in* the form unless
+combined with some other routing instruction.
 
 == A Complete Client
 
@@ -1293,7 +1195,7 @@ We are now to the point of seeing what a complete Fulcro RAD client looks like. 
 * A Root UI component
 * (optional) Some kind of "landing" page (default route)
 * One or more forms/reports.
-* The <<ClientInit, client initialization>> (shown earlier).
+* The <<Client Setup, client initialization>> (shown earlier).
 
 [source]
 -----
@@ -1305,13 +1207,13 @@ We are now to the point of seeing what a complete Fulcro RAD client looks like. 
        :cljs [com.fulcrologic.fulcro.dom :as dom :refer [div]])
     [com.fulcrologic.fulcro.routing.dynamic-routing :refer [defrouter]]
     [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.form :as form]))
 
 (form/defsc-form AccountForm [this props]
-  {::form/id                  acct/id
-   ::form/attributes          [acct/name]
-   ::form/cancel-route        ["landing-page"]
-   ::form/route-prefix        "account"})
+  {fo/id                  acct/id
+   fo/attributes          [acct/name]
+   fo/route-prefix        "account"})
 
 (defsc LandingPage [this props]
   {:query         ['*]
@@ -1338,38 +1240,6 @@ We are now to the point of seeing what a complete Fulcro RAD client looks like. 
 The landing page in this example includes a sample button to create a new account, but
 of course you'll also need to add some seed data to your database, wrap things with some authorization, etc.
 
-== Choosing Control Style
-
-Each supported data type will have a `:default` style. This will be the control that appears in generated UI for
-a field of that type, but this is insufficient for many kinds of controls. You may be storing a currency amount
-in a BigDecimal field. You want to constrain that to 2 decimal places of accuracy. The data type isn't enough
-information.
-
-An attribute can declare the style of control it prefers, and the style can also be overridden on the form itself
-(via declaration). Of course, you can also manually code the rendering of the form.
-
-Setting the preferred control style on an *attribute* is done via the `::form/field-style` attribute, which is simply a keyword. That keyword
-must appear in the <<ControlStyles, controls you've configured>> at the style level for the data type of interest.
-
-[source]
------
-(defattr name :account/name
-  {::form/field-style :full-human-name
-   ...})
------
-
-Overriding the control style at the form level requires you specify a map:
-
-[source]
------
-(defsc-form AccountForm [this props]
-  {::form/field-styles {:account/name :full-human-name}
-   ...})
------
-
-If the style is not found in the currently-install UI controls then `:default` will be used instead.  If no renderer
-is installed for the *type*, then a console error will be logged and the field will be missing from generated UI.
-
 == UI Validation
 
 The data type and rendering style of an attribute (along with extended parameters possibly defined by input styles in
@@ -1384,12 +1254,12 @@ They are functions that return `:valid`, `:invalid`, or `:unknown` (the field is
 They are easily constructed using the `form-state/make-validator` helper, which takes into account the current completion
 marker on the field itself (which prevents validation messages from showing too early).
 
-Attribute-level validation checks are specified with a predicate:
+Attribute-level validation checks can be specified with a predicate:
 
 [source]
 ----
 (defattr name :account/name :string
-  {::attr/valid? (fn [nm] (boolean (seq nm)))})
+  {ao/valid? (fn [nm] (boolean (seq nm)))})
 ----
 
 Custom validations are defined at the form level with the `::form/validator` key.  If there are validators at both
@@ -1591,16 +1461,16 @@ We can start from the bottom. The inventory item itself might have this model in
 -----
 (ns com.example.model.item
   (:require
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
-    [com.fulcrologic.rad.authorization :as auth]))
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.attributes :refer [defattr]]))
 
 (defattr id :item/id :uuid
-  {::attr/identity?                                      true
-   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+  {ao/identity? true
+   ao/schema    :production})
 
 (defattr item-name :item/name :string
-  {:com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:item/id}
-   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+  {ao/identities #{:item/id}
+   ao/schema     :production})
 
 ...
 -----
@@ -1611,21 +1481,25 @@ followed by the line item model:
 -----
 (ns com.example.model.line-item
   (:require
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
+    [com.fulcrologic.rad.form-options :as fo]
+    [com.fulcrologic.rad.attributes :refer [defattr]]
+    [com.fulcrologic.rad.attributes-options :as ao]))
 
 (defattr id :line-item/id :uuid
-  {::attr/identity?                                      true
-   :com.fulcrologic.rad.database-adapters.datomic/schema :production})
+  {ao/identity? true
+   ao/schema    :production})
 
 (defattr item :line-item/item :ref
-  {::attr/target                                             :item/id
-   ::attr/cardinality                                        :one
-   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:line-item/id}
-   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+  {ao/target      :item/id
+   ao/required?   true
+   ao/cardinality :one
+   ao/identities  #{:line-item/id}
+   ao/schema      :production})
 
 (defattr quantity :line-item/quantity :int
-  {:com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:line-item/id}
-   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+  {ao/required?  true
+   ao/identities #{:line-item/id}
+   ao/schema     :production})
 
 ...
 -----
@@ -1640,28 +1514,28 @@ In RAD we do that at the form layer:
 [source]
 -----
 (form/defsc-form LineItemForm [this props]
-  {::form/id            line-item/id
-   ::form/attributes    [line-item/item line-item/quantity]
+  {fo/id            line-item/id
+   fo/attributes    [line-item/item line-item/quantity]
 
    ;; Picker-related rendering
-   ::form/field-styles  {:line-item/item :pick-one}
-   ::form/field-options {:line-item/item {::picker-options/query-key       :item/all-items
-                                          ::picker-options/query-component item-forms/ItemForm
-                                          ::picker-options/options-xform   (fn [normalized-result raw-response]
-                                                                             (mapv
-                                                                               (fn [{:item/keys [id name price]}]
-                                                                                 {:text (str name " - " (math/numeric->currency-str price)) :value [:item/id id]})
-                                                                               (sort-by :item/name raw-response)))
-                                          ::picker-options/cache-time-ms   60000}}})
+   fo/field-styles  {:line-item/item :pick-one}
+   fo/field-options {:line-item/item {::picker-options/query-key       :item/all-items
+                                      ::picker-options/query-component item-forms/ItemForm
+                                      ::picker-options/options-xform   (fn [normalized-result raw-response]
+                                                                         (mapv
+                                                                           (fn [{:item/keys [id name price]}]
+                                                                             {:text (str name " - " (math/numeric->currency-str price)) :value [:item/id id]})
+                                                                           (sort-by :item/name raw-response)))
+                                      ::picker-options/cache-time-ms   60000}}})
 -----
 
 Here we've generated a normal form. We've included the `line-item/item` attribute, and since that is a ref we must
-normally include subform configuration; however, we do not intend to render a subform. We can use `::form/field-styles`
+normally include subform configuration; however, we do not intend to render a subform. We can use `fo/field-styles`
 to indicate to RAD that a reference attribute will be rendered as a field. In this case the `:pick-one` field type
 will look in `field-options` for additional information. This field type, of course, could also just be set as
 `::form/field-style` on the attribute itself.
 
-The `::form/field-options` map should contain an entry for each `:pick-one` field style. The options are:
+The `fo/field-options` map should contain an entry for each `:pick-one` field style. The options are:
 
 `::picker-options/query-key`:: A top-level EDN query key that can return the entities you want to choose from.
 `::picker-options/cache-key`:: (optional) A key under which to cache the options. If not supplied this assumes query key.
@@ -1673,7 +1547,8 @@ as the picker's options.
 `::picker-options/cache-time-ms`:: How long, in ms, should the options be cached at the cache key? Defaults to 100ms.
 
 At this point you can use the `LineItemForm` and it will allow you to pick from the existing items in your
-database as long as you have a resolver. Something like this on the server would fit the bill:
+database as long as you have a resolver. Something like this on the server (assuming you installed the
+attribute to resolver generator in your parser) would fit the bill:
 
 [source]
 -----
@@ -1684,6 +1559,24 @@ database as long as you have a resolver. Something like this on the server would
                       #?(:clj
                          {:item/all-items (queries/get-all-items env query-params)}))})
 -----
+
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+WARNING: Book is out of date below this line.
+See the RAD Demo project for working examples.
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
 
 === To-Many Relationships, Owned by Parent
 
