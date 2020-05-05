@@ -536,7 +536,7 @@
                :timestamp       (fn [_ value] (dt/tformat "MMM d, yyyy h:mma" value))
                :date            (fn [_ value] (dt/tformat "MMM d, yyyy" value))
                :time            (fn [_ value] (dt/tformat "h:mma" value))}
-     :int     {:default (fn [_ value] (math/numeric->str value))}
+     :int     {:default (fn [_ value] (str value))}
      :decimal {:default    (fn [_ value] (math/numeric->str value))
                :currency   (fn [_ value] (math/numeric->str (math/round value 2)))
                :percentage (fn [_ value] (math/numeric->percent-str value))
