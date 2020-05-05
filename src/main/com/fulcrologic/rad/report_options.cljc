@@ -24,7 +24,7 @@
   is still needed, but the renderer can choose to use the per-row data however it wants (points on a graph, etc).
 
   The columns are treated as the authoritative definition of the attributes, meaning that you can assoc things like
-  `at/style` on a column to override something like style."
+  `ao/style` on a column to override something like style."
   :com.fulcrologic.rad.report/columns)
 
 (def column-styles
