@@ -21,6 +21,10 @@
   isn't in this list, it will not be managed."
   :com.fulcrologic.rad.form/attributes)
 
+(def read-only-fields
+  "OPTIONAL: Render this set of fields as read-only."
+  :com.fulcrologic.rad.form/read-only-fields)
+
 (def layout
   "OPTIONAL (may not be supported by your rendering plugin): A vector of vectors holding the
   *qualified keys* of the editable attributes.
