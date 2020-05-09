@@ -158,8 +158,8 @@
   The attribute style of :default is the default, and can be overridden in ::form/field-styles on the form (master
   has precedence, followed by the form it actually appears on) or
   using ::form/field-style on the attribute itself."
-  [{::keys [form-instance master-form]} {::attr/keys [type qualified-key]
-                                         ::keys      [field-style style] :as attr}]
+  [{::keys [form-instance master-form]} {::attr/keys [type qualified-key style]
+                                         ::keys      [field-style] :as attr}]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (?! (or
                           (some-> master-form comp/component-options ::field-styles qualified-key)
