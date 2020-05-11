@@ -263,7 +263,9 @@
 
   Uses locale from `locale/current-locale`."
   [inst]
-  (tformat "E, MMM d, yyyy" inst))
+  (if (inst? inst)
+    (tformat "E, MMM d, yyyy" inst)
+    ""))
 
 (comment
   (set-timezone! "America/New_York")

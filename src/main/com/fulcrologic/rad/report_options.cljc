@@ -275,3 +275,52 @@
   Rendering plugins may or may not allow non-string return values from the function version."
   :com.fulcrologic.rad.report/column-heading)
 
+(def grouped-on
+  "A to-many attribute. When set, this option indicates that the attribute listed will appear in the report result
+   as a to-many source of grouping values.
+
+   This causes the report to change behavior to assume that the network
+   result from the server query will be a single result (a map instead of a vector) where one dimension of the
+   report is the keys in that map (given as the `columns` of the report) and the other dimension is represented by
+   a vector of values at each of these keys (which will correlate to each other). The `grouped-on` attribute
+   will be used to label the other dimension of the report.
+
+   For example, you might use a `ro/source-attribute` of `:invoice-statistics`, and `ro/columns` of
+   `[date-groups gross-sales item-count]` which results in a server result of:
+
+   ```
+   {:invoice-statistics
+    {:invoice-statistics/date-groups [\"1/1/2020\" \"2/1/2020\" \"3/1/2020\" \"4/1/2020\"]
+     :invoice-statistics/gross-sales [323M 313M 124M 884M]
+     :invoice-statistics/item-count  [10 11 5 42]}})
+  ```
+
+   The default layout for groupings will still use the defined `columns` as the report columns, and each group will
+   define a row.
+
+   ```
+   date-groups            gross-sales           item-count
+    1/1/2020                323.00                  10
+    2/1/2020                313.00                  11
+    3/1/2020                124.00                   5
+    4/1/2020                884.00                  42
+   ```
+
+   Use the `ro/rotate?` option to flip that so that the columns become the rows:
+
+   ```
+                   1/1/2020    2/1/2020   3/1/2020   4/1/2020
+   gross-sales       323.00     313.00     124.00     884.00
+   item-count           10         11          5         42
+   ```
+
+   The `column-headings` option *still applies to the gross-sales, etc.* (which are now technically row labels).
+
+   The new column labels will come from the `grouped-on` data in the result, and will still be formatted using
+   field formatters. See `ro/field-formatters` for the various places you can configure the column heading
+   formatting when rotated."
+  :com.fulcrologic.rad.report/grouped-on)
+
+(def rotate?
+  "A boolean. Default false."
+  :com.fulcrologic.rad.report/rotate?)
