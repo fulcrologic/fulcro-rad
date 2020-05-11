@@ -5,6 +5,11 @@
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
+    ;; FIXME: Straighten out our story on locale support. Right now defaulting to en-US, which is not right.
+    #?@(:cljs
+        [["js-joda"]
+         ["js-joda-timezone"]
+         ["@js-joda/locale_en-us" :as js-joda-locale]])
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.locale :as locale]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
@@ -32,6 +37,10 @@
                    [java.time.format DateTimeFormatter]
                    [java.time.temporal TemporalAdjusters ChronoField ChronoUnit]
                    [com.cognitect.transit TransitFactory WriteHandler ReadHandler])))
+
+#?(:cljs
+   (do
+     (js/goog.exportSymbol "JSJodaLocale" js-joda-locale)))
 
 (>def ::month (s/or :month #{january february march april may june july august september october
                              november december}))
@@ -232,7 +241,7 @@
                                       (string? fmt) (if (nil? locale)
                                                       (throw
                                                         #?(:clj  (Exception. "Locale is nil")
-                                                           :cljs (js/Error. (str "Locale is nil, try adding a require '[tick.locale-en-us]"))))
+                                                           :cljs (js/Error. (str "Locale is nil, try adding a require for [js-joda.locale_en-us]"))))
                                                       (.. DateTimeFormatter
                                                         (ofPattern fmt)
                                                         (withLocale locale))))]
