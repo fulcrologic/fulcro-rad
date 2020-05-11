@@ -124,7 +124,7 @@
       (uism/activate :state/gathering-credentials))))
 
 (defn- -reply-to-initiator [env event]
-  (let [source-machine-id (uism/retrieve env :source-machine-id)]
+  (when-let [source-machine-id (uism/retrieve env :source-machine-id)]
     (log/info "Sending" event "to" source-machine-id)
     (cond-> (uism/store env :source-machine-id nil)
       (and source-machine-id (not= :none source-machine-id)) (uism/trigger source-machine-id event))))
