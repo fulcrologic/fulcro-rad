@@ -153,7 +153,7 @@
   If no zone name (or nil) is given, then the `*current-timezone*` will be used."
   ([local-dt]
    [::local-date-time => inst?]
-   (local-datetime->inst nil local-dt))
+   (local-datetime->inst *current-zone-name* local-dt))
   ([zone-name local-dt]
    [(? ::zone-name) ::local-date-time => inst?]
    (let [z      (get-zone-id zone-name)
@@ -185,7 +185,7 @@
 (>defn html-datetime-string->inst
   ([date-time-string]
    [string? => inst?]
-   (html-datetime-string->inst nil date-time-string))
+   (html-datetime-string->inst *current-zone-name* date-time-string))
   ([zone-name date-time-string]
    [(? ::zone-name) string? => inst?]
    (try
@@ -200,7 +200,7 @@
 (>defn inst->html-datetime-string
   ([inst]
    [inst? => string?]
-   (inst->html-datetime-string nil inst))
+   (inst->html-datetime-string *current-zone-name* inst))
   ([zone-name inst]
    [(? ::zone-name) inst? => string?]
    (try
