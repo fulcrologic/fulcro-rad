@@ -285,54 +285,53 @@
   Rendering plugins may or may not allow non-string return values from the function version."
   :com.fulcrologic.rad.report/column-heading)
 
-(def grouped-on
-  "A to-many attribute. When set, this option indicates that the attribute listed will appear in the report result
-   as a to-many source of grouping values.
+(def raw-result-transform
+  "A function that will be called when the report is loaded/refreshed and can transform (or augment) the network result into
+   the normalized form expected by the report. This is useful when it is more convenient to implement Pathom resolvers
+   that return that data in a shape different from that needed, or when you'd like the raw result to have some
+   pre-processing done on it before presentation.
 
-   This causes the report to change behavior to assume that the network
-   result from the server query will be a single result (a map instead of a vector) where one dimension of the
-   report is the keys in that map (given as the `columns` of the report) and the other dimension is represented by
-   a vector of values at each of these keys (which will correlate to each other). The `grouped-on` attribute
-   will be used to label the other dimension of the report.
+   If supplied it should be a `(fn [report-class raw-network-result] updated-result)`.
 
    For example, you might use a `ro/source-attribute` of `:invoice-statistics`, and `ro/columns` of
-   `[date-groups gross-sales item-count]` which results in a server result of:
+   `[date-groups gross-sales item-count]`. However, the pathom implementation of groupings will be most optimal
+   if you can do the groupings at the `invoice-statistics` resolver, and then have each nested resolver report
+   the values for the groupings as a vector, like so:
 
    ```
-   {:invoice-statistics
+   {:invoice-statistics ; (1)
     {:invoice-statistics/date-groups [\"1/1/2020\" \"2/1/2020\" \"3/1/2020\" \"4/1/2020\"]
      :invoice-statistics/gross-sales [323M 313M 124M 884M]
      :invoice-statistics/item-count  [10 11 5 42]}})
   ```
 
-   The default layout for groupings will still use the defined `columns` as the report columns, and each group will
-   define a row.
+  Reports, however, expect the loaded data to have this shape:
 
-   ```
-   date-groups            gross-sales           item-count
-    1/1/2020                323.00                  10
-    2/1/2020                313.00                  11
-    3/1/2020                124.00                   5
-    4/1/2020                884.00                  42
-   ```
+  ```
+  {:invoice-statistics  ; (2)
+    [{:invoice-statistics/date-groups 1/1/2020 :invoice-statistics/gross-sales 323M :invoice-statistics/item-count 10}
+     {:invoice-statistics/date-groups 2/1/2020 :invoice-statistics/gross-sales 313M :invoice-statistics/item-count 11}
+     ...]}
+  ```
 
-   Use the `ro/rotate?` option to flip that so that the columns become the rows:
+  If so, you must provide this option in order to convert (1) into (2). Since the above transform is commonly useful
+  when implementing with Pathom it is included in RAD as `report/rotate-result`.
 
-   ```
-                   1/1/2020    2/1/2020   3/1/2020   4/1/2020
-   gross-sales       323.00     313.00     124.00     884.00
-   item-count           10         11          5         42
-   ```
+  IMPORTANT: IF you return a result like (1) you will also have to set `ro/denormalize?` to false or your raw data will
+  be mangled by normalization.
 
-   The `column-headings` option *still applies to the gross-sales, etc.* (which are now technically row labels).
-
-   The new column labels will come from the `grouped-on` data in the result, and will still be formatted using
-   field formatters. See `ro/field-formatters` for the various places you can configure the column heading
-   formatting when rotated."
-  :com.fulcrologic.rad.report/grouped-on)
+  This option can also be used to take some result and do statistical roll-ups on the client. For example, you could
+  include a virtual column (e.g. a `defattr` of `row-total` that has no representation on the server, and will result in no data on the
+  full-stack result). You could then use this function to calculate that value and plug it into the data just after load."
+  :com.fulcrologic.rad.report/raw-result-transform)
 
 (def rotate-on
-  "An `attribute`. Rotate the table such that the given attribute's column becomes the table headings (sorted using
-   `row-compare` IF that column is the current selected sort-by), and the remaining columns become the rows (with their
-   column headers becoming row headers)."
+  "An attribute (or a `(fn [report-instance] attribute)`). Requests that the UI rendering rotate the table such that the
+   given attribute's column becomes the table headings (sorted using `row-compare` IF that column is the current
+   selected sort-by), and the remaining columns become the rows (with their column headers becoming row headers).
+
+   If it is supplied as a function, then returning `nil` will have the effect of disabling the rotation.
+
+   WARNING: This option is a hint to the UI rendering layer. Your UI plugin may or may not support it, in which case this
+   option may be a no-op."
   :com.fulcrologic.rad.report/rotate-on)

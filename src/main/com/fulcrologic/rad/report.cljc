@@ -208,32 +208,28 @@
       env)))
 
 (defn rotate-result
-  "Given a grouped result and the list of column attributes that defined the query, returns a vector of rows that
+  "Given a report class that has columns, and a raw result grouped by those columns: returns a vector of rows that
    rotate the grouped result into a normal report shape."
-  [grouped-result columns]
-  (log/spy :info ["rotating" grouped-result])
-  (let [ks       (map ::attr/qualified-key columns)
+  [report-class grouped-result]
+  (when-not (map? grouped-result)
+    (log/warn "The incoming result looks like it was normalized. Did you forget `ro/denormalize? true` on your report?"))
+  (let [columns  (comp/component-options report-class ::columns)
+        ks       (map ::attr/qualified-key columns)
         row-data (map (fn [{::attr/keys [qualified-key]}]
                         (get grouped-result qualified-key)) columns)]
     (apply mapv (fn [& args] (zipmap ks args)) row-data)))
 
-(defn- preprocess-groupings
-  "If the report is using grouped results, we must first transform it to a normalized form."
+(defn- preprocess-raw-result
+  "Apply the raw result transform, if it is defined."
   [uism-env]
-  (let [grouped-on     (report-options uism-env ::grouped-on)
-        grouped-result (uism/alias-value uism-env :raw-rows) ; this should be a single map
-        rotate?        (report-options uism-env ::rotate?)]
-    ;; if we're not going to rotate a grouped result, then we have to fix it.
-    (if (and (not rotate?) grouped-on (map? grouped-result))
-      (let [columns      (report-options uism-env ::columns)
-            rotated-rows (rotate-result grouped-result columns)]
-        (uism/assoc-aliased uism-env :raw-rows rotated-rows))
-      (do
-        (when (and (not grouped-on) rotate?)
-          (log/error "Cannot rotate a non-grouped report. Add `ro/grouped-on`."))
-        (when (and grouped-on (not (map? (log/spy :info grouped-result))))
-          (log/error "Cannot preprocess rows of a grouped report. The resolver must return a *single* (map) result." grouped-result))
-        uism-env))))
+  (let [xform (report-options uism-env ::raw-result-transform)]
+    (if xform
+      (let [raw-result (uism/alias-value uism-env :raw-rows)
+            report     (uism/actor-class uism-env :actor/report)
+            new-result (xform report raw-result)]
+        (cond-> uism-env
+          new-result (uism/assoc-aliased :raw-rows new-result)))
+      uism-env)))
 
 (defstatemachine report-machine
   {::uism/actors
@@ -275,7 +271,7 @@
        {:event/loaded {::uism/handler (fn [{::uism/keys [state-map] :as env}]
                                         (let [table-name (comp/component-options (uism/actor-class env :actor/report) ::row-pk ::attr/qualified-key)]
                                           (-> env
-                                            (preprocess-groupings)
+                                            (preprocess-raw-result)
                                             (filter-rows)
                                             (sort-rows)
                                             (populate-current-page)
@@ -444,10 +440,9 @@
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
           {::keys [BodyItem edit-form columns row-pk form-links
-                   row-query-inclusion denormalize? grouped-on
-                   row-actions route] :as options} options
+                   row-query-inclusion denormalize? row-actions route] :as options} options
           _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
-          normalize?        (not (or denormalize? grouped-on))
+          normalize?        (not denormalize?)
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
           query             [:ui/parameters
