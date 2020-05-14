@@ -5,6 +5,11 @@
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
+    ;; FIXME: Straighten out our story on locale support. Right now defaulting to en-US, which is not right.
+    #?@(:cljs
+        [["js-joda"]
+         ["js-joda-timezone"]
+         ["@js-joda/locale_en-us" :as js-joda-locale]])
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.locale :as locale]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
@@ -32,6 +37,10 @@
                    [java.time.format DateTimeFormatter]
                    [java.time.temporal TemporalAdjusters ChronoField ChronoUnit]
                    [com.cognitect.transit TransitFactory WriteHandler ReadHandler])))
+
+#?(:cljs
+   (do
+     (js/goog.exportSymbol "JSJodaLocale" js-joda-locale)))
 
 (>def ::month (s/or :month #{january february march april may june july august september october
                              november december}))
@@ -153,7 +162,7 @@
   If no zone name (or nil) is given, then the `*current-timezone*` will be used."
   ([local-dt]
    [::local-date-time => inst?]
-   (local-datetime->inst nil local-dt))
+   (local-datetime->inst *current-zone-name* local-dt))
   ([zone-name local-dt]
    [(? ::zone-name) ::local-date-time => inst?]
    (let [z      (get-zone-id zone-name)
@@ -185,7 +194,7 @@
 (>defn html-datetime-string->inst
   ([date-time-string]
    [string? => inst?]
-   (html-datetime-string->inst nil date-time-string))
+   (html-datetime-string->inst *current-zone-name* date-time-string))
   ([zone-name date-time-string]
    [(? ::zone-name) string? => inst?]
    (try
@@ -200,7 +209,7 @@
 (>defn inst->html-datetime-string
   ([inst]
    [inst? => string?]
-   (inst->html-datetime-string nil inst))
+   (inst->html-datetime-string *current-zone-name* inst))
   ([zone-name inst]
    [(? ::zone-name) inst? => string?]
    (try
@@ -232,7 +241,7 @@
                                       (string? fmt) (if (nil? locale)
                                                       (throw
                                                         #?(:clj  (Exception. "Locale is nil")
-                                                           :cljs (js/Error. (str "Locale is nil, try adding a require '[tick.locale-en-us]"))))
+                                                           :cljs (js/Error. (str "Locale is nil, try adding a require for [js-joda.locale_en-us]"))))
                                                       (.. DateTimeFormatter
                                                         (ofPattern fmt)
                                                         (withLocale locale))))]
@@ -254,7 +263,9 @@
 
   Uses locale from `locale/current-locale`."
   [inst]
-  (tformat "E, MMM d, yyyy" inst))
+  (if (inst? inst)
+    (tformat "E, MMM d, yyyy" inst)
+    ""))
 
 (comment
   (set-timezone! "America/New_York")

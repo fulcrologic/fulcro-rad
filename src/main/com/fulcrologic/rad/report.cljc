@@ -207,6 +207,30 @@
         (page-number-changed))
       env)))
 
+(defn rotate-result
+  "Given a report class that has columns, and a raw result grouped by those columns: returns a vector of rows that
+   rotate the grouped result into a normal report shape."
+  [report-class grouped-result]
+  (when-not (map? grouped-result)
+    (log/warn "The incoming result looks like it was normalized. Did you forget `ro/denormalize? true` on your report?"))
+  (let [columns  (comp/component-options report-class ::columns)
+        ks       (map ::attr/qualified-key columns)
+        row-data (map (fn [{::attr/keys [qualified-key]}]
+                        (get grouped-result qualified-key)) columns)]
+    (apply mapv (fn [& args] (zipmap ks args)) row-data)))
+
+(defn- preprocess-raw-result
+  "Apply the raw result transform, if it is defined."
+  [uism-env]
+  (let [xform (report-options uism-env ::raw-result-transform)]
+    (if xform
+      (let [raw-result (uism/alias-value uism-env :raw-rows)
+            report     (uism/actor-class uism-env :actor/report)
+            new-result (xform report raw-result)]
+        (cond-> uism-env
+          new-result (uism/assoc-aliased :raw-rows new-result)))
+      uism-env)))
+
 (defstatemachine report-machine
   {::uism/actors
    #{:actor/report}
@@ -247,6 +271,7 @@
        {:event/loaded {::uism/handler (fn [{::uism/keys [state-map] :as env}]
                                         (let [table-name (comp/component-options (uism/actor-class env :actor/report) ::row-pk ::attr/qualified-key)]
                                           (-> env
+                                            (preprocess-raw-result)
                                             (filter-rows)
                                             (sort-rows)
                                             (populate-current-page)
@@ -415,9 +440,9 @@
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
           {::keys [BodyItem edit-form columns row-pk form-links
-                   row-query-inclusion denormalize?
-                   row-actions route] :as options} options
+                   row-query-inclusion denormalize? row-actions route] :as options} options
           _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
+          normalize?        (not denormalize?)
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
           query             [:ui/parameters
@@ -457,7 +482,7 @@
           body-options      (cond-> {:query        row-query
                                      ::row-actions row-actions
                                      ::columns     columns}
-                              (not denormalize?) (assoc :ident row-ident)
+                              normalize? (assoc :ident row-ident)
                               form-links (assoc ::form-links form-links))
           defs              (if-not BodyItem
                               [`(comp/defsc ~generated-row-sym [this# ~props-sym computed#]
@@ -536,7 +561,7 @@
                :timestamp       (fn [_ value] (dt/tformat "MMM d, yyyy h:mma" value))
                :date            (fn [_ value] (dt/tformat "MMM d, yyyy" value))
                :time            (fn [_ value] (dt/tformat "h:mma" value))}
-     :int     {:default (fn [_ value] (math/numeric->str value))}
+     :int     {:default (fn [_ value] (str value))}
      :decimal {:default    (fn [_ value] (math/numeric->str value))
                :currency   (fn [_ value] (math/numeric->str (math/round value 2)))
                :percentage (fn [_ value] (math/numeric->percent-str value))

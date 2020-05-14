@@ -24,7 +24,7 @@
   is still needed, but the renderer can choose to use the per-row data however it wants (points on a graph, etc).
 
   The columns are treated as the authoritative definition of the attributes, meaning that you can assoc things like
-  `at/style` on a column to override something like style."
+  `ao/style` on a column to override something like style."
   :com.fulcrologic.rad.report/columns)
 
 (def column-styles
@@ -173,6 +173,16 @@
    "
   :com.fulcrologic.rad.report/row-query-inclusion)
 
+(def row-heading
+  "An optional function that can calculate a header that should be added to a row (in HTML this would typically be
+   a leftmost `th` on the row).
+
+   The function should be a `(fn [report-instance row-data] string-or-element)`.
+
+   TODO: Should the `row-data` include information about its relative position in the table?
+   "
+  :com.fulcrologic.rad.report/row-heading)
+
 (def row-actions
   "A vector of actions that will appear on each row of the report (if supported by rendering plugin).
 
@@ -275,3 +285,54 @@
   Rendering plugins may or may not allow non-string return values from the function version."
   :com.fulcrologic.rad.report/column-heading)
 
+(def raw-result-xform
+  "A function that will be called when the report is loaded/refreshed and can transform (or augment) the network result into
+   the normalized form expected by the report. This is useful when it is more convenient to implement Pathom resolvers
+   that return that data in a shape different from that needed, or when you'd like the raw result to have some
+   pre-processing done on it before presentation.
+
+   If supplied it should be a `(fn [report-class raw-network-result] updated-result)`.
+
+   For example, you might use a `ro/source-attribute` of `:invoice-statistics`, and `ro/columns` of
+   `[date-groups gross-sales item-count]`. However, the pathom implementation of groupings will be most optimal
+   if you can do the groupings at the `invoice-statistics` resolver, and then have each nested resolver report
+   the values for the groupings as a vector, like so:
+
+   ```
+   {:invoice-statistics ; (1)
+    {:invoice-statistics/date-groups [\"1/1/2020\" \"2/1/2020\" \"3/1/2020\" \"4/1/2020\"]
+     :invoice-statistics/gross-sales [323M 313M 124M 884M]
+     :invoice-statistics/item-count  [10 11 5 42]}})
+   ```
+
+   Reports, however, expect the loaded data to have this shape:
+
+   ```
+   {:invoice-statistics  ; (2)
+     [{:invoice-statistics/date-groups 1/1/2020 :invoice-statistics/gross-sales 323M :invoice-statistics/item-count 10}
+      {:invoice-statistics/date-groups 2/1/2020 :invoice-statistics/gross-sales 313M :invoice-statistics/item-count 11}
+      ...]}
+   ```
+
+   If so, you must provide this option in order to convert (1) into (2). Since the above transform is commonly useful
+   when implementing with Pathom it is included in RAD as `report/rotate-result`.
+
+   IMPORTANT: IF you return a result like (1) you will also have to set `ro/denormalize?` to false or your raw data will
+   be mangled by normalization.
+
+   This option can also be used to take some result and do statistical roll-ups on the client. For example, you could
+   include a virtual column (e.g. a `defattr` of `row-total` that has no representation on the server, and will result in no data on the
+   full-stack result). You could then use this function to calculate that value and plug it into the data just after load."
+  :com.fulcrologic.rad.report/raw-result-xform)
+
+(def rotate?
+  "A boolean (or a `(fn [report-instance] boolean?)`). Requests that the UI rendering rotate the table. The first
+   column listed in the config will then become the column headings
+   and the remaining columns become the rows (with their column headers becoming row headers).
+
+   NOTE: Rotated tables do not support a custom row renderer. If you need to customize the look of rotation you will
+   have to take control of table rendering yourself.
+
+   WARNING: This option is a hint to the UI rendering layer. Your UI plugin may or may not support it, in which case this
+   option may be a no-op and you will have to write the rendering code in your table yourself."
+  :com.fulcrologic.rad.report/rotate?)

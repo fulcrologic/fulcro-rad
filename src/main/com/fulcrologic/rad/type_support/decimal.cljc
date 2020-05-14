@@ -316,6 +316,20 @@
 #?(:cljs
    (reader/register-tag-parser! 'math/bigdec bigdecimal))
 
+;; In cljs, at least, we can make `compare` work via this protocol.
+;; FIXME: This should be a more general function in transit support, since it tries to add comparison for transit tagged
+;; types.
+#?(:cljs
+   (extend-protocol cljs.core/IComparable
+     ty/TaggedValue
+     (-compare [a b]
+       (if (and (numeric? a) (numeric? b))
+         (cond
+           (< a b) -1
+           (> a b) 1
+           (= a b) 0)
+         (compare (.-rep a) (.-rep b))))))
+
 (defn floor
   "Returns the floor of n, which is n with all decimal digits removed."
   [n]

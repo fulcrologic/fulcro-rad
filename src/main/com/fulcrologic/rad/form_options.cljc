@@ -124,8 +124,9 @@
   :com.fulcrologic.rad.form/route-prefix)
 
 (def cancel-route
-  "OPTIONAL: A vector. The route to go to on cancel. Can also be `:back`, which is the default (and takes the user
-  back to where they came from.)"
+  "OPTIONAL: A vector of strings, a route target class (recommended), or `:back` (default). The route to go to on cancel.
+  A vector of strings will ignore history, a route target is recommended when using history, and
+  `:back` requires route history to be installed."
   :com.fulcrologic.rad.form/cancel-route)
 
 (def controls

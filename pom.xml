@@ -4,7 +4,7 @@
   <groupId>com.fulcrologic</groupId>
   <artifactId>fulcro-rad</artifactId>
   <packaging>jar</packaging>
-  <version>0.0.3-alpha</version>
+  <version>0.0.4-alpha</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -94,7 +94,7 @@
     <dependency>
       <groupId>com.fulcrologic</groupId>
       <artifactId>fulcro-i18n</artifactId>
-      <version>0.0.1-alpha-1</version>
+      <version>0.0.3-alpha</version>
     </dependency>
     <dependency>
       <groupId>com.taoensso</groupId>
@@ -104,7 +104,7 @@
     <dependency>
       <groupId>org.clojure</groupId>
       <artifactId>clojurescript</artifactId>
-      <version>1.10.597</version>
+      <version>1.10.748</version>
     </dependency>
     <dependency>
       <groupId>cljsjs</groupId>
@@ -114,7 +114,7 @@
     <dependency>
       <groupId>com.fulcrologic</groupId>
       <artifactId>fulcro</artifactId>
-      <version>3.2.1-RC5</version>
+      <version>3.2.6</version>
     </dependency>
     <dependency>
       <groupId>cljc.java-time</groupId>

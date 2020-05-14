@@ -70,7 +70,9 @@
   [pred]
   (fn [ast]
     (let [mutation? (symbol? (:dispatch-key ast))]
-      (cond-> (elide-ast-nodes ast pred)
+      (cond-> (-> ast
+                  (elide-ast-nodes pred)
+                  (update :children conj (eql/expr->ast :com.wsscode.pathom.core/errors)))
         mutation? (update :children conj (eql/expr->ast :tempids))))))
 
 (defn fulcro-rad-app

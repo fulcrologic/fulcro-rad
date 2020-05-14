@@ -158,8 +158,8 @@
   The attribute style of :default is the default, and can be overridden in ::form/field-styles on the form (master
   has precedence, followed by the form it actually appears on) or
   using ::form/field-style on the attribute itself."
-  [{::keys [form-instance master-form]} {::attr/keys [type qualified-key]
-                                         ::keys      [field-style style] :as attr}]
+  [{::keys [form-instance master-form]} {::attr/keys [type qualified-key style]
+                                         ::keys      [field-style] :as attr}]
   (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (?! (or
                           (some-> master-form comp/component-options ::field-styles qualified-key)
@@ -328,11 +328,12 @@
 
 (defn form-allow-route-change [this]
   "Used as a form route target's :allow-route-change?"
-  (let [id         (comp/get-ident this)
-        form-props (comp/props this)
-        read-only? (?! (comp/component-options this ::read-only?) this)
-        abandoned? (not= :state/editing (uism/get-active-state this id))
-        dirty?     (and (not abandoned?) (fs/dirty? form-props))]
+  (let [id            (comp/get-ident this)
+        form-props    (comp/props this)
+        read-only?    (?! (comp/component-options this ::read-only?) this)
+        current-state (app/current-state this)
+        abandoned?    (get-in current-state [::uism/asm-id id ::uism/local-storage :abandoned?] false)
+        dirty?        (and (not abandoned?) (fs/dirty? form-props))]
     (or read-only? (not dirty?))))
 
 (defn form-pre-merge
@@ -694,18 +695,22 @@
       (route-target-ready form-ident)
       (uism/activate :state/editing))))
 
-(defn exit-form
-  "Discard all changes, and attempt to change route. Exits the state machine (cleaning it up) if the new route takes effect."
+(defn leave-form
+  "Discard all changes, and attempt to change route."
   [{::uism/keys [fulcro-app] :as uism-env}]
   (let [Form         (uism/actor-class uism-env :actor/form)
         cancel-route (some-> Form comp/component-options ::cancel-route)]
     (let [form-ident (uism/actor->ident uism-env :actor/form)]
-      (when (history/history-support? fulcro-app)
-        (history/back! fulcro-app))
+      (cond
+        (= :back cancel-route) (if (history/history-support? fulcro-app)
+                                 (history/back! fulcro-app)
+                                 (log/error "Back not supported. No history installed."))
+        (and (seq cancel-route) (every? string? cancel-route)) (dr/change-route! fulcro-app cancel-route)
+        (comp/component-class? cancel-route) (rad-routing/route-to! fulcro-app cancel-route {})
+        (history/history-support? fulcro-app) (history/back! fulcro-app))
       (-> uism-env
-        (uism/apply-action fs/pristine->entity* form-ident)
-        (uism/activate :state/abandoned)
-        (uism/set-timeout :cleanup :event/exit {} 1)))))
+        (uism/store :abandoned? true)
+        (uism/apply-action fs/pristine->entity* form-ident)))))
 
 (>defn calc-diff
   "Calculates the minimal form diff from the UISM env of the master form's state machine."
@@ -719,10 +724,8 @@
     {::delta delta}))
 
 (def global-events
-  {:event/exit
-   {::uism/handler (fn [env] (uism/exit env))}
-   :event/route-denied
-   {::uism/handler (fn [env] env)}})
+  {:event/exit         {::uism/handler (fn [env] (uism/exit env))}
+   :event/route-denied {::uism/handler (fn [env] env)}})
 
 (defn auto-create-to-one
   "Create any to-one referenced entities that did not load, but which are marked as auto-create."
@@ -829,7 +832,7 @@
     {::uism/events
      (merge
        global-events
-       {:event/ok     {::uism/handler exit-form}
+       {:event/ok     {::uism/handler leave-form}
         :event/cancel {::uism/handler (fn [env] (uism/activate env :state/editing))}})}
 
     :state/saving
@@ -945,12 +948,7 @@
                             (uism/apply-action env fs/pristine->entity* form-ident)))}
 
         :event/cancel
-        {::uism/handler (fn [env] (-> env
-                                    (uism/activate :state/abandoned)
-                                    (exit-form)))}})}
-
-    :state/abandoned
-    {::uism/events global-events}}})
+        {::uism/handler leave-form}})}}})
 
 (defn save!
   "Trigger a save on the given form rendering env."
