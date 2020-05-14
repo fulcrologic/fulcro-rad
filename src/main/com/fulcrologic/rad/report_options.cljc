@@ -325,13 +325,14 @@
   full-stack result). You could then use this function to calculate that value and plug it into the data just after load."
   :com.fulcrologic.rad.report/raw-result-transform)
 
-(def rotate-on
-  "An attribute (or a `(fn [report-instance] attribute)`). Requests that the UI rendering rotate the table such that the
-   given attribute's column becomes the table headings (sorted using `row-compare` IF that column is the current
-   selected sort-by), and the remaining columns become the rows (with their column headers becoming row headers).
+(def rotate?
+  "A boolean (or a `(fn [report-instance] boolean?)`). Requests that the UI rendering rotate the table. The first
+   column listed in the config will then become the column headings
+   and the remaining columns become the rows (with their column headers becoming row headers).
 
-   If it is supplied as a function, then returning `nil` will have the effect of disabling the rotation.
+   NOTE: Rotated tables do not support a custom row renderer. If you need to customize the look of rotation you will
+   have to take control of table rendering yourself.
 
    WARNING: This option is a hint to the UI rendering layer. Your UI plugin may or may not support it, in which case this
-   option may be a no-op."
-  :com.fulcrologic.rad.report/rotate-on)
+   option may be a no-op and you will have to write the rendering code in your table yourself."
+  :com.fulcrologic.rad.report/rotate?)
