@@ -173,6 +173,16 @@
    "
   :com.fulcrologic.rad.report/row-query-inclusion)
 
+(def row-heading
+  "An optional function that can calculate a header that should be added to a row (in HTML this would typically be
+   a leftmost `th` on the row).
+
+   The function should be a `(fn [report-instance row-data] string-or-element)`.
+
+   TODO: Should the `row-data` include information about its relative position in the table?
+   "
+  :com.fulcrologic.rad.report/row-heading)
+
 (def row-actions
   "A vector of actions that will appear on each row of the report (if supported by rendering plugin).
 
@@ -321,6 +331,8 @@
    formatting when rotated."
   :com.fulcrologic.rad.report/grouped-on)
 
-(def rotate?
-  "A boolean. Default false."
-  :com.fulcrologic.rad.report/rotate?)
+(def rotate-on
+  "An `attribute`. Rotate the table such that the given attribute's column becomes the table headings (sorted using
+   `row-compare` IF that column is the current selected sort-by), and the remaining columns become the rows (with their
+   column headers becoming row headers)."
+  :com.fulcrologic.rad.report/rotate-on)
