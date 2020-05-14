@@ -285,7 +285,7 @@
   Rendering plugins may or may not allow non-string return values from the function version."
   :com.fulcrologic.rad.report/column-heading)
 
-(def raw-result-transform
+(def raw-result-xform
   "A function that will be called when the report is loaded/refreshed and can transform (or augment) the network result into
    the normalized form expected by the report. This is useful when it is more convenient to implement Pathom resolvers
    that return that data in a shape different from that needed, or when you'd like the raw result to have some
@@ -303,27 +303,27 @@
     {:invoice-statistics/date-groups [\"1/1/2020\" \"2/1/2020\" \"3/1/2020\" \"4/1/2020\"]
      :invoice-statistics/gross-sales [323M 313M 124M 884M]
      :invoice-statistics/item-count  [10 11 5 42]}})
-  ```
+   ```
 
-  Reports, however, expect the loaded data to have this shape:
+   Reports, however, expect the loaded data to have this shape:
 
-  ```
-  {:invoice-statistics  ; (2)
-    [{:invoice-statistics/date-groups 1/1/2020 :invoice-statistics/gross-sales 323M :invoice-statistics/item-count 10}
-     {:invoice-statistics/date-groups 2/1/2020 :invoice-statistics/gross-sales 313M :invoice-statistics/item-count 11}
-     ...]}
-  ```
+   ```
+   {:invoice-statistics  ; (2)
+     [{:invoice-statistics/date-groups 1/1/2020 :invoice-statistics/gross-sales 323M :invoice-statistics/item-count 10}
+      {:invoice-statistics/date-groups 2/1/2020 :invoice-statistics/gross-sales 313M :invoice-statistics/item-count 11}
+      ...]}
+   ```
 
-  If so, you must provide this option in order to convert (1) into (2). Since the above transform is commonly useful
-  when implementing with Pathom it is included in RAD as `report/rotate-result`.
+   If so, you must provide this option in order to convert (1) into (2). Since the above transform is commonly useful
+   when implementing with Pathom it is included in RAD as `report/rotate-result`.
 
-  IMPORTANT: IF you return a result like (1) you will also have to set `ro/denormalize?` to false or your raw data will
-  be mangled by normalization.
+   IMPORTANT: IF you return a result like (1) you will also have to set `ro/denormalize?` to false or your raw data will
+   be mangled by normalization.
 
-  This option can also be used to take some result and do statistical roll-ups on the client. For example, you could
-  include a virtual column (e.g. a `defattr` of `row-total` that has no representation on the server, and will result in no data on the
-  full-stack result). You could then use this function to calculate that value and plug it into the data just after load."
-  :com.fulcrologic.rad.report/raw-result-transform)
+   This option can also be used to take some result and do statistical roll-ups on the client. For example, you could
+   include a virtual column (e.g. a `defattr` of `row-total` that has no representation on the server, and will result in no data on the
+   full-stack result). You could then use this function to calculate that value and plug it into the data just after load."
+  :com.fulcrologic.rad.report/raw-result-xform)
 
 (def rotate?
   "A boolean (or a `(fn [report-instance] boolean?)`). Requests that the UI rendering rotate the table. The first
