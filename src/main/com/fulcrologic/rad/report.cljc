@@ -222,7 +222,7 @@
 (defn- preprocess-raw-result
   "Apply the raw result transform, if it is defined."
   [uism-env]
-  (let [xform (report-options uism-env ::raw-result-transform)]
+  (let [xform (report-options uism-env ::raw-result-xform)]
     (if xform
       (let [raw-result (uism/alias-value uism-env :raw-rows)
             report     (uism/actor-class uism-env :actor/report)
