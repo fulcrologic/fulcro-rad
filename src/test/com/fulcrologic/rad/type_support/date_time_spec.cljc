@@ -3,6 +3,7 @@
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [cljc.java-time.instant]
     [cljc.java-time.local-date :as ld]
+    [cljc.java-time.local-time :as lt]
     [cljc.java-time.format.date-time-formatter :as dtf]
     [fulcro-spec.core :refer [assertions specification behavior]]
     #?@(:clj  []
@@ -100,5 +101,38 @@
         "LA"
         (datetime/inst->human-readable-date tm) => "Tue, Mar 3, 2020"))))
 
-(comment
-  (dtf/format (dtf/of-pattern "HH:mm") (dt/now)))
+(specification "inst->html-date"
+  (behavior "Outputs the correct HTML date for the given instant based on the current time zone"
+    (let [tm #inst "2020-03-04T06:00:00Z"]
+      (datetime/set-timezone! "UTC")
+      (assertions
+        "UTC"
+        (datetime/inst->html-date tm) => "2020-03-04")
+      (datetime/set-timezone! "America/New_York")
+      (assertions
+        "NY"
+        (datetime/inst->html-date tm) => "2020-03-04")
+      (datetime/set-timezone! "America/Los_Angeles")
+      (assertions
+        "LA"
+        (datetime/inst->html-date tm) => "2020-03-03"))))
+
+(specification "html-date->inst"
+  (behavior "Outputs the correct instant for an HTML date, properly adjusted to the local time given in the *current-timezone*"
+    (let [dt "2020-03-01"
+          tm (lt/of 6 0)]
+      (datetime/set-timezone! "UTC")
+      (assertions
+        "UTC"
+        (datetime/html-date->inst dt tm) => #inst "2020-03-01T06:00:00Z")
+
+      (datetime/set-timezone! "America/New_York")
+      (assertions
+        "NY"
+        (datetime/html-date->inst dt tm) => #inst "2020-03-01T11:00:00Z")
+
+      (datetime/set-timezone! "America/Los_Angeles")
+      (assertions
+        "LA"
+        (datetime/html-date->inst dt tm) => #inst "2020-03-01T14:00:00Z"))))
+

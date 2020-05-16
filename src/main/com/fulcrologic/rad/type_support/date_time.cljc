@@ -267,7 +267,21 @@
     (tformat "E, MMM d, yyyy" inst)
     ""))
 
-(comment
-  (set-timezone! "America/New_York")
-  (tformat "HH:mm" (now)))
+(>defn inst->html-date
+  "Convert an inst to an HTML date input string. Assumes *current-timezone*. Always returns a string. Will return
+  today's date if inst is nil or otherwise fails to convert."
+  [inst]
+  [(? inst?) => string?]
+  (if inst
+    (tformat "yyyy-MM-dd" inst)
+    (tformat "yyyy-MM-dd" (now))))
+
+(>defn html-date->inst
+  "Convert an HTML date input string to an inst at the given local time, adjusted to the correct *current-timezone*. Returns
+   `now` if the string isn't a proper ISO string."
+  [html-date local-time]
+  [(? string?) ::local-time => inst?]
+  (let [date      (or (ld/parse html-date) (ld/now))
+        date-time (ld/at-time date local-time)]
+    (local-datetime->inst date-time)))
 
