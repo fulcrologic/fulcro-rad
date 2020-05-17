@@ -216,7 +216,7 @@
   (let [columns  (comp/component-options report-class ::columns)
         ks       (map ::attr/qualified-key columns)
         row-data (map (fn [{::attr/keys [qualified-key]}]
-                        (get grouped-result qualified-key)) columns)]
+                        (get grouped-result qualified-key (repeat 100000 nil))) columns)]
     (apply mapv (fn [& args] (zipmap ks args)) row-data)))
 
 (defn- preprocess-raw-result
@@ -560,6 +560,7 @@
                :short-timestamp (fn [_ value] (dt/tformat "MMM d, h:mma" value))
                :timestamp       (fn [_ value] (dt/tformat "MMM d, yyyy h:mma" value))
                :date            (fn [_ value] (dt/tformat "MMM d, yyyy" value))
+               :month-day       (fn [_ value] (dt/tformat "MMM d" value))
                :time            (fn [_ value] (dt/tformat "h:mma" value))}
      :int     {:default (fn [_ value] (str value))}
      :decimal {:default    (fn [_ value] (math/numeric->str value))
