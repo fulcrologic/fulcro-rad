@@ -84,8 +84,8 @@
   data. Does nothing by itself, must be used with :com.wsscode.pathom.connect/resolve, and optionally
   :com.wsscode.pathom.connect/input.
 
-  Attribute MUST be a `:ref` type and can include a `target` that indicates what kind of entities/rows/docs this attribute
-  resolves to.
+  If you are resolving a graph edge, then the attribute must be a `:ref` type and can include a `target`
+  that indicates what kind of entities/rows/docs this attribute resolves to.
 
   ```
   (defattr all-accounts :account/all-accounts :ref
@@ -96,10 +96,14 @@
                        {:account/all-accounts (queries/get-all-accounts env query-params)}))})
   ```
 
+  If you are resolving a scalar, then just specify the correct type.
+
   Remember that automatic resolver generation in database adapters will be able to resolve any other desired attributes
   of an entity/row/document based on the ID of it. Therefore a ref attribute like this will typically ONLY return the
   IDs of the items (though it may choose to return more if that case is judged to always be more efficient).
 
+  NOTE: Any pathom keys you'd normally put in a pathom resolver options
+  map can be included in an attribute that is used to generate a Pathom resolver.
   "
   :com.wsscode.pathom.connect/output)
 
@@ -113,7 +117,8 @@
 
   Must be used with :com.wsscode.pathom.connect/output, and optionally :com.wsscode.pathom.connect/input.
 
-  See `pc-output`.
+  See `pc-output`. Also note: Any pathom keys you'd normally put in a pathom resolver options
+   map can be included in an attribute that is used to generate a Pathom resolver.
   "
   :com.wsscode.pathom.connect/resolve)
 
@@ -143,7 +148,8 @@
    A completely virtual resolution like this can also simply be generated with Pathom's `defresolver`, but defining them
    in attributes means you can add additional info to them that is useful to other parts of RAD like form rendering.
 
-   See `pc-resolve` and `pc-output`.
+   See `pc-resolve` and `pc-output`. Also note: Any pathom keys you'd normally put in a pathom resolver options
+   map can be included in an attribute that is used to generate a Pathom resolver.
   "
   :com.wsscode.pathom.connect/input)
 
