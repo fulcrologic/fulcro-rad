@@ -520,11 +520,17 @@
     (let [path (conj ref :ui/parameters)]
       (swap! state update-in path merge params))))
 
+(defn externally-controlled?
+  "Returns true if the given report instance is controlled by a container."
+  [report-instance]
+  (boolean (some-> report-instance comp/props :ui/parameters ::externally-controlled?)))
+
 (defn set-parameter!
   "Set the given parameter on the report. Use `filter-rows!`, `reload!`, etc. to refresh the report."
   [report-instance parameter-name new-value]
   (comp/transact! report-instance [(merge-params {parameter-name new-value})])
-  (rad-routing/update-route-params! report-instance assoc parameter-name new-value))
+  (when-not (externally-controlled? report-instance)
+    (rad-routing/update-route-params! report-instance assoc parameter-name new-value)))
 
 (defn form-link
   "Get the form link info for a given (column) key.

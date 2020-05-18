@@ -131,12 +131,12 @@
 
    The types of controls supported will depend on your UI plugin.
 
-   See also `::report/control-layout`, `row-visible?`, `initial-sort-params`, and `compare-rows`.
+   See also `control-layout`, `row-visible?`, `initial-sort-params`, and `compare-rows`.
    "
   :com.fulcrologic.rad.control/controls)
 
 (def control-layout
-  "Reports can have actions and input controls. These are normally laid out by simply throwing all of the buttons
+  "Alias to `::control/control-layout`. Reports can have actions and input controls. These are normally laid out by simply throwing all of the buttons
    in a sequence, and throwing all of the non-buttons in a form. No layout in particular is guaranteed by RAD
    (though you rendering plugin may provide one).
 
@@ -150,9 +150,9 @@
    ```
 
    Where the keywords are the control keys that you wish to place in those respective positions in the UI. See
-   `::control/controls`.
+   `controls`.
    "
-  :com.fulcrologic.rad.report/control-layout)
+  :com.fulcrologic.rad.control/control-layout)
 
 (def route
   "A string that will be used as this reports path element in the routing tree. Must be unique among siblings."
