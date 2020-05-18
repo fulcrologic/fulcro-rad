@@ -65,10 +65,12 @@
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
         control-style (or (some-> report-instance comp/component-options ::control-style) :default)
         control       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::control-style->control control-style)]
+    ;; TASK: If this report is in a container, it should only render controls that still matter. Need some way to declare that
+    ;; a control is local to a report.
     (if control
       control
       (do
-        (log/error "No layout function found for form layout style" control-style)
+        (log/error "No layout function found for report control style" control-style)
         nil))))
 
 (defn render-control
@@ -109,8 +111,9 @@
 
 (defn initialize-parameters [{::uism/keys [fulcro-app] :as env}]
   (let [report-ident        (uism/actor->ident env :actor/report)
+        controlled?         (uism/alias-value env :controlled?)
         path                (conj report-ident :ui/parameters)
-        {history-params :params} (history/current-route fulcro-app)
+        {history-params :params} (when-not controlled? (history/current-route fulcro-app))
         controls            (report-options env :com.fulcrologic.rad.control/controls)
         initial-sort-params (initial-sort-params-with-defaults env)
         initial-parameters  (reduce-kv
@@ -240,6 +243,7 @@
     :sort-params   [:actor/report :ui/parameters ::sort]
     :sort-by       [:actor/report :ui/parameters ::sort :sort-by]
     :ascending?    [:actor/report :ui/parameters ::sort :ascending?]
+    :controlled?   [:actor/report :ui/parameters ::externally-controlled?]
     :filtered-rows [:actor/report :ui/cache :filtered-rows]
     :sorted-rows   [:actor/report :ui/cache :sorted-rows]
     :raw-rows      [:actor/report :ui/loaded-data]
@@ -253,17 +257,19 @@
    {:initial
     {::uism/handler (fn [env]
                       (let [{::uism/keys [fulcro-app event-data]} env
-                            {::keys [run-on-mount?]} (report-options env)
+                            {::keys [run-on-mount? externally-controlled?]} (report-options env)
 
-                            {desired-page ::current-page} (:params (history/current-route fulcro-app))]
+                            {desired-page ::current-page} (:params (history/current-route fulcro-app))
+                            run-now? (and (or desired-page run-on-mount?) (not externally-controlled?))]
                         (-> env
+                          (uism/assoc-aliased :controlled? (boolean externally-controlled?))
                           (uism/store :route-params (:route-params event-data))
                           (cond->
                             (nil? desired-page) (uism/assoc-aliased :current-page 1))
                           (initialize-parameters)
                           (cond->
-                            (or desired-page run-on-mount?) (load-report!)
-                            (not run-on-mount?) (uism/activate :state/gathering-parameters)))))}
+                            run-now? (load-report!)
+                            (not run-now?) (uism/activate :state/gathering-parameters)))))}
 
     :state/loading
     (merge global-events
@@ -298,13 +304,15 @@
 
         :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                                                    (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
-                                                     (let [sort-by    (uism/alias-value env :sort-by)
-                                                           ascending? (uism/alias-value env :ascending?)
-                                                           ascending? (if (= qualified-key sort-by)
-                                                                        (not ascending?)
-                                                                        true)]
-                                                       (rad-routing/update-route-params! fulcro-app update ::sort merge {:ascending? ascending?
-                                                                                                                         :sort-by    qualified-key})
+                                                     (let [sort-by     (uism/alias-value env :sort-by)
+                                                           controlled? (uism/alias-value env :controlled?)
+                                                           ascending?  (uism/alias-value env :ascending?)
+                                                           ascending?  (if (= qualified-key sort-by)
+                                                                         (not ascending?)
+                                                                         true)]
+                                                       (when-not controlled?
+                                                         (rad-routing/update-route-params! fulcro-app update ::sort merge {:ascending? ascending?
+                                                                                                                           :sort-by    qualified-key}))
                                                        (-> env
                                                          (uism/assoc-aliased
                                                            :busy? false
@@ -315,8 +323,9 @@
                                                      env))}
 
         :event/select-row        {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
-                                                   (let [row (:row event-data)]
-                                                     (when (nat-int? row)
+                                                   (let [row         (:row event-data)
+                                                         controlled? (uism/alias-value env :controlled?)]
+                                                     (when (and (nat-int? row) (not controlled?))
                                                        (rad-routing/update-route-params! fulcro-app assoc ::selected-row row))
                                                      (uism/assoc-aliased env :selected-row row)))}
 
@@ -675,28 +684,3 @@
                     ::attr/keys [qualified-key] :as attr}]
   (let [rpt-column-class (comp/component-options report-instance ::column-classes qualified-key)]
     (or rpt-column-class column-class)))
-
-(comment
-
-  (let [data         [{:category "Gross Receipts" :subcategory "Merchandise" :amount 99.33M}
-                      {:category "Gross Receipts" :subcategory "Services" :amount 19.99M}
-                      {:category "Gross Receipts" :subcategory "Returns" :amount -10.00M}
-                      {:category "Gross Receipts" :subcategory "Tax" :amount 9.11M}
-                      {:category "Net Sales" :subcategory "Merchandise" :amount 99.33M}
-                      {:category "Net Sales" :subcategory "Services" :amount 19.99M}
-                      {:category "Net Sales" :subcategory "Returns" :amount -10.00M}]
-        grouped-data (group-by :category data)
-        group-rows   (reduce-kv
-                       (fn [m group-label rows]
-                         (conj m {:aggregate-row [group-label (reduce (fn [result {:keys [amount]}] (+ result amount)) 0 rows)]
-                                  :rows          rows}))
-                       []
-                       grouped-data)]
-    group-rows)
-
-  ;; TODO: Report that supports defining custom derived named values (in :ui/cache) along with a function over the report
-  ;; data that can generate those values. Then, a simple layout declaration that can be used to add a table that
-  ;; displays the given values nicely.
-
-  )
-
