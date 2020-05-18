@@ -24,7 +24,8 @@
   [container-instance])
 
 (defn set-parameter!
-  "Set the given parameter on the container, which will feed it forward into each report that uses it."
+  "Set the given parameter on the container, which will feed it forward into each report that uses it. The container
+   should be started before you do this or the forward-feed will likely be overwritten when the children are started."
   [report-instance parameter-name new-value]
   ;(comp/transact! report-instance [(merge-params {parameter-name new-value})])
   (rad-routing/update-route-params! report-instance assoc parameter-name new-value))
@@ -56,12 +57,10 @@
   [container-class-or-instance]
   (let [{::keys [children]} (comp/component-options container-class-or-instance)
         without-local (fn *without-local [controls]
-                        (log/spy :info controls)
                         (reduce-kv (fn [c k v]
                                      (if (:local? v)
                                        c
                                        (assoc c k v))) {} controls))]
-    (log/spy :info children)
     (reduce
       (fn [controls child]
         (let [child-controls (comp/component-options child ::control/controls)]
@@ -88,7 +87,7 @@
        (when-not (seq children)
          (throw (ana/error &env (str "defsc-container " sym " has no declared children."))))
        (let [query   (into [:ui/parameters [df/marker-table '(quote _)]]
-                       (map-indexed (fn [idx child-sym] {(keyword "container" (str "child" idx)) `(comp/get-query ~child-sym)}) children))
+                       (map (fn [child-sym] {(comp/class->registry-key ~child-sym) `(comp/get-query ~child-sym)}) children))
              nspc    (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
              fqkw    (keyword (str nspc) (name sym))
              options (assoc options
