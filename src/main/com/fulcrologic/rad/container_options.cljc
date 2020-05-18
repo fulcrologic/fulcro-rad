@@ -25,3 +25,11 @@
   "A keyword (hint) of what layout style to use. Support relies on the underlying rendering plugin."
   :com.fulcrologic.rad.container/layout-style)
 
+(def route
+  "A string that will be used as this container's path element in the routing tree. Must be unique among siblings. If you
+   do not define this option, then the container will not behave properly as a route target in dynamic routing."
+  :com.fulcrologic.rad.container/route)
+
+(def title
+  "A string of `(fn [this] element-or-string)` that will be used as this container's title."
+  :com.fulcrologic.rad.container/title)

@@ -15,25 +15,23 @@
     #?@(:clj
         [[clojure.pprint :refer [pprint]]
          [cljs.analyzer :as ana]])
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
-    [com.fulcrologic.rad.type-support.date-time :as dt]
-    [edn-query-language.core :as eql]
-    [com.fulcrologic.rad.type-support.decimal :as math]
-    [com.fulcrologic.fulcro.mutations :as m]
-    [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.rad.locale :as locale]
-    [com.fulcrologic.fulcro.data-fetch :as df]
-    [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [clojure.spec.alpha :as s]
+    [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.control :as control]
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.routing.history :as history]
-    [taoensso.encore :as enc]))
+    [com.fulcrologic.rad.type-support.date-time :as dt]
+    [com.fulcrologic.rad.type-support.decimal :as math]
+    [edn-query-language.core :as eql]
+    [taoensso.encore :as enc]
+    [taoensso.timbre :as log]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
@@ -73,27 +71,6 @@
         (log/error "No layout function found for report control style" control-style)
         nil))))
 
-(defn render-control
-  "Render the control defined by `control-key` in the ::report/controls option. The control definition in question will be
-   a `(fn [props])` where `props` is a map containing:
-
-   * `:report-instance` - The React instance of the mounted report
-   * `:control-key` - The name of the control key being rendererd (so the control can look up additional options on the component)
-   "
-  [report-instance control-key]
-  (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
-        {:keys [:com.fulcrologic.rad.control/controls]} (comp/component-options report-instance)
-        input-type   (get-in controls [control-key :type])
-        input-style  (get-in controls [control-key :style] :default)
-        style->input (some-> runtime-atom deref ::rad/controls :com.fulcrologic.rad.control/type->style->control (get input-type))
-        input        (or (get style->input input-style) (get style->input :default))]
-    (if input
-      (input {:report-instance report-instance
-              :control-key     control-key})
-      (do
-        (log/error "No renderer installed to support parameter " control-key "with type/style" input-type input-style)
-        nil))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LOGIC
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -113,7 +90,7 @@
   (let [report-ident        (uism/actor->ident env :actor/report)
         controlled?         (uism/alias-value env :controlled?)
         path                (conj report-ident :ui/parameters)
-        {history-params :params} (when-not controlled? (history/current-route fulcro-app))
+        {history-params :params} (history/current-route fulcro-app)
         controls            (report-options env :com.fulcrologic.rad.control/controls)
         initial-sort-params (initial-sort-params-with-defaults env)
         initial-parameters  (reduce-kv
@@ -124,9 +101,9 @@
                               {::sort initial-sort-params}
                               controls)]
     (cond-> env
-      report-ident (uism/apply-action assoc-in path (merge initial-parameters history-params)))))
+      report-ident (uism/apply-action assoc-in path (merge initial-parameters history-params {::externally-controlled? controlled?})))))
 
-(defn load-report! [{::uism/keys [state-map event-data] :as env}]
+(defn load-report! [env]
   (let [Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
         {::keys [BodyItem source-attribute]} (comp/component-options Report)
@@ -257,15 +234,15 @@
    {:initial
     {::uism/handler (fn [env]
                       (let [{::uism/keys [fulcro-app event-data]} env
-                            {::keys [run-on-mount? externally-controlled?]} (report-options env)
-
+                            {::keys [run-on-mount?]} (report-options env)
+                            {::keys [externally-controlled?]} event-data
                             {desired-page ::current-page} (:params (history/current-route fulcro-app))
                             run-now? (and (or desired-page run-on-mount?) (not externally-controlled?))]
                         (-> env
                           (uism/assoc-aliased :controlled? (boolean externally-controlled?))
                           (uism/store :route-params (:route-params event-data))
                           (cond->
-                            (nil? desired-page) (uism/assoc-aliased :current-page 1))
+                            (or externally-controlled? (nil? desired-page)) (uism/assoc-aliased :current-page 1))
                           (initialize-parameters)
                           (cond->
                             run-now? (load-report!)
@@ -346,6 +323,12 @@
                                                    (uism/trigger! fulcro-app (uism/asm-id env) :event/do-filter)
                                                    (uism/assoc-aliased env :busy? true))}
 
+        :event/set-parameter     {::uism/handler
+                                  (fn [{::uism/keys [event-data app] :as env}]
+                                    (when-not (uism/alias-value env :controlled?)
+                                      (rad-routing/update-route-params! app merge event-data))
+                                    (uism/update-aliased env :parameters merge event-data))}
+
         :event/set-ui-parameters {::uism/handler
                                   (fn [{::uism/keys [event-data fulcro-app] :as env}]
                                     (let [report-ident        (uism/actor->ident env :actor/report)
@@ -400,7 +383,7 @@
          cache-expired?      (or (nil? last-load-time)
                                (not= current-table-count last-table-count)
                                (< last-load-time (- now-ms cache-expiration-ms)))]
-     (if (not running?)
+     (if (or (::externally-controlled? options) (not running?))
        (uism/begin! app machine-def asm-id {:actor/report report-class} options)
        (do
          (uism/trigger! app asm-id :event/set-ui-parameters {:params params})
@@ -504,33 +487,18 @@
 
 #?(:clj (s/fdef defsc-report :args ::comp/args))
 
-(def reload!
-  "[report-instance]
-
-   Reload the report."
-  (debounce
-    (fn [report-instance]
-      (uism/trigger! report-instance (comp/get-ident report-instance) :event/run))
-    100))
-
-(m/defmutation merge-params
-  "Mutation: Merges the given params (a map) into the current report instance's ui parameters."
-  [params]
-  (action [{:keys [state ref]}]
-    (let [path (conj ref :ui/parameters)]
-      (swap! state update-in path merge params))))
+(def ^:deprecated reload!
+  "Alias to `control/run!`. Runs the report."
+  control/run!)
 
 (defn externally-controlled?
   "Returns true if the given report instance is controlled by a container."
   [report-instance]
   (boolean (some-> report-instance comp/props :ui/parameters ::externally-controlled?)))
 
-(defn set-parameter!
-  "Set the given parameter on the report. Use `filter-rows!`, `reload!`, etc. to refresh the report."
-  [report-instance parameter-name new-value]
-  (comp/transact! report-instance [(merge-params {parameter-name new-value})])
-  (when-not (externally-controlled? report-instance)
-    (rad-routing/update-route-params! report-instance assoc parameter-name new-value)))
+(def ^:deprecated set-parameter!
+  "Alias to `control/set-parameter!`. Set the given parameter value on the report. Usually used internally by controls."
+  control/set-parameter!)
 
 (defn form-link
   "Get the form link info for a given (column) key.
