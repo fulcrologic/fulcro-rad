@@ -22,7 +22,7 @@
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.control :as control]
+    [com.fulcrologic.rad.control :as control :refer [Control]]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
     [com.fulcrologic.rad.routing :as rad-routing]
@@ -86,28 +86,32 @@
   [env]
   (merge {:ascending? true} (report-options env ::initial-sort-params)))
 
-(defn initialize-parameters [{::uism/keys [fulcro-app] :as env}]
+(defn initialize-parameters [{::uism/keys [app] :as env}]
   (let [report-ident        (uism/actor->ident env :actor/report)
         controlled?         (uism/alias-value env :controlled?)
         path                (conj report-ident :ui/parameters)
-        {history-params :params} (history/current-route fulcro-app)
+        {history-params :params} (history/current-route app)
         controls            (report-options env :com.fulcrologic.rad.control/controls)
         initial-sort-params (initial-sort-params-with-defaults env)
-        initial-parameters  (reduce-kv
-                              (fn [result control-key {:keys [default-value]}]
-                                (if default-value
-                                  (assoc result control-key (?! default-value fulcro-app))
-                                  result))
-                              {::sort initial-sort-params}
-                              controls)]
-    (cond-> env
-      report-ident (uism/apply-action assoc-in path (merge initial-parameters history-params {::externally-controlled? controlled?})))))
+        initial-parameters  {::sort initial-sort-params}]
+    (as-> env $
+      (reduce-kv
+        (fn [new-env control-key {:keys [default-value]}]
+          (let [v (cond
+                    (contains? history-params control-key) (get history-params control-key)
+                    (not (nil? default-value)) (?! default-value app))]
+            (if v
+              (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v)
+              new-env)))
+        $
+        controls)
+      (uism/apply-action $ assoc-in path (merge initial-parameters (select-keys history-params #{::sort}) {::externally-controlled? controlled?})))))
 
-(defn load-report! [env]
+(defn load-report! [{::uism/keys [app] :as env}]
   (let [Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
         {::keys [BodyItem source-attribute]} (comp/component-options Report)
-        current-params (dissoc (uism/alias-value env :parameters) ::sort)
+        current-params (log/spy :info (control/current-control-parameters app (comp/component-options Report ::control/controls)))
         path           (conj (comp/get-ident Report {}) :ui/loaded-data)]
     (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
     (-> env
@@ -152,7 +156,7 @@
 
 (defn- page-number-changed [env]
   (let [pg (uism/alias-value env :current-page)]
-    (rad-routing/update-route-params! (::uism/fulcro-app env) assoc ::selected-row -1 ::current-page pg))
+    (rad-routing/update-route-params! (::uism/app env) assoc ::selected-row -1 ::current-page pg))
   env)
 
 (defn- populate-current-page [uism-env]
@@ -302,13 +306,13 @@
         :event/select-row        {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
                                                    (let [row         (:row event-data)
                                                          controlled? (uism/alias-value env :controlled?)]
-                                                     (when (and (nat-int? row) (not controlled?))
+                                                     (when (nat-int? row)
                                                        (rad-routing/update-route-params! fulcro-app assoc ::selected-row row))
                                                      (uism/assoc-aliased env :selected-row row)))}
 
-        :event/sort              {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
+        :event/sort              {::uism/handler (fn [{::uism/keys [app event-data] :as env}]
                                                    ;; this ensures that the do sort doesn't get the CPU until the busy state is rendered
-                                                   (uism/trigger! fulcro-app (uism/asm-id env) :event/do-sort event-data)
+                                                   (uism/trigger! app (uism/asm-id env) :event/do-sort event-data)
                                                    (uism/assoc-aliased env :busy? true))}
 
         :event/do-filter         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
@@ -318,16 +322,10 @@
                                                      (sort-rows)
                                                      (populate-current-page)))}
 
-        :event/filter            {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
+        :event/filter            {::uism/handler (fn [{::uism/keys [app] :as env}]
                                                    ;; this ensures that the do sort doesn't get the CPU until the busy state is rendered
-                                                   (uism/trigger! fulcro-app (uism/asm-id env) :event/do-filter)
+                                                   (uism/trigger! app (uism/asm-id env) :event/do-filter)
                                                    (uism/assoc-aliased env :busy? true))}
-
-        :event/set-parameter     {::uism/handler
-                                  (fn [{::uism/keys [event-data app] :as env}]
-                                    (when-not (uism/alias-value env :controlled?)
-                                      (rad-routing/update-route-params! app merge event-data))
-                                    (uism/update-aliased env :parameters merge event-data))}
 
         :event/set-ui-parameters {::uism/handler
                                   (fn [{::uism/keys [event-data fulcro-app] :as env}]
@@ -431,7 +429,8 @@
        (req! &env sym options ::source-attribute keyword?)
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
-          {::keys [BodyItem edit-form columns row-pk form-links
+          {::control/keys [controls]
+           ::keys [BodyItem edit-form columns row-pk form-links
                    row-query-inclusion denormalize? row-actions route] :as options} options
           _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
           normalize?        (not denormalize?)
@@ -442,6 +441,7 @@
                              :ui/busy?
                              :ui/page-count
                              :ui/current-page
+                             {:ui/controls `(comp/get-query Control)}
                              {:ui/current-rows subquery}
                              [df/marker-table '(quote _)]]
           nspc              (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
@@ -451,12 +451,14 @@
                               :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
                               ::BodyItem ItemClass
                               :query query
-                              :initial-state {:ui/parameters   {}
-                                              :ui/cache        {}
-                                              :ui/busy?        false
-                                              :ui/current-page 1
-                                              :ui/page-count   1
-                                              :ui/current-rows []}
+                              :initial-state (list 'fn '[_]
+                                               {:ui/parameters   {}
+                                                :ui/cache        {}
+                                                :ui/controls     `(mapv #(select-keys % #{::control/id}) (control/control-map->controls ~controls))
+                                                :ui/busy?        false
+                                                :ui/current-page 1
+                                                :ui/page-count   1
+                                                :ui/current-rows []})
                               :ident (list 'fn [] [::id fqkw]))
           body              (if (seq (rest args))
                               (rest args)

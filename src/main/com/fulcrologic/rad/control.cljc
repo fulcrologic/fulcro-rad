@@ -19,12 +19,21 @@
    "
   (:refer-clojure :exclude [run!])
   (:require
-    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
+    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.mutations :refer [defmutation]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
     [com.fulcrologic.rad :as rad]
     [taoensso.timbre :as log]))
+
+(defsc Control
+  "A component used for normalizing control state in the app so that reports in containers can share controls."
+  [_ _]
+  {:query [::id ::value]
+   :ident ::id})
 
 (defn render-control
   "Render the control defined by `control-key` in the ::report/controls option. The control definition in question will be
@@ -56,8 +65,38 @@
       (uism/trigger! instance (comp/get-ident instance) :event/run))
     100))
 
+(defmutation set-parameter [{:keys [k value]}]
+  (action [{:keys [state]}]
+    (swap! state assoc-in [::id k ::value] value)))
+
 (defn set-parameter!
   "Set the given parameter on a report or container."
   [instance parameter-name new-value]
-  (uism/trigger! instance (comp/get-ident instance) :event/set-parameter {parameter-name new-value}))
+  (rad-routing/update-route-params! instance merge {parameter-name new-value})
+  (comp/transact! instance [(set-parameter {:k parameter-name :value new-value})]))
 
+(defn control-map->controls
+  "Convert an old-style control map into a vector of controls that can be normalized into state as `Control`s."
+  [control-map]
+  (if (map? control-map)
+    (reduce-kv
+      (fn [m k v]
+        (conj m (merge {::id k} v)))
+      []
+      control-map)
+    control-map))
+
+(defn current-control-parameters [app-ish controls]
+  (let [state-map (-> app-ish comp/any->app app/current-state)
+        controls  (control-map->controls controls)]
+    (reduce
+      (fn [result {::keys [id]}]
+        (merge result {id (get-in state-map [::id id ::value])}))
+      {}
+      controls)))
+
+(defn current-value
+  "Get the current value of a normalized control."
+  [app-ish control-key]
+  (let [state-map (-> app-ish comp/any->app app/current-state)]
+    (get-in state-map [::id control-key ::value])))

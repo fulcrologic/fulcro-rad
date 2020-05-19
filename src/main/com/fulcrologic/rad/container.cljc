@@ -18,7 +18,7 @@
     [com.fulcrologic.rad.report :as report]
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.routing.history :as history]
-    [com.fulcrologic.rad.control :as control]
+    [com.fulcrologic.rad.control :as control :refer [Control]]
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
     #?@(:clj
         [[cljs.analyzer :as ana]])
@@ -166,14 +166,18 @@
          (throw (ana/error &env (str "defsc-container " sym " has no declared children."))))
        (when (and route (not (string? route)))
          (throw (ana/error &env (str "defsc-container " sym " ::route, when defined, must be a string."))))
-       (let [query-expr (into [:ui/parameters [df/marker-table '(quote _)]]
+       (let [query-expr (into [:ui/parameters
+                               {:ui/controls `(comp/get-query Control)}
+                               [df/marker-table '(quote _)]]
                           (map (fn [child-sym] `{(comp/class->registry-key ~child-sym) (comp/get-query ~child-sym)}) children))
              query      (list 'fn '[] query-expr)
              nspc       (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
              fqkw       (keyword (str nspc) (name sym))
              options    (cond-> (assoc options
                                   :query query
-                                  :initial-state (list 'fn '[_] {:ui/parameters {}})
+                                  :initial-state (list 'fn '[_]
+                                                   {:ui/parameters {}
+                                                    :ui/controls   `(mapv #(select-keys % #{::control/id}) (control/control-map->controls ~controls))})
                                   :ident (list 'fn [] [::id fqkw]))
                           (string? route) (assoc
                                             :route-segment [route]
