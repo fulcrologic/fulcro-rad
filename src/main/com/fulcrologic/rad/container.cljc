@@ -68,15 +68,17 @@
   [uism-env & k-or-ks]
   (apply comp/component-options (uism/actor-class uism-env :actor/container) k-or-ks))
 
-(defn- initialize-parameters [{::uism/keys [app] :as env}]
+(defn- initialize-parameters [{::uism/keys [app event-data] :as env}]
   (let [{history-params :params} (history/current-route app)
+        {:keys [route-params]} event-data
         controls (merge (shared-controls (uism/actor-class env :actor/container)) (container-options env :com.fulcrologic.rad.control/controls))]
     (reduce-kv
       (fn [new-env control-key {:keys [default-value]}]
         (let [v (cond
+                  (contains? route-params control-key) (get route-params control-key)
                   (contains? history-params control-key) (get history-params control-key)
                   (not (nil? default-value)) (?! default-value app))]
-          (if v
+          (if-not (nil? v)
             (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v)
             new-env)))
       env

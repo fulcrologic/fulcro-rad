@@ -86,12 +86,14 @@
       control-map)
     control-map))
 
-(defn current-control-parameters [app-ish controls]
-  (let [state-map (-> app-ish comp/any->app app/current-state)
-        controls  (control-map->controls controls)]
+(defn current-control-parameters [state-map controls]
+  (let [controls (control-map->controls controls)]
     (reduce
       (fn [result {::keys [id]}]
-        (merge result {id (get-in state-map [::id id ::value])}))
+        (let [v (get-in state-map [::id id ::value])]
+          (if (nil? v)
+            result
+            (assoc result id v))))
       {}
       controls)))
 

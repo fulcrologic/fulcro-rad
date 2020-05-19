@@ -86,10 +86,10 @@
   [env]
   (merge {:ascending? true} (report-options env ::initial-sort-params)))
 
-(defn initialize-parameters [{::uism/keys [app] :as env}]
+(defn initialize-parameters [{::uism/keys [app event-data] :as env}]
   (let [report-ident        (uism/actor->ident env :actor/report)
-        controlled?         (uism/alias-value env :controlled?)
         path                (conj report-ident :ui/parameters)
+        {:keys [params]} event-data
         {history-params :params} (history/current-route app)
         controls            (report-options env :com.fulcrologic.rad.control/controls)
         initial-sort-params (initial-sort-params-with-defaults env)
@@ -98,20 +98,21 @@
       (reduce-kv
         (fn [new-env control-key {:keys [default-value]}]
           (let [v (cond
-                    (contains? history-params control-key) (get history-params control-key)
+                    (not (nil? (get params control-key))) (get params control-key)
+                    (not (nil? (get history-params control-key))) (get history-params control-key)
                     (not (nil? default-value)) (?! default-value app))]
-            (if v
+            (if-not (nil? v)
               (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v)
               new-env)))
         $
         controls)
-      (uism/apply-action $ assoc-in path (merge initial-parameters (select-keys history-params #{::sort}) {::externally-controlled? controlled?})))))
+      (uism/apply-action $ assoc-in path (merge initial-parameters (select-keys history-params #{::sort}))))))
 
-(defn load-report! [{::uism/keys [app] :as env}]
+(defn load-report! [{::uism/keys [app state-map] :as env}]
   (let [Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
         {::keys [BodyItem source-attribute]} (comp/component-options Report)
-        current-params (log/spy :info (control/current-control-parameters app (comp/component-options Report ::control/controls)))
+        current-params (control/current-control-parameters state-map (comp/component-options Report ::control/controls))
         path           (conj (comp/get-ident Report {}) :ui/loaded-data)]
     (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
     (-> env
@@ -224,7 +225,6 @@
     :sort-params   [:actor/report :ui/parameters ::sort]
     :sort-by       [:actor/report :ui/parameters ::sort :sort-by]
     :ascending?    [:actor/report :ui/parameters ::sort :ascending?]
-    :controlled?   [:actor/report :ui/parameters ::externally-controlled?]
     :filtered-rows [:actor/report :ui/cache :filtered-rows]
     :sorted-rows   [:actor/report :ui/cache :sorted-rows]
     :raw-rows      [:actor/report :ui/loaded-data]
@@ -239,11 +239,9 @@
     {::uism/handler (fn [env]
                       (let [{::uism/keys [fulcro-app event-data]} env
                             {::keys [run-on-mount?]} (report-options env)
-                            {::keys [externally-controlled?]} event-data
                             {desired-page ::current-page} (:params (history/current-route fulcro-app))
                             run-now? (or desired-page run-on-mount?)]
                         (-> env
-                          (uism/assoc-aliased :controlled? (boolean externally-controlled?))
                           (uism/store :route-params (:route-params event-data))
                           (cond->
                             (nil? desired-page) (uism/assoc-aliased :current-page 1))
@@ -324,7 +322,9 @@
                                                    (uism/trigger! app (uism/asm-id env) :event/do-filter)
                                                    (uism/assoc-aliased env :busy? true))}
 
-        :event/set-ui-parameters {::uism/handler initialize-parameters}
+        :event/set-ui-parameters {::uism/handler (fn [env]
+                                                   (-> env
+                                                     (initialize-parameters)))}
 
         :event/run               {::uism/handler load-report!}}})}})
 
@@ -474,11 +474,6 @@
 (def ^:deprecated reload!
   "Alias to `control/run!`. Runs the report."
   control/run!)
-
-(defn externally-controlled?
-  "Returns true if the given report instance is controlled by a container."
-  [report-instance]
-  (boolean (some-> report-instance comp/props :ui/parameters ::externally-controlled?)))
 
 (def ^:deprecated set-parameter!
   "Alias to `control/set-parameter!`. Set the given parameter value on the report. Usually used internally by controls."
