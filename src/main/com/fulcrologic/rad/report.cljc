@@ -241,12 +241,12 @@
                             {::keys [run-on-mount?]} (report-options env)
                             {::keys [externally-controlled?]} event-data
                             {desired-page ::current-page} (:params (history/current-route fulcro-app))
-                            run-now? (and (or desired-page run-on-mount?) (not externally-controlled?))]
+                            run-now? (or desired-page run-on-mount?)]
                         (-> env
                           (uism/assoc-aliased :controlled? (boolean externally-controlled?))
                           (uism/store :route-params (:route-params event-data))
                           (cond->
-                            (or externally-controlled? (nil? desired-page)) (uism/assoc-aliased :current-page 1))
+                            (nil? desired-page) (uism/assoc-aliased :current-page 1))
                           (initialize-parameters)
                           (cond->
                             run-now? (load-report!)
@@ -285,15 +285,13 @@
 
         :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
                                                    (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
-                                                     (let [sort-by     (uism/alias-value env :sort-by)
-                                                           controlled? (uism/alias-value env :controlled?)
-                                                           ascending?  (uism/alias-value env :ascending?)
-                                                           ascending?  (if (= qualified-key sort-by)
-                                                                         (not ascending?)
-                                                                         true)]
-                                                       (when-not controlled?
-                                                         (rad-routing/update-route-params! fulcro-app update ::sort merge {:ascending? ascending?
-                                                                                                                           :sort-by    qualified-key}))
+                                                     (let [sort-by    (uism/alias-value env :sort-by)
+                                                           ascending? (uism/alias-value env :ascending?)
+                                                           ascending? (if (= qualified-key sort-by)
+                                                                        (not ascending?)
+                                                                        true)]
+                                                       (rad-routing/update-route-params! fulcro-app update ::sort merge {:ascending? ascending?
+                                                                                                                         :sort-by    qualified-key})
                                                        (-> env
                                                          (uism/assoc-aliased
                                                            :busy? false
@@ -304,8 +302,7 @@
                                                      env))}
 
         :event/select-row        {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
-                                                   (let [row         (:row event-data)
-                                                         controlled? (uism/alias-value env :controlled?)]
+                                                   (let [row (:row event-data)]
                                                      (when (nat-int? row)
                                                        (rad-routing/update-route-params! fulcro-app assoc ::selected-row row))
                                                      (uism/assoc-aliased env :selected-row row)))}
@@ -327,22 +324,7 @@
                                                    (uism/trigger! app (uism/asm-id env) :event/do-filter)
                                                    (uism/assoc-aliased env :busy? true))}
 
-        :event/set-ui-parameters {::uism/handler
-                                  (fn [{::uism/keys [event-data fulcro-app] :as env}]
-                                    (let [report-ident        (uism/actor->ident env :actor/report)
-                                          {:keys [params]} event-data
-                                          path                (conj report-ident :ui/parameters)
-                                          controls            (report-options env :com.fulcrologic.rad.control/controls)
-                                          initial-sort-params (initial-sort-params-with-defaults env)
-                                          initial-parameters  (reduce-kv
-                                                                (fn [result control-key {:keys [default-value]}]
-                                                                  (if default-value
-                                                                    (assoc result control-key (?! default-value fulcro-app))
-                                                                    result))
-                                                                {::sort initial-sort-params}
-                                                                controls)]
-                                      (cond-> env
-                                        report-ident (uism/apply-action assoc-in path (merge initial-parameters params)))))}
+        :event/set-ui-parameters {::uism/handler initialize-parameters}
 
         :event/run               {::uism/handler load-report!}}})}})
 
@@ -381,7 +363,7 @@
          cache-expired?      (or (nil? last-load-time)
                                (not= current-table-count last-table-count)
                                (< last-load-time (- now-ms cache-expiration-ms)))]
-     (if (or (::externally-controlled? options) (not running?))
+     (if (not running?)
        (uism/begin! app machine-def asm-id {:actor/report report-class} options)
        (do
          (uism/trigger! app asm-id :event/set-ui-parameters {:params params})
