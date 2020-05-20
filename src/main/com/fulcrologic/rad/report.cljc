@@ -63,8 +63,6 @@
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
         control-style (or (some-> report-instance comp/component-options ::control-style) :default)
         control       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::control-style->control control-style)]
-    ;; TASK: If this report is in a container, it should only render controls that still matter. Need some way to declare that
-    ;; a control is local to a report.
     (if control
       control
       (do
@@ -82,26 +80,41 @@
   [uism-env & k-or-ks]
   (apply comp/component-options (uism/actor-class uism-env :actor/report) k-or-ks))
 
-(defn initial-sort-params-with-defaults
+(defn- route-params-path [env control-key]
+  (let [report-ident (uism/actor->ident env :actor/report)
+        {:keys [local?] :as control} (comp/component-options (uism/actor-class env :actor/report) ::control/controls control-key)
+        id           (second report-ident)]
+    (if (and
+          (or (nil? control) local?)
+          (not (keyword? id)))
+      [id control-key]
+      [control-key])))
+
+(defn initial-sort-params
   [env]
   (merge {:ascending? true} (report-options env ::initial-sort-params)))
 
 (defn initialize-parameters [{::uism/keys [app event-data] :as env}]
-  (let [report-ident        (uism/actor->ident env :actor/report)
-        path                (conj report-ident :ui/parameters)
+  (let [report-ident       (uism/actor->ident env :actor/report)
+        path               (conj report-ident :ui/parameters)
         {:keys [params]} event-data
         {history-params :params} (history/current-route app)
-        controls            (report-options env :com.fulcrologic.rad.control/controls)
-        initial-sort-params (initial-sort-params-with-defaults env)
-        initial-parameters  {::sort initial-sort-params}]
+        sort-path          (route-params-path env ::sort)
+        selected-row       (get-in history-params (route-params-path env ::selected-row))
+        current-page       (get-in history-params (route-params-path env ::current-page))
+        controls           (report-options env :com.fulcrologic.rad.control/controls)
+        initial-parameters (cond-> {::sort (initial-sort-params env)}
+                             selected-row (assoc ::selected-row selected-row)
+                             current-page (assoc ::current-page current-page))]
     (as-> env $
-      (uism/apply-action $ assoc-in path (merge initial-parameters (select-keys history-params #{::sort})))
+      (uism/apply-action $ assoc-in path (merge initial-parameters {::sort (get-in history-params sort-path)}))
       (reduce-kv
         (fn [new-env control-key {:keys [local? default-value]}]
-          (let [v (cond
-                    (not (nil? (get params control-key))) (get params control-key)
-                    (not (nil? (get history-params control-key))) (get history-params control-key)
-                    (not (nil? default-value)) (?! default-value app))]
+          (let [param-path (route-params-path env control-key)
+                v          (cond
+                             (not (nil? (get-in params param-path))) (get-in params param-path)
+                             (not (nil? (get-in history-params param-path))) (get-in history-params param-path)
+                             (not (nil? default-value)) (?! default-value app))]
             (if-not (nil? v)
               (if local?
                 (uism/apply-action new-env assoc-in (conj report-ident :ui/parameters control-key) v)
@@ -128,7 +141,7 @@
       controls)))
 
 
-(defn load-report! [{::uism/keys [state-map] :as env}]
+(defn load-report! [env]
   (let [
         Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
@@ -151,8 +164,7 @@
         row-visible?  (report-options uism-env ::row-visible?)
         normalized?   (some-> all-rows (first) (eql/ident?))
         filtered-rows (if row-visible?
-                        ;; TASK: parameters could now be global. Might want to just pass instance
-                        (let [parameters (uism/alias-value uism-env :parameters)]
+                        (let [parameters (current-control-parameters uism-env)]
                           (filterv
                             (fn [row]
                               (let [row (if normalized? (get-in state-map row) row)]
@@ -178,8 +190,13 @@
 (declare goto-page*)
 
 (defn- page-number-changed [env]
-  (let [pg (uism/alias-value env :current-page)]
-    (rad-routing/update-route-params! (::uism/app env) assoc ::selected-row -1 ::current-page pg))
+  (let [pg        (uism/alias-value env :current-page)
+        row-path  (route-params-path env ::selected-row)
+        page-path (route-params-path env ::current-page)]
+    (rad-routing/update-route-params! (::uism/app env) (fn [p]
+                                                         (-> p
+                                                           (assoc-in row-path -1)
+                                                           (assoc-in page-path pg)))))
   env)
 
 (defn- populate-current-page [uism-env]
@@ -261,8 +278,11 @@
     {::uism/handler (fn [env]
                       (let [{::uism/keys [fulcro-app event-data]} env
                             {::keys [run-on-mount?]} (report-options env)
-                            {desired-page ::current-page} (:params (history/current-route fulcro-app))
-                            run-now? (or desired-page run-on-mount?)]
+                            page-path    (route-params-path env ::current-page)
+                            desired-page (-> (history/current-route fulcro-app)
+                                           :params
+                                           (get-in page-path))
+                            run-now?     (or desired-page run-on-mount?)]
                         (-> env
                           (uism/store :route-params (:route-params event-data))
                           (cond->
@@ -303,15 +323,17 @@
                                                    (let [page (uism/alias-value env :current-page)]
                                                      (goto-page* env (dec (max 2 page)))))}
 
-        :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data fulcro-app] :as env}]
+        :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data app] :as env}]
                                                    (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
                                                      (let [sort-by    (uism/alias-value env :sort-by)
+                                                           sort-path  (route-params-path env ::sort)
                                                            ascending? (uism/alias-value env :ascending?)
                                                            ascending? (if (= qualified-key sort-by)
                                                                         (not ascending?)
                                                                         true)]
-                                                       (rad-routing/update-route-params! fulcro-app update ::sort merge {:ascending? ascending?
-                                                                                                                         :sort-by    qualified-key})
+                                                       (rad-routing/update-route-params! app update-in sort-path merge
+                                                         {:ascending? ascending?
+                                                          :sort-by    qualified-key})
                                                        (-> env
                                                          (uism/assoc-aliased
                                                            :busy? false
@@ -321,10 +343,11 @@
                                                          (populate-current-page)))
                                                      env))}
 
-        :event/select-row        {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
-                                                   (let [row (:row event-data)]
+        :event/select-row        {::uism/handler (fn [{::uism/keys [app event-data] :as env}]
+                                                   (let [row               (:row event-data)
+                                                         selected-row-path (route-params-path env ::selected-row)]
                                                      (when (nat-int? row)
-                                                       (rad-routing/update-route-params! fulcro-app assoc ::selected-row row))
+                                                       (rad-routing/update-route-params! app assoc-in selected-row-path row))
                                                      (uism/assoc-aliased env :selected-row row)))}
 
         :event/sort              {::uism/handler (fn [{::uism/keys [app event-data] :as env}]
@@ -337,6 +360,7 @@
                                                      (uism/assoc-aliased :current-page 1 :busy? false)
                                                      (filter-rows)
                                                      (sort-rows)
+                                                     ;; TODO: Why isn't this goto-page* 1???
                                                      (populate-current-page)))}
 
         :event/filter            {::uism/handler (fn [{::uism/keys [app] :as env}]

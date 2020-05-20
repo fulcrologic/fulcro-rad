@@ -66,15 +66,19 @@
     100))
 
 (defmutation set-parameter [{:keys [k value]}]
-  (action [{:keys [component state]}]
+  (action [{:keys [component ref state]}]
     (let [{:keys [local?]} (get (comp/component-options component ::controls) k)
-          path (if local? (conj (comp/get-ident component) :ui/parameters k) [::id k ::value])]
+          id        (second ref)
+          instance? (and id (not (keyword? id)))
+          path      (if local? (conj (comp/get-ident component) :ui/parameters k) [::id k ::value])]
+      (if instance?
+        (rad-routing/update-route-params! component assoc-in [id k] value)
+        (rad-routing/update-route-params! component assoc k value))
       (swap! state assoc-in path value))))
 
 (defn set-parameter!
   "Set the given parameter on a report or container."
   [instance parameter-name new-value]
-  (rad-routing/update-route-params! instance merge {parameter-name new-value})
   (comp/transact! instance [(set-parameter {:k parameter-name :value new-value})]))
 
 (defn control-map->controls
