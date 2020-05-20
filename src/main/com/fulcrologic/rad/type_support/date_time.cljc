@@ -180,14 +180,14 @@
 (>defn inst->local-datetime
   "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) LocalDateTime."
   ([inst]
-   [(s/or :inst inst?
-      :instant ::instant) => ::local-date-time]
+   [(? (s/or :inst inst?
+         :instant ::instant)) => ::local-date-time]
    (inst->local-datetime *current-zone-name* inst))
   ([zone-name inst]
-   [(? ::zone-name) (s/or :inst inst?
-                      :instant ::instant) => ::local-date-time]
+   [(? ::zone-name) (? (s/or :inst inst?
+                         :instant ::instant)) => ::local-date-time]
    (let [z   (get-zone-id zone-name)
-         i   (instant/of-epoch-milli (inst-ms inst))
+         i   (instant/of-epoch-milli (inst-ms (or inst (now))))
          ldt (ldt/of-instant i z)]
      ldt)))
 
@@ -208,13 +208,13 @@
 
 (>defn inst->html-datetime-string
   ([inst]
-   [inst? => string?]
+   [(? inst?) => string?]
    (inst->html-datetime-string *current-zone-name* inst))
   ([zone-name inst]
-   [(? ::zone-name) inst? => string?]
+   [(? ::zone-name) (? inst?) => string?]
    (try
-     (let [z         (get-zone-id zone-name)
-           ldt       (ldt/of-instant (inst->instant inst) z)
+     (let [z         (get-zone-id (or zone-name "UTC"))
+           ldt       (ldt/of-instant (inst->instant (or inst (now))) z)
            formatter cljc.java-time.format.date-time-formatter/iso-local-date-time]
        (ldt/format ldt formatter))
      (catch #?(:cljs :default :clj Exception) e

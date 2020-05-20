@@ -26,17 +26,20 @@
     [taoensso.timbre :as log]
     [taoensso.encore :as enc]))
 
+(defn id-child-pairs [container]
+  (map-indexed (fn [idx c] [idx c]) (comp/component-options container ::children)))
+
 (defn- merge-children [env]
   (let [container-class (uism/actor-class env :actor/container)
         container-ident (uism/actor->ident env :actor/container)
         merge-children* (fn [s]
                           (reduce
-                            (fn [state cls]
+                            (fn [state [id cls]]
                               (let [k    (comp/class->registry-key cls)
                                     path (conj container-ident k)]
-                                (merge/merge-component state cls (or (comp/get-initial-state cls) {}) :replace path)))
+                                (merge/merge-component state cls (or (comp/get-initial-state cls {::report/id id}) {}) :replace path)))
                             s
-                            (comp/component-options container-class ::children)))]
+                            (id-child-pairs container-class)))]
     (uism/apply-action env merge-children*)))
 
 (defn shared-controls
@@ -58,9 +61,11 @@
 
 (defn- start-children! [{::uism/keys [app event-data] :as env}]
   (let [container-class (uism/actor-class env :actor/container)
-        children        (comp/component-options container-class ::children)]
-    (doseq [c children]
-      (report/start-report! app c (assoc event-data ::report/externally-controlled? true)))
+        id-children     (id-child-pairs container-class)]
+    (doseq [[id c] id-children]
+      (report/start-report! app c (assoc event-data
+                                    ::report/id id
+                                    ::report/externally-controlled? true)))
     env))
 
 (defn container-options
@@ -105,10 +110,10 @@
       :event/run
       {::uism/handler (fn [env]
                         (reduce
-                          (fn [env c]
-                            (uism/trigger env (comp/get-ident c {}) :event/run))
+                          (fn [env [id c]]
+                            (uism/trigger env (comp/get-ident c {::report/id id}) :event/run))
                           env
-                          (comp/component-options (uism/actor-class env :actor/container) ::children)))}}}}})
+                          (id-child-pairs (uism/actor-class env :actor/container))))}}}}})
 
 (defn render-layout
   "Auto-render the content of a container. This is the automatic body of a container. If you supply no render body
@@ -159,15 +164,17 @@
        (let [query-expr (into [:ui/parameters
                                {:ui/controls `(comp/get-query Control)}
                                [df/marker-table '(quote _)]]
-                          (map (fn [child-sym] `{(comp/class->registry-key ~child-sym) (comp/get-query ~child-sym)}) children))
+                          (map-indexed (fn [idx child-sym] `{~(keyword (str "child" idx)) (comp/get-query ~child-sym)}) children))
              query      (list 'fn '[] query-expr)
              nspc       (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
              fqkw       (keyword (str nspc) (name sym))
              options    (cond-> (assoc options
                                   :query query
                                   :initial-state (list 'fn '[_]
-                                                   {:ui/parameters {}
-                                                    :ui/controls   `(mapv #(select-keys % #{::control/id}) (control/control-map->controls ~controls))})
+                                                   `(into {:ui/parameters {}
+                                                           :ui/controls   (mapv #(select-keys % #{::control/id}) (control/control-map->controls ~controls))}
+                                                      (map-indexed (fn [idx# c#]
+                                                                     [(keyword (str "child" idx#)) (comp/get-initial-state c# {::report/id idx#})]) ~children)))
                                   :ident (list 'fn [] [::id fqkw]))
                           (string? route) (assoc
                                             :route-segment [route]

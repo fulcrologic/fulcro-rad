@@ -66,8 +66,10 @@
     100))
 
 (defmutation set-parameter [{:keys [k value]}]
-  (action [{:keys [state]}]
-    (swap! state assoc-in [::id k ::value] value)))
+  (action [{:keys [component state]}]
+    (let [{:keys [local?]} (get (comp/component-options component ::controls) k)
+          path (if local? (conj (comp/get-ident component) :ui/parameters k) [::id k ::value])]
+      (swap! state assoc-in path value))))
 
 (defn set-parameter!
   "Set the given parameter on a report or container."
@@ -86,19 +88,13 @@
       control-map)
     control-map))
 
-(defn current-control-parameters [state-map controls]
-  (let [controls (control-map->controls controls)]
-    (reduce
-      (fn [result {::keys [id]}]
-        (let [v (get-in state-map [::id id ::value])]
-          (if (nil? v)
-            result
-            (assoc result id v))))
-      {}
-      controls)))
-
 (defn current-value
-  "Get the current value of a normalized control."
-  [app-ish control-key]
-  (let [state-map (-> app-ish comp/any->app app/current-state)]
-    (get-in state-map [::id control-key ::value])))
+  "Get the current value of a control. If it is normalized, then it will come from the normalized table. If the control
+   is local to the instance, then it will come from there."
+  [instance control-key]
+  (let [{:keys [local?]} (get (comp/component-options instance ::controls) control-key)]
+    (if local?
+      (get-in (comp/props instance) [:ui/parameters control-key])
+      (-> instance
+        (app/current-state)
+        (get-in [::id control-key ::value])))))

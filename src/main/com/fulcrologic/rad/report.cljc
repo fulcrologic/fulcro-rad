@@ -95,25 +95,46 @@
         initial-sort-params (initial-sort-params-with-defaults env)
         initial-parameters  {::sort initial-sort-params}]
     (as-> env $
+      (uism/apply-action $ assoc-in path (merge initial-parameters (select-keys history-params #{::sort})))
       (reduce-kv
-        (fn [new-env control-key {:keys [default-value]}]
+        (fn [new-env control-key {:keys [local? default-value]}]
           (let [v (cond
                     (not (nil? (get params control-key))) (get params control-key)
                     (not (nil? (get history-params control-key))) (get history-params control-key)
                     (not (nil? default-value)) (?! default-value app))]
             (if-not (nil? v)
-              (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v)
+              (if local?
+                (uism/apply-action new-env assoc-in (conj report-ident :ui/parameters control-key) v)
+                (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v))
               new-env)))
         $
-        controls)
-      (uism/apply-action $ assoc-in path (merge initial-parameters (select-keys history-params #{::sort}))))))
+        controls))))
 
-(defn load-report! [{::uism/keys [app state-map] :as env}]
-  (let [Report         (uism/actor-class env :actor/report)
+(defn- current-control-parameters [{::uism/keys [state-map] :as env}]
+  (let [Report       (uism/actor-class env :actor/report)
+        report-ident (uism/actor->ident env :actor/report)
+        controls     (comp/component-options Report ::control/controls)
+        controls     (control/control-map->controls controls)]
+    (reduce
+      (fn [result {:keys          [local?]
+                   ::control/keys [id]}]
+        (let [v (if local?
+                  (get-in state-map (conj report-ident :ui/parameters id))
+                  (get-in state-map [::control/id id ::control/value]))]
+          (if (nil? v)
+            result
+            (assoc result id v))))
+      {}
+      controls)))
+
+
+(defn load-report! [{::uism/keys [state-map] :as env}]
+  (let [
+        Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
         {::keys [BodyItem source-attribute]} (comp/component-options Report)
-        current-params (control/current-control-parameters state-map (comp/component-options Report ::control/controls))
-        path           (conj (comp/get-ident Report {}) :ui/loaded-data)]
+        current-params (current-control-parameters env)
+        path           (conj report-ident :ui/loaded-data)]
     (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
     (-> env
       (uism/load source-attribute BodyItem {:params            current-params
@@ -130,6 +151,7 @@
         row-visible?  (report-options uism-env ::row-visible?)
         normalized?   (some-> all-rows (first) (eql/ident?))
         filtered-rows (if row-visible?
+                        ;; TASK: parameters could now be global. Might want to just pass instance
                         (let [parameters (uism/alias-value uism-env :parameters)]
                           (filterv
                             (fn [row]
@@ -201,7 +223,7 @@
   (let [columns  (comp/component-options report-class ::columns)
         ks       (map ::attr/qualified-key columns)
         row-data (map (fn [{::attr/keys [qualified-key]}]
-                        (get grouped-result qualified-key (repeat 100000 nil))) columns)]
+                        (get grouped-result qualified-key [])) columns)]
     (apply mapv (fn [& args] (zipmap ks args)) row-data)))
 
 (defn- preprocess-raw-result
@@ -344,7 +366,10 @@
 
 (defn start-report!
   "Start a report. Not normally needed, since a report is started when it is routed to; however, if you put
-  a report on-screen initially (or don't use dynamic router), then you must call this to start your report."
+  a report on-screen initially (or don't use dynamic router), then you must call this to start your report.
+
+  `options` can contain `::id`, which will cause an instance of the report to be started. Used by containers so that
+  multiple instances of the same report can co-exist with different views on the same screen."
   ([app report-class]
    (start-report! app report-class {}))
   ([app report-class options]
@@ -352,7 +377,7 @@
          now-ms              (inst-ms (dt/now))
          params              (:route-params options)
          cache-expiration-ms (* 1000 (or (comp/component-options report-class ::load-cache-seconds) 0))
-         asm-id              (comp/ident report-class {})
+         asm-id              (comp/ident report-class options) ; options might contain ::report/id to instance the report
          state-map           (app/current-state app)
          asm                 (some-> state-map (get-in [::uism/asm-id asm-id]))
          running?            (some-> asm ::uism/active-state boolean)
@@ -364,7 +389,7 @@
                                (not= current-table-count last-table-count)
                                (< last-load-time (- now-ms cache-expiration-ms)))]
      (if (not running?)
-       (uism/begin! app machine-def asm-id {:actor/report report-class} options)
+       (uism/begin! app machine-def asm-id {:actor/report (uism/with-actor-class asm-id report-class)} options)
        (do
          (uism/trigger! app asm-id :event/set-ui-parameters {:params params})
          (if cache-expired?
@@ -403,9 +428,13 @@
      If you elide the body, one will be generated for you.
      "
      [sym arglist & args]
-     (let [this-sym (first arglist)
-           options  (first args)
-           options  (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})]
+     (let [this-sym  (first arglist)
+           props-sym (second arglist)
+           props-sym (if (map? props-sym) (:as props-sym) props-sym)
+           options   (first args)
+           options   (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})]
+       (when (or (= '_ props-sym) (= '_ this-sym) (= props-sym this-sym) (not (symbol? this-sym)) (not (symbol? props-sym)))
+         (throw (ana/error &env (str "defsc-report argument list must use a real (unique) symbol (or a destructuring with `:as`) for the `this` and `props` (1st and 2nd) arguments."))))
        (req! &env sym options ::columns #(every? symbol? %))
        (req! &env sym options ::row-pk #(symbol? %))
        (req! &env sym options ::source-attribute keyword?)
@@ -418,7 +447,8 @@
           normalize?        (not denormalize?)
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
-          query             [:ui/parameters
+          query             [::id
+                             :ui/parameters
                              :ui/cache
                              :ui/busy?
                              :ui/page-count
@@ -433,15 +463,17 @@
                               :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
                               ::BodyItem ItemClass
                               :query query
-                              :initial-state (list 'fn '[_]
-                                               {:ui/parameters   {}
-                                                :ui/cache        {}
-                                                :ui/controls     `(mapv #(select-keys % #{::control/id}) (control/control-map->controls ~controls))
-                                                :ui/busy?        false
-                                                :ui/current-page 1
-                                                :ui/page-count   1
-                                                :ui/current-rows []})
-                              :ident (list 'fn [] [::id fqkw]))
+                              :initial-state (list 'fn ['params]
+                                               `(cond-> {:ui/parameters   {}
+                                                         :ui/cache        {}
+                                                         :ui/controls     (mapv #(select-keys % #{::control/id})
+                                                                            (remove :local? (control/control-map->controls ~controls)))
+                                                         :ui/busy?        false
+                                                         :ui/current-page 1
+                                                         :ui/page-count   1
+                                                         :ui/current-rows []}
+                                                  (contains? ~'params ::id) (assoc ::id (::id ~'params))))
+                              :ident (list 'fn [] [::id `(or (::id ~props-sym) ~fqkw)]))
           body              (if (seq (rest args))
                               (rest args)
                               [`(render-layout ~this-sym)])
