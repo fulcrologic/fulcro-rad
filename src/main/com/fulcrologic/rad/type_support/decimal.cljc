@@ -335,3 +335,7 @@
   [n]
   (let [v (str/replace (numeric->str (numeric n)) #"[.].*" "")]
     (numeric v)))
+
+(defn numeric->double [n]
+  #?(:clj  (Double/parseDouble (numeric->str n))
+     :cljs (js/parseFloat (numeric->str n))))
