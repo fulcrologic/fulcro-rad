@@ -111,6 +111,7 @@
           (let [param-path (route-params-path env control-key)
                 v          (cond
                              (not (nil? (get-in params param-path))) (get-in params param-path)
+                             (not (nil? (get params control-key))) (get params control-key)
                              (not (nil? (get-in history-params param-path))) (get-in history-params param-path)
                              (not (nil? default-value)) (?! default-value app))]
             (if-not (nil? v)
