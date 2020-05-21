@@ -84,9 +84,7 @@
   (let [report-ident (uism/actor->ident env :actor/report)
         {:keys [local?] :as control} (comp/component-options (uism/actor-class env :actor/report) ::control/controls control-key)
         id           (second report-ident)]
-    (if (and
-          (or (nil? control) local?)
-          (not (keyword? id)))
+    (if (or local? (nil? control))
       [id control-key]
       [control-key])))
 
@@ -142,8 +140,7 @@
 
 
 (defn load-report! [env]
-  (let [
-        Report         (uism/actor-class env :actor/report)
+  (let [Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
         {::keys [BodyItem source-attribute]} (comp/component-options Report)
         current-params (current-control-parameters env)

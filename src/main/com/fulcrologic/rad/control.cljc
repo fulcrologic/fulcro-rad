@@ -68,12 +68,9 @@
 (defmutation set-parameter [{:keys [k value]}]
   (action [{:keys [component ref state]}]
     (let [{:keys [local?]} (get (comp/component-options component ::controls) k)
-          id        (second ref)
-          instance? (and id (not (keyword? id)))
-          path      (if local? (conj (comp/get-ident component) :ui/parameters k) [::id k ::value])]
-      (if instance?
-        (rad-routing/update-route-params! component assoc-in [id k] value)
-        (rad-routing/update-route-params! component assoc k value))
+          id   (log/spy :info (second ref))
+          path (if local? (conj ref :ui/parameters k) [::id k ::value])]
+      (rad-routing/update-route-params! component assoc-in [id k] value)
       (swap! state assoc-in path value))))
 
 (defn set-parameter!

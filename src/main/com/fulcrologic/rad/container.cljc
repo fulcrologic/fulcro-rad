@@ -24,10 +24,18 @@
         [[cljs.analyzer :as ana]])
     [com.fulcrologic.fulcro.data-fetch :as df]
     [taoensso.timbre :as log]
-    [taoensso.encore :as enc]))
+    [taoensso.encore :as enc]
+    [clojure.spec.alpha :as s]))
 
-(defn id-child-pairs [container]
-  (map-indexed (fn [idx c] [idx c]) (comp/component-options container ::children)))
+(defn id-child-pairs
+  "Returns a sequence of [id cls] pairs for each child (i.e. the seq of the children setting)"
+  [container]
+  (seq (comp/component-options container ::children)))
+
+(defn child-classes
+  "Returns a de-duped set of classes of the children"
+  [container]
+  (set (vals (comp/component-options container ::children))))
 
 (defn- merge-children [env]
   (let [container-class (uism/actor-class env :actor/container)
@@ -46,8 +54,7 @@
   "Gathers all of the non-local controls from all children into a common control map. Controls with a common name
    will end up with the last child's definition, or you can make an explicit override in the container itself."
   [container-class-or-instance]
-  (let [{::keys [children]} (comp/component-options container-class-or-instance)
-        without-local (fn *without-local [controls]
+  (let [without-local (fn *without-local [controls]
                         (reduce-kv (fn [c k v]
                                      (if (:local? v)
                                        c
@@ -57,7 +64,7 @@
         (let [child-controls (comp/component-options child ::control/controls)]
           (merge controls (without-local child-controls))))
       {}
-      children)))
+      (child-classes container-class-or-instance))))
 
 (defn- start-children! [{::uism/keys [app event-data] :as env}]
   (let [container-class (uism/actor-class env :actor/container)
@@ -157,14 +164,14 @@
            options  (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})
            {::control/keys [controls]
             ::keys         [children route] :as options} options]
-       (when-not (seq children)
+       (when-not (map? children)
          (throw (ana/error &env (str "defsc-container " sym " has no declared children."))))
        (when (and route (not (string? route)))
          (throw (ana/error &env (str "defsc-container " sym " ::route, when defined, must be a string."))))
        (let [query-expr (into [:ui/parameters
                                {:ui/controls `(comp/get-query Control)}
                                [df/marker-table '(quote _)]]
-                          (map-indexed (fn [idx child-sym] `{~(keyword (str "child" idx)) (comp/get-query ~child-sym)}) children))
+                          (map (fn [[id child-sym]] `{~id (comp/get-query ~child-sym)}) children))
              query      (list 'fn '[] query-expr)
              nspc       (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
              fqkw       (keyword (str nspc) (name sym))
@@ -173,8 +180,7 @@
                                   :initial-state (list 'fn '[_]
                                                    `(into {:ui/parameters {}
                                                            :ui/controls   (mapv #(select-keys % #{::control/id}) (control/control-map->controls ~controls))}
-                                                      (map-indexed (fn [idx# c#]
-                                                                     [(keyword (str "child" idx#)) (comp/get-initial-state c# {::report/id idx#})]) ~children)))
+                                                      (map (fn [[id# c#]] [id# (comp/get-initial-state c# {::report/id id#})]) ~children)))
                                   :ident (list 'fn [] [::id fqkw]))
                           (string? route) (assoc
                                             :route-segment [route]
