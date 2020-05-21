@@ -29,6 +29,7 @@
     [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [com.fulcrologic.rad.type-support.decimal :as math]
+    [com.fulcrologic.rad.picker-options :as picker-options]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
@@ -475,6 +476,7 @@
                              :ui/busy?
                              :ui/page-count
                              :ui/current-page
+                             [::picker-options/options-cache (quote '_)]
                              {:ui/controls `(comp/get-query Control)}
                              {:ui/current-rows subquery}
                              [df/marker-table '(quote _)]]

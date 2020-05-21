@@ -29,18 +29,16 @@
                       result)]
       (swap! state assoc-in (conj ref :ui/options) options))))
 
-(defn load-options!
-  "Load picker options into the options cache."
-  ([app-ish form-class props attribute] (load-options! app-ish form-class props attribute {}))
-  ([app-ish form-class props {:com.fulcrologic.rad.attributes/keys [qualified-key] :as attribute} load-options]
+(defn load-picker-options!
+  "Load picker options based on raw picker options"
+  ([app-ish component-class props picker-options] (load-picker-options! app-ish component-class props picker-options {}))
+  ([app-ish component-class props picker-options load-options]
    (let [{::app/keys [state-atom] :as app} (comp/any->app app-ish)
-         {:com.fulcrologic.rad.form/keys [field-options]} (comp/component-options form-class)
-         field-options (get field-options qualified-key)
-         {::keys [remote query-key query-component cache-key options-xform cache-time-ms query-parameters]} (merge attribute field-options)
-         params        (or (?! query-parameters app form-class props) {})
+         {::keys [remote query-key query-component cache-key options-xform cache-time-ms query-parameters]} picker-options
+         params        (or (?! query-parameters app component-class props) {})
          cache-time-ms (or cache-time-ms 100)
          state-map     @state-atom
-         cache-key     (or (?! cache-key form-class props) query-key)
+         cache-key     (or (?! cache-key component-class props) query-key)
          time-path     [::options-cache cache-key :cached-at]
          target-path   [::options-cache cache-key :query-result]
          options-path  [::options-cache cache-key :options]
@@ -48,17 +46,16 @@
          cached-at     (get-in state-map time-path 0)
          reload?       (> (- now cached-at) cache-time-ms)]
      (when-not query-key
-       (log/error "Ref attribute has a field style that is using picker options, but no ::picker-options/query-key!" qualified-key))
+       (log/error "Cannot load picker options because there is no query-key."))
      (when-not query-component
-       (log/warn "Ref attribute is using a picker, but no ::picker-options/query-component was supplied. This means options will not be normalized." qualified-key))
-     ;; prevent a screen that has many of the same pickers on it from issuing more than one load per cache timeout
+       (log/warn "Cannot load picker options because ::query-component is missing."))
      (swap! state-atom assoc-in time-path now)
      (when reload?
        (df/load! app-ish query-key query-component
          (cond-> (merge load-options
                    {:target      target-path
                     :params      params
-                    :post-action (fn [{:keys [state result] :as env}]
+                    :post-action (fn [{:keys [state result]}]
                                    (let [query-result (get-in @state target-path)
                                          raw-result   (get-in result [:body query-key])
                                          options      (vec
@@ -67,3 +64,43 @@
                                      (fns/swap!-> state
                                        (assoc-in options-path options))))})
            remote (assoc :remote remote)))))))
+
+(defn load-options!
+  "Load picker options into the options cache for a form field."
+  ([app-ish form-class props attribute] (load-options! app-ish form-class props attribute {}))
+  ([app-ish form-class props {:com.fulcrologic.rad.attributes/keys [qualified-key] :as attribute} load-options]
+   (let [{:com.fulcrologic.rad.form/keys [field-options]} (comp/component-options form-class)
+         field-options  (get field-options qualified-key)
+         picker-options (merge attribute field-options)]
+     (load-picker-options! app-ish form-class props picker-options load-options))))
+
+(def remote
+  "The keyword name of the remote that the picker options are loaded from. Defaults to :remote."
+  ::remote)
+
+(def query-key
+  "The top-level query keyword to use when pulling the options."
+  ::query-key)
+
+(def query-component
+  "A Fulcro defsc with the subquery to use for pulling options."
+  ::query-component)
+
+(def query-parameters
+  "A map of query parameters to include in the option load, or a `(fn [app cls props] map?)` that can generate those
+   props on demand."
+  ::query-parameters)
+
+(def cache-key
+  "A keyword or `(fn [cls props] keyword?)` under which the normalized picker options will be saved."
+  ::cache-key)
+
+(def options-xform
+  "A `(fn [normalized-result raw-result] [{:text t :value v} ...])`. This generates the options to show the user. If
+  not provided then it is assumed that the query result itself is a vector of these text/value pair maps."
+  ::options-xform)
+
+(def cache-time-ms
+  "How long the options can be cached. This allows multiple uses of the same options load to be used over time. Caching
+  is done under ::cache-key."
+  ::cache-time-ms)
