@@ -50,10 +50,13 @@
 (>def ::minute (s/int-in 0 60))
 (>def ::instant #(instance? Instant %))
 (>def ::local-time #(instance? LocalTime %))
+(>def ::zoned-date-time #(instance? ZonedDateTime %))
 (>def ::local-date-time #(instance? LocalDateTime %))
 (>def ::local-date #(instance? LocalDate %))
 (>def ::zone-name (set (cljc.java-time.zone-id/get-available-zone-ids)))
 (>def ::at inst?)
+(>def ::period #(instance? Period %))
+(>def ::duration #(instance? Duration %))
 (>def ::day-of-week #{java-time.day-of-week/sunday
                       java-time.day-of-week/monday
                       java-time.day-of-week/tuesday
@@ -177,6 +180,20 @@
    [(? ::zone-name) int? int? int? int? int? => inst?]
    (local-datetime->inst zone-name month day yyyy hh mm 0)))
 
+(>defn inst->local-date
+  "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) LocalDate."
+  ([inst]
+   [(? (s/or :inst inst?
+         :instant ::instant)) => ::local-date]
+   (inst->local-date *current-zone-name* inst))
+  ([zone-name inst]
+   [(? ::zone-name) (? (s/or :inst inst?
+                         :instant ::instant)) => ::local-date]
+   (let [z   (get-zone-id zone-name)
+         i   (instant/of-epoch-milli (inst-ms (or inst (now))))
+         ldt (ldt/of-instant i z)]
+     (ldt/to-local-date ldt))))
+
 (>defn inst->local-datetime
   "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) LocalDateTime."
   ([inst]
@@ -190,6 +207,19 @@
          i   (instant/of-epoch-milli (inst-ms (or inst (now))))
          ldt (ldt/of-instant i z)]
      ldt)))
+
+(>defn inst->zoned-date-time
+  "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) ZonedDateTime."
+  ([inst]
+   [(? (s/or :inst inst?
+         :instant ::instant)) => ::zoned-date-time]
+   (inst->zoned-date-time *current-zone-name* inst))
+  ([zone-name inst]
+   [(? ::zone-name) (? (s/or :inst inst?
+                         :instant ::instant)) => ::zoned-date-time]
+   (let [z (get-zone-id zone-name)
+         i (instant/of-epoch-milli (inst-ms (or inst (now))))]
+     (zdt/of-instant i z))))
 
 (>defn html-datetime-string->inst
   ([date-time-string]
