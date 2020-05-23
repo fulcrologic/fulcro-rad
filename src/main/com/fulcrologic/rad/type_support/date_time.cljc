@@ -208,12 +208,12 @@
          ldt (ldt/of-instant i z)]
      ldt)))
 
-(>defn inst->zoned-local-date
-  "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) LocalDate."
+(>defn inst->zoned-date-time
+  "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) ZonedDateTime."
   ([inst]
    [(? (s/or :inst inst?
          :instant ::instant)) => ::zoned-date-time]
-   (inst->zoned-local-date *current-zone-name* inst))
+   (inst->zoned-date-time *current-zone-name* inst))
   ([zone-name inst]
    [(? ::zone-name) (? (s/or :inst inst?
                          :instant ::instant)) => ::zoned-date-time]
