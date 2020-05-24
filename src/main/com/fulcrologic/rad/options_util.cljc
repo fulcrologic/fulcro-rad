@@ -5,6 +5,7 @@
        :cljs [goog.functions :as gf])
     [clojure.spec.alpha :as s]
     [clojure.string]
+    [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [taoensso.encore :as enc]
@@ -145,3 +146,28 @@
         nm     (name k)
         new-ns (str old-ns "." nm)]
     (keyword new-ns new-name)))
+
+(defn ast-child-classes
+  "Returns a set of classes that are in the children of the given AST."
+  [ast recursive?]
+  (let [{:keys [children]} ast]
+    (reduce
+      (fn [result {:keys [component children]}]
+        (cond-> result
+          component (conj component)
+          recursive? (into (mapcat #(ast-child-classes % recursive?)) children)))
+      #{}
+      children)))
+
+(defn child-classes
+  "Returns a de-duped set of classes of the children of the given instance/class (using it's query). An instance will
+   use dynamic queries, but a class may not (depending on usage context in Fulcro).
+
+   The `recursive?` flag  (default false) can be used to recurse the query to find all subchildren as well."
+  ([class-or-instance]
+   (child-classes class-or-instance false))
+  ([class-or-instance recursive?]
+   (let [q   (comp/get-query class-or-instance)
+         ast (eql/query->ast q)]
+     (ast-child-classes ast recursive?))))
+

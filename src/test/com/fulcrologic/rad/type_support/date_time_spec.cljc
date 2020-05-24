@@ -4,13 +4,15 @@
     [cljc.java-time.instant]
     [cljc.java-time.local-date :as ld]
     [cljc.java-time.local-time :as lt]
+    [cljc.java-time.local-date-time :as ldt]
     [cljc.java-time.format.date-time-formatter :as dtf]
     [fulcro-spec.core :refer [assertions specification behavior]]
     #?@(:clj  []
         :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
                [goog.date.duration :as g-duration]])
     [cljc.java-time.instant :as instant]
-    [com.fulcrologic.rad.type-support.date-time :as datetime])
+    [com.fulcrologic.rad.type-support.date-time :as datetime]
+    [cljc.java-time.zoned-date-time :as zdt])
   #?(:clj (:import java.io.Writer
                    [java.util Date]
                    [java.time DayOfWeek Duration Instant LocalDate LocalDateTime LocalTime Month MonthDay
@@ -135,4 +137,16 @@
       (assertions
         "LA"
         (datetime/html-date->inst dt tm) => #inst "2020-03-01T14:00:00Z"))))
+
+(specification "inst->zoned-date-time"
+  (let [expected (zdt/of (ldt/of (ld/of 2020 3 1) (lt/of 6 0)) (datetime/get-zone-id "America/Los_Angeles"))]
+    (datetime/set-timezone! "America/Los_Angeles")
+    (assertions
+      (= expected (datetime/inst->zoned-date-time #inst "2020-03-01T14:00:00Z")) => true)))
+
+(specification "inst->local-date"
+  (let [expected (ld/of 2020 2 29)]
+    (datetime/set-timezone! "America/Los_Angeles")
+    (assertions
+      (= expected (datetime/inst->local-date #inst "2020-03-01T04:00:00Z")) => true)))
 

@@ -25,7 +25,7 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce child-classes]]
     [com.fulcrologic.rad :as rad]
     [taoensso.timbre :as log]))
 
@@ -101,3 +101,31 @@
       (-> instance
         (app/current-state)
         (get-in [::id control-key ::value])))))
+
+(defn component-controls
+  "Gets all of the controls declared on the given class or instance (e.g. report, container).
+   If `recursive?` (default true) is true, then it will look for non-local controls on all classes contained in the (recursive)
+   query of that class or instance. Controls appearing in the target `class-or-instance` will override any from children,
+   but any duplicates found in children will be unified by choosing an arbitrary one. Thus, if your component is pulling
+   unifying inconsistent controls from children you should probably provide a hand-unified control in the parent."
+  ([class-or-instance]
+   (component-controls class-or-instance true))
+  ([class-or-instance recursive?]
+   (let [parent-controls (comp/component-options class-or-instance ::controls)
+         children        (when recursive? (child-classes class-or-instance true))]
+     (merge
+       (reduce
+         (fn [controls c]
+           (let [candidates         (comp/component-options c ::controls)
+                 non-local-controls (reduce-kv
+                                      (fn [m k v]
+                                        (if (and (map? v) (not (:local? v)))
+                                          (assoc m k v)
+                                          m))
+                                      {}
+                                      candidates)]
+             (merge controls non-local-controls)))
+         {}
+         children)
+       ;; parent always wins
+       parent-controls))))

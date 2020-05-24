@@ -33,7 +33,7 @@
   (seq (comp/component-options container ::children)))
 
 (defn child-classes
-  "Returns a de-duped set of classes of the children"
+  "Returns a de-duped set of classes of the children of the given instance/class (using it's query)"
   [container]
   (set (vals (comp/component-options container ::children))))
 

@@ -25,7 +25,8 @@
                                   november december]]
     #?@(:clj  []
         :cljs [[goog.object :as gobj]
-               [java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
+               [java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate ZonedDateTime
+                                  Period DayOfWeek Month ZoneOffset Instant]]
                [java.time.format :refer [DateTimeFormatter]]
                [com.fulcrologic.rad.type-support.ten-year-timezone]
                [goog.date.duration :as g-duration]]))
