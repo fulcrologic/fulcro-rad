@@ -213,3 +213,51 @@
   Placing this on an attribute indicates a default for the label for the attribute on forms. The default is a
   capitalized version of the attribute's key. See also `field-labels`."
   :com.fulcrologic.rad.form/field-label)
+
+(def ui
+  "Used within `subforms`. This should be the Form component that will be used to render instances of
+   the subform."
+  :com.fulcrologic.rad.form/ui)
+
+(def field-style-config
+  "ATTRIBUTE OPTION: A map of options that are used by the rendering plugin to augment the style of a rendered input.
+  Such configuration options are really up to the render plugin, but could include things like `:input/props` as
+  additional DOM k/v pairs to put on the input."
+  :com.fulcrologic.rad.attributes/field-style-config)
+
+(def field-style-configs
+  "A map from field *keyword* to a map of options that are used by the rendering plugin to augment the style of a rendered input.
+  Such configuration options are really up to the render plugin, but could include things like `:input/props` as
+  additional DOM k/v pairs to put on the input."
+  :com.fulcrologic.rad.form/field-style-configs)
+
+(def sort-children
+  "This option goes *within* ::subforms and defines how to sort those subform UI components when there are more
+  than one. It is a `(fn [denormalized-children] sorted-children)`.
+
+  For example, a form might have:
+
+  ```
+  {fo/subforms {:person/children {fo/ui PersonForm
+                                  fo/sort-children (fn [children] (sort-by :person/name children))}
+  ```
+  "
+  :com.fulcrologic.rad.form/sort-children)
+
+(def read-only-fields
+  "A set of keywords, or a `(fn [form-instance] set?)`. Any form fields that appear in the set will be shown
+   as read-only values in the form"
+  :com.fulcrologic.rad.form/read-only-fields)
+
+(def can-delete?
+  "Used in `subforms` maps to control when a child can be deleted.
+   This option is a boolean or a `(fn [parent-form-instance row-props] boolean?)`.
+   that is used to determine if the given child can be deleted by the user."
+  :com.fulcrologic.rad.form/can-delete?)
+
+(def can-add?
+  "Used in `subforms` maps to control when a child of that type can be added across its relation.
+   This option is a boolean or a `(fn [form-instance attribute] boolean?)` that is used to determine if the
+   given child (reachable through `attribute` (a ref attribute)) can be added as a child to `form-instance`."
+  :com.fulcrologic.rad.form/can-add?)
+
