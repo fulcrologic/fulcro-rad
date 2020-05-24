@@ -316,3 +316,79 @@
         date-time (ld/at-time date local-time)]
     (local-datetime->inst date-time)))
 
+(>defn zoned-date-time->inst
+  "Convert a zoned-date-time back to a low-level inst?"
+  [ztm]
+  [::zoned-date-time => inst?]
+  (-> ztm
+    (zdt/to-instant)
+    (instant/to-epoch-milli)
+    (new-date)))
+
+(>defn beginning-of-month
+  "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of the month of the
+   input instant (which defaults to `now`)."
+  ([]
+   [=> inst?]
+   (beginning-of-month (now)))
+  ([inst]
+   [inst? => inst?]
+   (let [ztm (inst->zoned-date-time inst)]
+     (-> ztm
+       (zdt/with-hour 0)
+       (zdt/with-minute 0)
+       (zdt/with-nano 0)
+       (zdt/with-day-of-month 1)
+       (zoned-date-time->inst)))))
+
+(>defn end-of-month
+  "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of the next month of the
+   input instant (which defaults to `now`). This creates an open interval for end."
+  ([]
+   [=> inst?]
+   (end-of-month (now)))
+  ([inst]
+   [inst? => inst?]
+   (let [ztm (inst->zoned-date-time inst)]
+     (-> ztm
+       (zdt/with-hour 0)
+       (zdt/with-minute 0)
+       (zdt/with-nano 0)
+       (zdt/with-day-of-month 1)
+       (zdt/plus-months 1)
+       (zoned-date-time->inst)))))
+
+(>defn beginning-of-year
+  "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of January in the
+   next year."
+  ([]
+   [=> inst?]
+   (beginning-of-year (now)))
+  ([inst]
+   [inst? => inst?]
+   (let [ztm (inst->zoned-date-time inst)]
+     (-> ztm
+       (zdt/with-hour 0)
+       (zdt/with-minute 0)
+       (zdt/with-nano 0)
+       (zdt/with-month 1)
+       (zdt/with-day-of-month 1)
+       (zoned-date-time->inst)))))
+
+(>defn end-of-year
+  "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of January in the
+   next year."
+  ([]
+   [=> inst?]
+   (end-of-year (now)))
+  ([inst]
+   [inst? => inst?]
+   (let [ztm (inst->zoned-date-time inst)]
+     (-> ztm
+       (zdt/with-hour 0)
+       (zdt/with-minute 0)
+       (zdt/with-nano 0)
+       (zdt/with-month 1)
+       (zdt/with-day-of-month 1)
+       (zdt/plus-years 1)
+       (zoned-date-time->inst)))))

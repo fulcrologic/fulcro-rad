@@ -148,5 +148,13 @@
   (let [expected (ld/of 2020 2 29)]
     (datetime/set-timezone! "America/Los_Angeles")
     (assertions
+      "Converts an instant to the correct (zoned) local date"
       (= expected (datetime/inst->local-date #inst "2020-03-01T04:00:00Z")) => true)))
+
+(specification "beginning-of-month"
+  (let [expected #inst "2020-02-01T08:00:00Z"]
+    (datetime/set-timezone! "America/Los_Angeles")
+    (assertions
+      "Converts an instant to the correct (zoned) instant at the beginning of the month."
+      (datetime/beginning-of-month #inst "2020-03-01T04:00:00Z") => expected)))
 

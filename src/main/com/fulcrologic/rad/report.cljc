@@ -21,6 +21,7 @@
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
+    [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.control :as control :refer [Control]]
     [com.fulcrologic.rad.form :as form]
@@ -106,7 +107,7 @@
                              selected-row (assoc ::selected-row selected-row)
                              current-page (assoc ::current-page current-page))]
     (as-> env $
-      (uism/apply-action $ assoc-in path (merge initial-parameters {::sort (get-in history-params sort-path)}))
+      (uism/apply-action $ assoc-in path (deep-merge initial-parameters {::sort (get-in history-params sort-path {})}))
       (reduce-kv
         (fn [new-env control-key {:keys [local? default-value]}]
           (let [param-path (route-params-path env control-key)
