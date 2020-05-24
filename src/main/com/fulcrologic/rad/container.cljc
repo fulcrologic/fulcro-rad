@@ -50,22 +50,6 @@
                             (id-child-pairs container-class)))]
     (uism/apply-action env merge-children*)))
 
-(defn shared-controls
-  "Gathers all of the non-local controls from all children into a common control map. Controls with a common name
-   will end up with the last child's definition, or you can make an explicit override in the container itself."
-  [container-class-or-instance]
-  (let [without-local (fn *without-local [controls]
-                        (reduce-kv (fn [c k v]
-                                     (if (:local? v)
-                                       c
-                                       (assoc c k v))) {} controls))]
-    (reduce
-      (fn [controls child]
-        (let [child-controls (comp/component-options child ::control/controls)]
-          (merge controls (without-local child-controls))))
-      {}
-      (child-classes container-class-or-instance))))
-
 (defn- start-children! [{::uism/keys [app event-data] :as env}]
   (let [container-class (uism/actor-class env :actor/container)
         id-children     (id-child-pairs container-class)]
@@ -83,7 +67,7 @@
 (defn- initialize-parameters [{::uism/keys [app event-data] :as env}]
   (let [{history-params :params} (history/current-route app)
         {:keys [route-params]} event-data
-        controls (merge (shared-controls (uism/actor-class env :actor/container)) (container-options env :com.fulcrologic.rad.control/controls))]
+        controls (control/component-controls (uism/actor-class env :actor/container))]
     (reduce-kv
       (fn [new-env control-key {:keys [default-value]}]
         (let [v (cond

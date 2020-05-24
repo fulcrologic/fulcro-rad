@@ -19,7 +19,8 @@
    "
   (:refer-clojure :exclude [run!])
   (:require
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
+    [clojure.spec.alpha :as s]
+    [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.mutations :refer [defmutation]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
@@ -129,3 +130,39 @@
          children)
        ;; parent always wins
        parent-controls))))
+
+(>def ::action-layout (s/coll-of keyword? :kind vector?))
+(>def ::input-layout (s/coll-of (s/coll-of keyword? :kind vector?) :kind vector?))
+
+(>defn standard-control-layout
+  "Returns a map of:
+
+  * `:action-layout`: a simple vector of keywords for the order buttons should appear. The default is the order they
+    are returned from the control map (which is stable, but not necessarily the order of appearance in the map).
+  * `:input-layout`: a nested vector of keywords that represents the preferred layout of the controls
+     on `class-or-instance`. This layout can be declared on the class-or-instance, or will default to a
+     single-row layout based on the entry order in the control map (stable but undefined)."
+  [class-or-instance]
+  [(s/or :cls comp/component-class? :inst comp/component?) => (s/keys :req-un [::action-layout ::input-layout])]
+  (let [{::keys [control-layout]} (comp/component-options class-or-instance)
+        ;; For backward compat with report option
+        control-layout (or control-layout (comp/component-options class-or-instance :com.fulcrologic.rad.report/control-layout))
+        {:keys [action-buttons inputs]} control-layout]
+    (let [controls            (component-controls class-or-instance)
+          control-button-keys (keep (fn [[k v]] (when (= :button (:type v)) k)) controls)
+          input-keys          (keep (fn [[k v]] (when-not (= :button (:type v)) k)) controls)
+          button-layout       (or action-buttons control-button-keys)
+          input-layout        (or inputs (vector (into [] input-keys)))]
+      (when #?(:cljs js/goog.DEBUG :clj true)
+        (let [expected-button-layout-keys (set control-button-keys)
+              button-layout-keys          (set button-layout)
+              expected-input-keys         (set input-keys)
+              input-layout-keys           (set (flatten input-layout))]
+          (when (and (seq button-layout) (not= expected-button-layout-keys button-layout-keys))
+            (log/warn "The declared (and pulled up) action buttons" control-button-keys "on" (comp/component-name class-or-instance)
+              "do not match the action button layout" button-layout))
+          (when (and (seq input-layout-keys) (not= expected-input-keys input-layout-keys))
+            (log/warn "The actual inputs" input-keys "on" (comp/component-name class-or-instance)
+              "do not match the declared layout:" input-layout))))
+      {:action-layout button-layout
+       :input-layout  input-layout})))
