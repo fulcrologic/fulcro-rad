@@ -149,7 +149,7 @@
         control-layout (or control-layout (comp/component-options class-or-instance :com.fulcrologic.rad.report/control-layout))
         {:keys [action-buttons inputs]} control-layout]
     (let [controls            (component-controls class-or-instance)
-          control-button-keys (keep (fn [[k v]] (when (= :button (:type v)) k)) controls)
+          control-button-keys (vec (keep (fn [[k v]] (when (= :button (:type v)) k)) controls))
           input-keys          (keep (fn [[k v]] (when-not (= :button (:type v)) k)) controls)
           button-layout       (or action-buttons control-button-keys)
           input-layout        (or inputs (vector (into [] input-keys)))]
