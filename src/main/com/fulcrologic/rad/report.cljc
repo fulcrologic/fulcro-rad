@@ -97,7 +97,8 @@
 (defn initialize-parameters [{::uism/keys [app event-data] :as env}]
   (let [report-ident       (uism/actor->ident env :actor/report)
         path               (conj report-ident :ui/parameters)
-        {:keys [params]} event-data
+        {:keys  [params]
+         ::keys [externally-controlled?]} event-data
         {history-params :params} (history/current-route app)
         sort-path          (route-params-path env ::sort)
         selected-row       (get-in history-params (route-params-path env ::selected-row))
@@ -110,16 +111,21 @@
       (uism/apply-action $ assoc-in path (deep-merge initial-parameters {::sort (get-in history-params sort-path {})}))
       (reduce-kv
         (fn [new-env control-key {:keys [local? default-value]}]
-          (let [param-path (route-params-path env control-key)
-                v          (cond
-                             (not (nil? (get-in params param-path))) (get-in params param-path)
-                             (not (nil? (get params control-key))) (get params control-key)
-                             (not (nil? (get-in history-params param-path))) (get-in history-params param-path)
-                             (not (nil? default-value)) (?! default-value app))]
+          (let [param-path     (route-params-path env control-key)
+                state-map      (::uism/state-map new-env)
+                explicit-value (or (get-in params param-path) (get params control-key) (get-in history-params param-path))
+                default-value  (?! default-value app)
+                v              (or explicit-value default-value)]
             (if-not (nil? v)
-              (if local?
-                (uism/apply-action new-env assoc-in (conj report-ident :ui/parameters control-key) v)
-                (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v))
+              (cond
+                ;; only the report knows about it, or it came from the route/history
+                local? (uism/apply-action new-env assoc-in (conj report-ident :ui/parameters control-key) v)
+                ;; Came in on explicit params...force it to the new value
+                explicit-value (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v)
+                ;; A container is controlling this report, and it is a global control. Leave it alone
+                (and externally-controlled? (get-in state-map [::control/id control-key ::control/value])) new-env
+                ;; It's a global control on a standalone report, or it is missing a value.
+                :else (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v))
               new-env)))
         $
         controls))))
@@ -415,7 +421,7 @@
      (if (not running?)
        (uism/begin! app machine-def asm-id {:actor/report (uism/with-actor-class asm-id report-class)} options)
        (do
-         (uism/trigger! app asm-id :event/set-ui-parameters {:params params})
+         (uism/trigger! app asm-id :event/set-ui-parameters (merge options {:params params}))
          (if cache-expired?
            (uism/trigger! app asm-id :event/run)
            (uism/trigger! app asm-id :event/filter)))))))

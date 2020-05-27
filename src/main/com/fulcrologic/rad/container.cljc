@@ -94,8 +94,8 @@
       {::uism/handler
        (fn [env]
          (-> env
-           (initialize-parameters)
            (merge-children)
+           (initialize-parameters)
            (start-children!)))}
 
       :event/run
