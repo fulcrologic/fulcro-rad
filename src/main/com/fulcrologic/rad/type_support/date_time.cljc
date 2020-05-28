@@ -161,6 +161,23 @@
   [date? => string?]
   (str d))
 
+(>defn local-date->inst
+  "Returns a UTC Clojure inst based on the date given as time in the named (ISO) zone (e.g. America/Los_Angeles).
+  If no zone name (or nil) is given, then the `*current-timezone*` will be used."
+  ([local-dt]
+   [::local-date => inst?]
+   (local-date->inst *current-zone-name* local-dt))
+  ([zone-name local-dt]
+   [(? ::zone-name) ::local-date => inst?]
+   (let [z      (get-zone-id zone-name)
+         zdt    (ldt/at-zone (ld/at-start-of-day local-dt) z)
+         millis (instant/to-epoch-milli (zdt/to-instant zdt))]
+     (new-date millis)))
+  ([zone-name month day yyyy]
+   [(? ::zone-name) int? int? int? => inst?]
+   (let [local-dt (ld/of yyyy month day)]
+     (local-date->inst zone-name local-dt))))
+
 (>defn local-datetime->inst
   "Returns a UTC Clojure inst based on the date/time given as time in the named (ISO) zone (e.g. America/Los_Angeles).
   If no zone name (or nil) is given, then the `*current-timezone*` will be used."
@@ -325,6 +342,31 @@
     (instant/to-epoch-milli)
     (new-date)))
 
+(>defn beginning-of-day
+  "Returns an inst? that is adjusted to midnight (local time of current time zone) on the day of the
+   input instant (which defaults to `now`)."
+  ([]
+   [=> inst?]
+   (beginning-of-day (now)))
+  ([inst]
+   [inst? => inst?]
+   (-> inst
+     (inst->local-date)
+     (local-date->inst))))
+
+(>defn end-of-day
+  "Returns an inst? that is adjusted to midnight (local time of current time zone) on the next day of the
+   input instant (which defaults to `now`). This creates an open interval for end."
+  ([]
+   [=> inst?]
+   (end-of-day (now)))
+  ([inst]
+   [inst? => inst?]
+   (-> inst
+     (inst->local-date)
+     (ld/plus-months 1)
+     (local-date->inst))))
+
 (>defn beginning-of-month
   "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of the month of the
    input instant (which defaults to `now`)."
@@ -333,13 +375,10 @@
    (beginning-of-month (now)))
   ([inst]
    [inst? => inst?]
-   (let [ztm (inst->zoned-date-time inst)]
-     (-> ztm
-       (zdt/with-hour 0)
-       (zdt/with-minute 0)
-       (zdt/with-nano 0)
-       (zdt/with-day-of-month 1)
-       (zoned-date-time->inst)))))
+   (-> inst
+     (inst->local-date)
+     (ld/with-day-of-month 1)
+     (local-date->inst))))
 
 (>defn end-of-month
   "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of the next month of the
@@ -349,31 +388,24 @@
    (end-of-month (now)))
   ([inst]
    [inst? => inst?]
-   (let [ztm (inst->zoned-date-time inst)]
-     (-> ztm
-       (zdt/with-hour 0)
-       (zdt/with-minute 0)
-       (zdt/with-nano 0)
-       (zdt/with-day-of-month 1)
-       (zdt/plus-months 1)
-       (zoned-date-time->inst)))))
+   (-> inst
+     (inst->local-date)
+     (ld/with-day-of-month 1)
+     (ld/plus-months 1)
+     (local-date->inst))))
 
 (>defn beginning-of-year
-  "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of January in the
-   next year."
+  "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of January in this
+   year."
   ([]
    [=> inst?]
    (beginning-of-year (now)))
   ([inst]
    [inst? => inst?]
-   (let [ztm (inst->zoned-date-time inst)]
-     (-> ztm
-       (zdt/with-hour 0)
-       (zdt/with-minute 0)
-       (zdt/with-nano 0)
-       (zdt/with-month 1)
-       (zdt/with-day-of-month 1)
-       (zoned-date-time->inst)))))
+   (-> inst
+     (inst->local-date)
+     (ld/with-day-of-year 1)
+     (local-date->inst))))
 
 (>defn end-of-year
   "Returns an inst? that is adjusted to midnight (local time of current time zone) on the first day of January in the
@@ -383,12 +415,8 @@
    (end-of-year (now)))
   ([inst]
    [inst? => inst?]
-   (let [ztm (inst->zoned-date-time inst)]
-     (-> ztm
-       (zdt/with-hour 0)
-       (zdt/with-minute 0)
-       (zdt/with-nano 0)
-       (zdt/with-month 1)
-       (zdt/with-day-of-month 1)
-       (zdt/plus-years 1)
-       (zoned-date-time->inst)))))
+   (-> inst
+     (inst->local-date)
+     (ld/with-day-of-year 1)
+     (ld/plus-years 1)
+     (local-date->inst))))
