@@ -364,7 +364,7 @@
    [inst? => inst?]
    (-> inst
      (inst->local-date)
-     (ld/plus-months 1)
+     (ld/plus-days 1)
      (local-date->inst))))
 
 (>defn beginning-of-month
