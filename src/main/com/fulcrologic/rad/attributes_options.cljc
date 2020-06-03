@@ -170,3 +170,9 @@
    Examples that might be defined include `:USD`, `:password`, `:currency`, etc. Support for this attribute
    will depend on the specific RAD artifact, and may have no effect at all."
   :com.fulcrologic.rad.attributes/style)
+
+(def field-style-config
+  "A map of options that are used by the rendering plugin to augment the style of a rendered input.
+  Such configuration options are really up to the render plugin, but could include things like `:input/props` as
+  additional DOM k/v pairs to put on the input."
+  :com.fulcrologic.rad.attributes/field-style-config)
