@@ -1199,8 +1199,7 @@
   then the result will be a deep merge of the two (with form winning)."
   [{::keys [form-instance]} attribute config-key]
   [::form-env ::attr/attribute keyword? => any?]
-  (let [{::attr/keys [qualified-key]
-         ::keys      [field-style-config]} attribute
+  (let [{::attr/keys [qualified-key field-style-config]} attribute
         form-value      (comp/component-options form-instance ::field-style-configs qualified-key config-key)
         attribute-value (get field-style-config config-key)]
     (if (and (map? form-value) (map? attribute-value))
