@@ -78,7 +78,7 @@
   :com.fulcrologic.rad.report/form-links)
 
 (def field-formatters
-  "A map from *qualified key* to a `(fn [report-instance value-to-format] string-or-element?)`. The function will
+  "A map from *qualified key* to a `(fn [report-instance value-to-format row-props attribute] string-or-element?)`. The function will
    receive the raw value of the column and should return a string or a UI element *that is acceptable to the current render
    plugin*.
 
@@ -98,7 +98,7 @@
   :com.fulcrologic.rad.report/field-formatters)
 
 (def field-formatter
-  "ATTRIBUTE OPTION. A `(fn [report-instance value])` which can be used on an attribute. See `field-formatters`."
+  "ATTRIBUTE OPTION. A `(fn [report-instance value row-props attribute])` which can be used on an attribute. See `field-formatters`."
   :com.fulcrologic.rad.report/field-formatter)
 
 (def run-on-mount?

@@ -605,19 +605,20 @@
   (let [value                  (get row-props qualified-key)
         report-field-formatter (comp/component-options report-instance ::field-formatters qualified-key)
         {::app/keys [runtime-atom]} (comp/any->app report-instance)
-        formatter              (if report-field-formatter
-                                 report-field-formatter
-                                 (let [style                (or
-                                                              (get column-styles qualified-key)
-                                                              style
-                                                              :default)
-                                       installed-formatters (some-> runtime-atom deref ::type->style->formatter)
-                                       formatter            (get-in installed-formatters [type style])]
-                                   (or
-                                     formatter
-                                     (built-in-formatter type style)
-                                     (fn [_ v] (str v)))))
-        formatted-value        (formatter report-instance value)]
+        formatter              (cond
+                                 report-field-formatter report-field-formatter
+                                 field-formatter field-formatter
+                                 :else (let [style                (or
+                                                                    (get column-styles qualified-key)
+                                                                    style
+                                                                    :default)
+                                             installed-formatters (some-> runtime-atom deref ::type->style->formatter)
+                                             formatter            (get-in installed-formatters [type style])]
+                                         (or
+                                           formatter
+                                           (built-in-formatter type style)
+                                           (fn [_ v] (str v)))))
+        formatted-value        (formatter report-instance value row-props column-attribute)]
     formatted-value))
 
 (defn install-formatter!
