@@ -465,7 +465,7 @@
            options   (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})]
        (when (or (= '_ props-sym) (= '_ this-sym) (= props-sym this-sym) (not (symbol? this-sym)) (not (symbol? props-sym)))
          (throw (ana/error &env (str "defsc-report argument list must use a real (unique) symbol (or a destructuring with `:as`) for the `this` and `props` (1st and 2nd) arguments."))))
-       (req! &env sym options ::columns #(every? symbol? %))
+       (req! &env sym options ::columns #(or (symbol? %) (every? symbol? %)))
        (req! &env sym options ::row-pk #(symbol? %))
        (req! &env sym options ::source-attribute keyword?)
        (let
