@@ -1017,7 +1017,8 @@
         identity?
         (?! read-only? form-instance attr)
         computed-value
-        (and (set? (?! read-only-fields form-instance)) (contains? read-only-fields qualified-key))))))
+        (let [read-only-fields (?! read-only-fields form-instance)]
+          (and (set? read-only-fields) (contains? read-only-fields qualified-key)))))))
 
 (defn field-visible?
   "Should the `attr` on the given `form-instance` be visible? This is controlled:
