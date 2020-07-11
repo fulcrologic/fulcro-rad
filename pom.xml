@@ -4,7 +4,7 @@
     <groupId>com.fulcrologic</groupId>
     <artifactId>fulcro-rad</artifactId>
     <packaging>jar</packaging>
-    <version>0.0.15-alpha-SNAPSHOT</version>
+    <version>0.0.15-alpha</version>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -23,7 +23,7 @@
         <url>https://github.com/fulcrologic/fulcro-rad</url>
         <connection>scm:git:git://github.com/fulcrologic/fulcro-rad.git</connection>
         <developerConnection>scm:git:ssh://git@github.com/fulcrologic/fulcro-rad.git</developerConnection>
-        <tag>a321576cebecc9230088b2c75fc0d45dfae9fb8d</tag>
+        <tag>fulcro-rad-0.0.15-alpha</tag>
     </scm>
     <distributionManagement>
         <repository>
