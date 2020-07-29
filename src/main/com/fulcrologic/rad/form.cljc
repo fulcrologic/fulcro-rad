@@ -699,7 +699,7 @@
   "Discard all changes, and attempt to change route."
   [{::uism/keys [fulcro-app] :as uism-env}]
   (let [Form         (uism/actor-class uism-env :actor/form)
-        cancel-route (some-> Form comp/component-options ::cancel-route)]
+        cancel-route (?! (some-> Form comp/component-options ::cancel-route))]
     (let [form-ident (uism/actor->ident uism-env :actor/form)]
       (cond
         (= :back cancel-route) (if (history/history-support? fulcro-app)
