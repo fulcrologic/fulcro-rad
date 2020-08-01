@@ -322,7 +322,7 @@
 #?(:cljs
    (extend-protocol cljs.core/IComparable
      ty/TaggedValue
-     (-compare [a b]
+     (-compare [a ^ty/TaggedValue b]
        (if (and (numeric? a) (numeric? b))
          (cond
            (< a b) -1
