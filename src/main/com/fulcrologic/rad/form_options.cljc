@@ -202,7 +202,7 @@
   :com.fulcrologic.rad.form/triggers)
 
 (def enumerated-labels
-  "A map from qualified key of a form field to the string to use for it. May be a `(fn [] string?)` (e.g. for i18n).
+  "A map from qualified key of a form field to the string to use for it. May be a `(fn [] string?)`.
    Overrides ::attr/enumerated-labels."
   :com.fulcrologic.rad.form/enumerated-labels)
 

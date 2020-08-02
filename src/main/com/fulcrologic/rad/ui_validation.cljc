@@ -2,7 +2,6 @@
   (:require
     [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
-    [com.fulcrologic.fulcro-i18n.i18n :refer [tr tr-unsafe]]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.form :as form]
@@ -30,10 +29,9 @@
         value          (and attribute (get props qualified-key))
         master-message (comp/component-options master-form ::form/validation-messages qualified-key)
         local-message  (comp/component-options form-instance ::form/validation-messages qualified-key)
-        message        (tr-unsafe
-                         (or
-                           (?! master-message props qualified-key)
-                           (?! local-message props qualified-key)
-                           (?! validation-message value)
-                           "Invalid value"))]
+        message        (or
+                         (?! master-message props qualified-key)
+                         (?! local-message props qualified-key)
+                         (?! validation-message value)
+                         "Invalid value")]
     message))
