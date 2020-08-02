@@ -5,7 +5,7 @@
            com.taoensso/encore                    {:mvn/version "2.119.0"}
            com.fulcrologic/fulcro                 {:mvn/version "3.2.8"}
            com.fulcrologic/guardrails             {:mvn/version "0.0.12"}
-           com.wsscode/pathom                     {:mvn/version "2.2.30"}
+           com.wsscode/pathom                     {:mvn/version "2.2.31"}
            commons-codec                          {:mvn/version "1.14"}
 
            ;; These are needed so cljdoc works. Use shadow-cljs, which means you really want them
