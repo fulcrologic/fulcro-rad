@@ -22,6 +22,7 @@
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
+    [com.fulcrologic.fulcro.algorithms.normalized-state :as fstate]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.control :as control :refer [Control]]
     [com.fulcrologic.rad.form :as form]
@@ -170,11 +171,13 @@
   (let [all-rows      (uism/alias-value uism-env :raw-rows)
         row-visible?  (report-options uism-env ::row-visible?)
         normalized?   (some-> all-rows (first) (eql/ident?))
+        report        (uism/actor-class uism-env :actor/report)
+        BodyItem      (comp/component-options report ro/BodyItem)
         filtered-rows (if row-visible?
                         (let [parameters (current-control-parameters uism-env)]
                           (filterv
                             (fn [row]
-                              (let [row (if normalized? (get-in state-map row) row)]
+                              (let [row (if normalized? (fstate/ui->props state-map BodyItem row) row)]
                                 (row-visible? parameters row)))
                             all-rows))
                         all-rows)]
