@@ -26,6 +26,7 @@
     [com.fulcrologic.rad.control :as control :refer [Control]]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.report-options :as ro]
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.type-support.date-time :as dt]
@@ -205,28 +206,40 @@
                                                            (assoc-in page-path pg)))))
   env)
 
+(defn- postprocess-page
+  "Apply the user-defined UISM operation to the report state machine just after the current page has
+   been populated. The :current-rows alias will have the result of filter/sort/paginate, and the
+   report actor is :actor/report. See the definition of the report state machine for more information."
+  [uism-env]
+  (let [xform (report-options uism-env ro/post-process)]
+    (if xform
+      (xform uism-env)
+      uism-env)))
+
 (defn- populate-current-page [uism-env]
-  (if (report-options uism-env ::paginate?)
-    (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
-          page-size      (or (report-options uism-env ::page-size) 20)
-          available-rows (or (uism/alias-value uism-env :sorted-rows) [])
-          n              (count available-rows)
-          stragglers?    (pos? (rem n page-size))
-          pages          (cond-> (int (/ n page-size))
-                           stragglers? inc)
-          page-start     (* (dec current-page) page-size)
-          rows           (cond
-                           (= pages current-page) (subvec available-rows page-start n)
-                           (> n page-size) (subvec available-rows page-start (+ page-start page-size))
-                           :else available-rows)]
-      (if (and (not= 1 current-page) (empty? rows))
-        (goto-page* uism-env 1)
-        (-> uism-env
-          (uism/assoc-aliased :current-rows rows :page-count pages))))
-    (-> uism-env
-      (uism/assoc-aliased
-        :page-count 1
-        :current-rows (uism/alias-value uism-env :sorted-rows)))))
+  (->
+    (if (report-options uism-env ::paginate?)
+      (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
+            page-size      (or (report-options uism-env ::page-size) 20)
+            available-rows (or (uism/alias-value uism-env :sorted-rows) [])
+            n              (count available-rows)
+            stragglers?    (pos? (rem n page-size))
+            pages          (cond-> (int (/ n page-size))
+                             stragglers? inc)
+            page-start     (* (dec current-page) page-size)
+            rows           (cond
+                             (= pages current-page) (subvec available-rows page-start n)
+                             (> n page-size) (subvec available-rows page-start (+ page-start page-size))
+                             :else available-rows)]
+        (if (and (not= 1 current-page) (empty? rows))
+          (goto-page* uism-env 1)
+          (-> uism-env
+            (uism/assoc-aliased :current-rows rows :page-count pages))))
+      (-> uism-env
+        (uism/assoc-aliased
+          :page-count 1
+          :current-rows (uism/alias-value uism-env :sorted-rows))))
+    (postprocess-page)))
 
 (defn- goto-page* [env page]
   (let [pg (uism/alias-value env :current-page)]
@@ -471,22 +484,23 @@
        (let
          [generated-row-sym (symbol (str (name sym) "-Row"))
           {::control/keys [controls]
-           ::keys [BodyItem edit-form columns row-pk form-links
+           ::keys [BodyItem edit-form columns row-pk form-links query-inclusions
                    row-query-inclusion denormalize? row-actions route] :as options} options
           _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
           normalize?        (not denormalize?)
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
-          query             [::id
-                             :ui/parameters
-                             :ui/cache
-                             :ui/busy?
-                             :ui/page-count
-                             :ui/current-page
-                             [::picker-options/options-cache (quote '_)]
-                             {:ui/controls `(comp/get-query Control)}
-                             {:ui/current-rows subquery}
-                             [df/marker-table '(quote _)]]
+          query             (into [::id
+                                   :ui/parameters
+                                   :ui/cache
+                                   :ui/busy?
+                                   :ui/page-count
+                                   :ui/current-page
+                                   [::picker-options/options-cache (quote '_)]
+                                   {:ui/controls `(comp/get-query Control)}
+                                   {:ui/current-rows subquery}
+                                   [df/marker-table '(quote _)]]
+                              query-inclusions)
           nspc              (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
           fqkw              (keyword (str nspc) (name sym))
           options           (assoc (merge {::compare-rows `default-compare-rows} options)

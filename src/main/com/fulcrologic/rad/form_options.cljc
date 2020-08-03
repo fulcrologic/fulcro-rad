@@ -261,3 +261,7 @@
    given child (reachable through `attribute` (a ref attribute)) can be added as a child to `form-instance`."
   :com.fulcrologic.rad.form/can-add?)
 
+(def machine
+  "Override the state machine definition that is used to control this form. Defaults to form/form-machine, which
+   you can use as a basis of your replacement (a state machine definition is just a map)."
+  :com.fulcrologic.rad.form/machine)

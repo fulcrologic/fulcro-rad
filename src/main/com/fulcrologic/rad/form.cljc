@@ -296,7 +296,7 @@
   ([app id form-class] (start-form! app id form-class {}))
   ([app id form-class params]
    (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
-         machine    (or (::machine (comp/component-options form-class)) form-machine)
+         machine    (or (comp/component-options form-class ::machine) form-machine)
          new?       (tempid/tempid? id)
          form-ident [qualified-key id]]
      (uism/begin! app machine

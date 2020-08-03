@@ -336,3 +336,24 @@
    WARNING: This option is a hint to the UI rendering layer. Your UI plugin may or may not support it, in which case this
    option may be a no-op and you will have to write the rendering code in your table yourself."
   :com.fulcrologic.rad.report/rotate?)
+
+(def machine
+  "Override the state machine definition that is used to control this report. Defaults to report/report-machine, which
+   you can use as a basis of your replacement (a state machine definition is just a map)."
+  :com.fulcrologic.rad.report/machine)
+
+(def post-process
+  "A `(fn [uism-env] new-env)` that will be called just after rows have been sorted/filtered/paginated, but before
+  they have been rendered.  This option is particularly useful in mobile where you might want to transform the page
+  into a js data array for use with list views."
+  :com.fulcrologic.rad.report/post-process)
+
+(def BodyItem
+  "The class that is used for rendering the rows of the report. If not supplied then one will be generated for you. This
+   key will be available on the resulting report, and can be used to obtain the row class for things like denormalizing
+   row data."
+  :com.fulcrologic.rad.report/BodyItem)
+
+(def query-inclusions
+  "A vector of things to add to the top-level report's query. "
+  :com.fulcrologic.rad.report/query-inclusions)
