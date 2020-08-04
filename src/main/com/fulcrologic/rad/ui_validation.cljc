@@ -4,6 +4,7 @@
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form :as form]
     [taoensso.timbre :as log]))
 
@@ -16,8 +17,10 @@
         props          (comp/props form-instance)
         value          (and attribute (get props k))
         checked?       (fs/checked? props k)
+        required?      (get attribute ao/required? false)
         form-validator (comp/component-options master-form ::form/validator)
         invalid?       (or
+                         (and checked? required? (or (nil? value) (and (string? value) (empty? value))))
                          (and checked? (not form-validator) (not (attr/valid-value? attribute value)))
                          (and form-validator (= :invalid (form-validator props k))))]
     invalid?))

@@ -10,6 +10,7 @@
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.rad.type-support.date-time :as dt]
+    [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.options-util :refer [?!]]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.application :as app]))
@@ -73,6 +74,41 @@
          field-options  (get field-options qualified-key)
          picker-options (merge attribute field-options)]
      (load-picker-options! app-ish form-class props picker-options load-options))))
+
+(defn current-options
+  "Gets the current picker options for the given form-instance attribute."
+  [form-instance attr]
+  (let [{:com.fulcrologic.rad.form/keys [attributes field-options]} (comp/component-options form-instance)
+        {:com.fulcrologic.rad.attributes/keys [qualified-key required?]} attr
+        field-options (get field-options qualified-key)
+        target-id-key (first (keep (fn [{k ::attr/qualified-key ::attr/keys [target]}]
+                                     (when (= k qualified-key) target)) attributes))
+        {::keys [cache-key query-key]} (merge attr field-options)
+        cache-key     (or (?! cache-key (comp/react-type form-instance) (comp/props form-instance)) query-key)
+        cache-key     (or cache-key query-key (log/error "Ref field MUST have either a ::picker-options/cache-key or ::picker-options/query-key in attribute " qualified-key))
+        props         (comp/props form-instance)
+        options       (get-in props [::options-cache cache-key :options])]
+    options))
+
+(defn current-to-one-value
+  "Returns the current to-one ref value for the given reference attribute as an ident."
+  [form-instance attr]
+  (let [{:com.fulcrologic.rad.form/keys [attributes]} (comp/component-options form-instance)
+        {::attr/keys [qualified-key]} attr
+        target-id-key (first (keep (fn [{k ::attr/qualified-key ::attr/keys [target]}]
+                                     (when (= k qualified-key) target)) attributes))
+        props         (comp/props form-instance)
+        id            (get-in props [qualified-key target-id-key])]
+    (when id
+      [target-id-key id])))
+
+(defn current-to-one-label
+  "Extracts the current to-one label from the given attribute's value via the picker options"
+  [form-instance attr]
+  (let [options (current-options form-instance attr)
+        value   (current-to-one-value form-instance attr)
+        {:keys [text]} (first (filter #(= (:value %) value) options))]
+    (str text)))
 
 (def remote
   "The keyword name of the remote that the picker options are loaded from. Defaults to :remote."
