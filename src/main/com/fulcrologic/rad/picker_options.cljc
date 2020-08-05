@@ -108,7 +108,7 @@
   (let [options (current-options form-instance attr)
         value   (current-to-one-value form-instance attr)
         {:keys [text]} (first (filter #(= (:value %) value) options))]
-    (str text)))
+    (str (or text "UNSELECTED"))))
 
 (def remote
   "The keyword name of the remote that the picker options are loaded from. Defaults to :remote."

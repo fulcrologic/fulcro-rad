@@ -725,8 +725,14 @@
     {::delta delta}))
 
 (def global-events
-  {:event/exit         {::uism/handler (fn [env] (uism/exit env))}
-   :event/route-denied {::uism/handler (fn [env] env)}})
+  {:event/exit          {::uism/handler (fn [env] (uism/exit env))}
+   :event/mark-complete {::uism/handler (fn [env]
+                                          (let [form-ident (uism/actor->ident env :actor/form)]
+                                            (uism/apply-action env fs/mark-complete* form-ident)))}
+   :event/route-denied  {::uism/handler (fn [env] env)}})
+
+(defn mark-all-complete! [master-form-instance]
+  (uism/trigger! master-form-instance (comp/get-ident master-form-instance) :event/mark-complete))
 
 (defn auto-create-to-one
   "Create any to-one referenced entities that did not load, but which are marked as auto-create."

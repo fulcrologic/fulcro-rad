@@ -190,7 +190,7 @@
         compare-rows (report-options uism-env ::compare-rows)
         normalized?  (some-> all-rows (first) (eql/ident?))
         sorted-rows  (if compare-rows
-                       (let [sort-params (uism/alias-value uism-env :sort-params)
+                       (let [sort-params (merge (uism/alias-value uism-env :sort-params) {:state-map state-map})
                              keyfn       (if normalized? #(get-in state-map %) identity)
                              comparefn   (fn [a b] (compare-rows sort-params a b))]
                          (vec (sort-by keyfn comparefn all-rows)))
@@ -435,9 +435,9 @@
                                (not= current-table-count last-table-count)
                                (< last-load-time (- now-ms cache-expiration-ms)))]
      (if (not running?)
-       (uism/begin! app machine-def asm-id {:actor/report (uism/with-actor-class asm-id report-class)} options)
+       (uism/begin! app machine-def asm-id {:actor/report (uism/with-actor-class asm-id report-class)} (assoc options :params params))
        (do
-         (uism/trigger! app asm-id :event/set-ui-parameters (merge options {:params params}))
+         (uism/trigger! app asm-id :event/set-ui-parameters (assoc options :params params))
          (if cache-expired?
            (uism/trigger! app asm-id :event/run)
            (uism/trigger! app asm-id :event/filter)))))))
