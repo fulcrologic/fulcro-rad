@@ -3,10 +3,32 @@
 A library using Fulcro and Pathom to create full-stack single-page web, mobile, and
 desktop applications with a rich (and potentially federated) data model quickly.
 
-WARNING: This library is marked Alpha. It is not intended for the light-hearted at this monent. We *will intentionally
-make breaking changes until the Alpha marking is removed*. Once out of Alpha we will follow the Clojure community standard
-of only adding features or reducing requirements. Bigger version numbers will just mean "better", and bigger changes
-in the version number will simply indicate the subjective magnitude of the improvement.
+== Usage
+
+image:https://img.shields.io/clojars/v/com.fulcrologic/fulcro-rad.svg[link=https://clojars.org/com.fulcrologic/fulcro-rad]
+
+Current SNAPSHOT CI status:
+image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop"]
+
+Current RELEASE CI status:
+image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master"]
+
+The RAD project has ambitious goals, but only one primary contributor who is very busy.
+
+Documentation is currently available in the docstrings of the namespaces (most up-to-date), and you can refer to the
+https://github.com/fulcrologic/fulcro-rad-demo[Fulcro RAD Demo] project (status varies, but is an accurate representation
+of what is working).
+
+There is a (likely inaccurate and out of date) start on a book at http://book.fulcrologic.com/RAD.html.
+At the moment your best bet for understanding usage is to look at the https://github.com/fulcrologic/fulcro-rad-demo[RAD Demo project].
+
+== Support
+
+Unpaid questions, issue reports, or requests should go through the #fulcro channel of http://clojurians.net/[Clojurians Slack].
+
+Paid support for RAD and related libraries is available from http://www.fulcrologic.com[Fulcrologic, LLC].
+
+== Project Goals
 
 The general goals of this project are:
 
@@ -48,30 +70,6 @@ move that card, zoom that chart).
 fine-grained control of rendering.
 ** Platform: Assuming you're having RAD generate UI, it should be possible to specify the platform (e.g. Mobile vs Web).
 This allows RAD to stand up apps with different targets with minimal changes to your application code.
-
-== Usage
-
-At the moment your best bet for understanding usage is to look at the https://github.com/fulcrologic/fulcro-rad-demo[RAD Demo project].
-
-image:https://img.shields.io/clojars/v/com.fulcrologic/fulcro-rad.svg[link=https://clojars.org/com.fulcrologic/fulcro-rad]
-
-Current SNAPSHOT CI status:
-image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop"]
-
-Current RELEASE CI status:
-image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master"]
-
-The RAD project has ambitious goals, but only one primary contributor who is very busy.
-
-Documentation is currently available in the docstrings of the namespaces (most up-to-date), and you can refer to the
-https://github.com/fulcrologic/fulcro-rad-demo[Fulcro RAD Demo] project (status varies, but is an accurate representation
-of what is working).
-There is a (likely inaccurate and out of date) start on a book at http://book.fulcrologic.com/RAD.html.
-
-Unpaid questions, issue reports, or requests cannot be supported at this time.
-
-Paid support for RAD and related libraries is available from http://www.fulcrologic.com[Fulcrologic, LLC].
-You may ask questions on the #fulcro channel of http://clojurians.net/[Clojurians Slack].
 
 == LICENSE
 
