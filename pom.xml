@@ -4,7 +4,7 @@
   <groupId>com.fulcrologic</groupId>
   <artifactId>fulcro-rad</artifactId>
   <packaging>jar</packaging>
-  <version>0.0.16-alpha-SNAPSHOT</version>
+  <version>1.0.0-RC1-SNAPSHOT</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.8</maven.compiler.source>
@@ -71,7 +71,7 @@
     <dependency>
       <groupId>com.wsscode</groupId>
       <artifactId>pathom</artifactId>
-      <version>2.2.30</version>
+      <version>2.2.31</version>
     </dependency>
     <dependency>
       <groupId>commons-codec</groupId>
@@ -86,12 +86,12 @@
     <dependency>
       <groupId>edn-query-language</groupId>
       <artifactId>eql</artifactId>
-      <version>0.0.9</version>
+      <version>1.0.0</version>
     </dependency>
     <dependency>
       <groupId>com.taoensso</groupId>
       <artifactId>encore</artifactId>
-      <version>2.119.0</version>
+      <version>2.120.0</version>
     </dependency>
     <dependency>
       <groupId>com.taoensso</groupId>
@@ -111,7 +111,7 @@
     <dependency>
       <groupId>com.fulcrologic</groupId>
       <artifactId>fulcro</artifactId>
-      <version>3.2.8</version>
+      <version>3.2.12</version>
     </dependency>
     <dependency>
       <groupId>cljc.java-time</groupId>
