@@ -49,7 +49,7 @@
       (assoc ::qualified-key kw))))
 
 #?(:clj
-   (defmacro ^{:arglists '[[symbol qualified-keyword data-type options-map]]} defattr
+   (defmacro ^{:arglists '[[symbol docstring? qualified-keyword data-type options-map]]} defattr
      "Define a new attribute into a sym.
 
      WARNING: IF YOU ARE DOING FULL-STACK, THEN THESE MUST BE DEFINED IN CLJC FILES FOR RAD TO WORK! RAD actually supports
