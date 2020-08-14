@@ -506,22 +506,24 @@
                               query-inclusions)
           nspc              (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
           fqkw              (keyword (str nspc) (name sym))
-          options           (assoc (merge {::compare-rows `default-compare-rows} options)
-                              :route-segment (if (vector? route) route [route])
-                              :will-enter `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))
-                              ::BodyItem ItemClass
-                              :query query
-                              :initial-state (list 'fn ['params]
-                                               `(cond-> {:ui/parameters   {}
-                                                         :ui/cache        {}
-                                                         :ui/controls     (mapv #(select-keys % #{::control/id})
-                                                                            (remove :local? (control/control-map->controls ~controls)))
-                                                         :ui/busy?        false
-                                                         :ui/current-page 1
-                                                         :ui/page-count   1
-                                                         :ui/current-rows []}
-                                                  (contains? ~'params ::id) (assoc ::id (::id ~'params))))
-                              :ident (list 'fn [] [::id `(or (::id ~props-sym) ~fqkw)]))
+          options           (merge
+                              {::compare-rows `default-compare-rows
+                               :will-enter    `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))}
+                              options
+                              {:route-segment (if (vector? route) route [route])
+                               ::BodyItem     ItemClass
+                               :query         query
+                               :initial-state (list 'fn ['params]
+                                                `(cond-> {:ui/parameters   {}
+                                                          :ui/cache        {}
+                                                          :ui/controls     (mapv #(select-keys % #{::control/id})
+                                                                             (remove :local? (control/control-map->controls ~controls)))
+                                                          :ui/busy?        false
+                                                          :ui/current-page 1
+                                                          :ui/page-count   1
+                                                          :ui/current-rows []}
+                                                   (contains? ~'params ::id) (assoc ::id (::id ~'params))))
+                               :ident         (list 'fn [] [::id `(or (::id ~props-sym) ~fqkw)])})
           body              (if (seq (rest args))
                               (rest args)
                               [`(render-layout ~this-sym)])
