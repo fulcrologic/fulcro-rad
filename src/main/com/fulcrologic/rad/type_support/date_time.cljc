@@ -420,3 +420,15 @@
      (ld/with-day-of-year 1)
      (ld/plus-years 1)
      (local-date->inst))))
+
+(>defn max-inst
+  "Returns the maximum inst from a list of insts. Returns nil if no insts are passed."
+  [& insts]
+  [(s/* inst?) => (? inst?)]
+  (first (sort-by (comp - inst-ms) insts)))
+
+(>defn min-inst
+  "Returns the minimum inst from a list of insts. Returns nil if no insts are passed."
+  [& insts]
+  [(s/* inst?) => (? inst?)]
+  (first (sort insts)))
