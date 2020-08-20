@@ -365,7 +365,8 @@
   [get-class location options]
   (required! location options ::attributes vector?)
   (required! location options ::id attr/attribute?)
-  (let [{::keys [id attributes route-prefix query-inclusion]} options
+  (let [{::keys [id attributes route-prefix query-inclusion]
+         :keys [will-enter]} options
         id-key                     (::attr/qualified-key id)
         form-field?                (fn [{::attr/keys [identity? computed-value]}] (and
                                                                                     (not computed-value)
@@ -394,12 +395,16 @@
                                        route-prefix (merge {:route-segment       [route-prefix :action :id]
                                                             :allow-route-change? form-allow-route-change
                                                             :will-leave          (fn [this props] (form-will-leave this))
-                                                            :will-enter          (fn [app route-params] (form-will-enter app route-params (get-class)))})))
+                                                            :will-enter          (or will-enter
+                                                                                     (fn [app route-params]
+                                                                                       (form-will-enter app route-params (get-class))))})))
         inclusions                 (set/union attribute-query-inclusions (set query-inclusion))
         query                      (cond-> (form-options->form-query base-options)
                                      (seq inclusions) (into inclusions))]
     (when (and #?(:cljs goog.DEBUG :clj true) (not (string? route-prefix)))
       (log/info "NOTE: " location " does not have a route prefix and will only be usable as a sub-form."))
+    (when (and #?(:cljs goog.DEBUG :clj true) will-enter (not route-prefix))
+      (log/info "NOTE: There's a :will-enter option in form/defsc-form" location "that will be ignored because ::report/route-prefix is not specified"))
     (assoc base-options :query (fn [_] query))))
 
 #?(:clj
