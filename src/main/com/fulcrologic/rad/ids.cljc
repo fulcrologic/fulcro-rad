@@ -55,12 +55,13 @@
 
 (defn id-string->id
   "When forms are routed to their ID is in the URL as a string. This converts IDs in such a string format to the
-   given type (which must be a RAD type name that supports IDs like :uuid, :int, or :long)."
+   given type (which must be a RAD type name that supports IDs like :uuid, :int, :long or :string)."
   [type id]
   (case type
     :uuid (new-uuid id)
     :int (int/parse-int id)
     :long (int/parse-long id)
+    :string id
     (do
       (log/error "Unsupported ID type" type)
       id)))
