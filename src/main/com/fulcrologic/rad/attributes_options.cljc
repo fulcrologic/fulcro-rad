@@ -176,3 +176,20 @@
   Such configuration options are really up to the render plugin, but could include things like `:input/props` as
   additional DOM k/v pairs to put on the input."
   :com.fulcrologic.rad.attributes/field-style-config)
+
+(def computed-options
+  "A vector of {:text/:value} maps that indicate the options available for an attribute's value,
+  which may be dependent on other attributes of the entity (e.g. to populate a cascading dropdown). This can also be a
+  (fn [env] [{:text ... :value ...} ...]), where `env` is defined by the context of usage (for example in a form
+  this will be the form-env which contains the master form and current form instance, allowing you to examine the
+  entire nested form).
+
+  Various plugins *may* support this option in various ways, so see the documentation of your
+  UI/database plugin for more information. You must ensure that `:text` is always a string, and
+  that your `:value` is a legal value of the attribute.
+
+  Generally this option will do nothing unless a renderer supports it directly.
+
+  For example: The Semantic UI Rendering plugin supports this option on strings and other types when you set
+  `ao/style` to :picker."
+  :com.fulcrologic.rad.attributes/computed-options)
