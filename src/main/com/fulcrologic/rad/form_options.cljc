@@ -225,6 +225,14 @@
   additional DOM k/v pairs to put on the input."
   :com.fulcrologic.rad.attributes/field-style-config)
 
+(def input-props
+  "A key that can be included WITHIN `field-style-config`(s).  A HINT to the field renderer that the given additional
+  props should be included on the low-level input.  Renderers may define additional keys for further customization. In
+  general you should *not* use this to attempt to mess with the input's value of value event handlers. The value of
+  this option can be a map or a `(fn [form-env] map?)`. In general `:value`, `:onBlur`, `:onChange`, and `:onFocus`
+  will be ignored by the underlying renderer, since it will likely provide its own setting for those."
+  :input/props)
+
 (def field-style-configs
   "A map from field *keyword* to a map of options that are used by the rendering plugin to augment the style of a rendered input.
   Such configuration options are really up to the render plugin, but could include things like `:input/props` as

@@ -1171,7 +1171,7 @@
         field-label (?! (or
                           (get-in options [::field-labels k])
                           (::field-label attribute)
-                          (some-> k name str/capitalize)) form-instance)]
+                          (some-> k name str/capitalize (str/replace #"-" " "))) form-instance)]
     field-label))
 
 (defn invalid?
