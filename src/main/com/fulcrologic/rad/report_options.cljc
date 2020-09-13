@@ -77,13 +77,13 @@
    "
   :com.fulcrologic.rad.report/form-links)
 
-(def field-formatters
+(def column-formatters
   "A map from *qualified key* to a `(fn [report-instance value-to-format row-props attribute] string-or-element?)`. The function will
    receive the raw value of the column and should return a string or a UI element *that is acceptable to the current render
    plugin*.
 
    ```
-   ro/field-formatters {:account/name
+   ro/column-formatters {:account/name
                          (fn [this v]
                            (dom/a {:onClick #(form/edit! this AccountForm (-> this comp/props :account/id)} (str v)))}
    ```
@@ -91,15 +91,19 @@
    Returning an element is particularly useful when the formatting needs something special, like bold, SVG, or some other
    complex format.
 
-   A global default can be specified with `::report/field-formatter` on the attribute, which is just a `fn` (not a map).
+   A global default can be specified with `::report/column-formatter` on the attribute, which is just a `fn` (not a map).
 
-   See also `column-styles`, `attr/style`, `link`, `form-links`, `row-query-inclusion`, and `field-formatter`.
+   See also `column-styles`, `attr/style`, `link`, `form-links`, `row-query-inclusion`, and `column-formatter`.
    "
-  :com.fulcrologic.rad.report/field-formatters)
+  :com.fulcrologic.rad.report/column-formatters)
 
-(def field-formatter
-  "ATTRIBUTE OPTION. A `(fn [report-instance value row-props attribute])` which can be used on an attribute. See `field-formatters`."
-  :com.fulcrologic.rad.report/field-formatter)
+(def filed-formatters "DEPRECATED. Use column-formatters" column-formatters)
+
+(def column-formatter
+  "ATTRIBUTE OPTION. A `(fn [report-instance value row-props attribute])` which can be used on an attribute. See `column-formatters`."
+  :com.fulcrologic.rad.report/column-formatter)
+
+(def field-formatter "DEPRECATED. Use column-formatter." column-formatter)
 
 (def run-on-mount?
   "Boolean. Should this report run when it is first mounted, or wait for the user to explicitly take an action. See

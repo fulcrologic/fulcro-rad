@@ -478,7 +478,7 @@
            props-sym (second arglist)
            props-sym (if (map? props-sym) (:as props-sym) props-sym)
            options   (first args)
-           options   (opts/macro-optimize-options &env options #{::field-formatters ::column-headings ::form-links} {})]
+           options   (opts/macro-optimize-options &env options #{::column-formatters ::field-formatters ::column-headings ::form-links} {})]
        (when (or (= '_ props-sym) (= '_ this-sym) (= props-sym this-sym) (not (symbol? this-sym)) (not (symbol? props-sym)))
          (throw (ana/error &env (str "defsc-report argument list must use a real (unique) symbol (or a destructuring with `:as`) for the `this` and `props` (1st and 2nd) arguments."))))
        (req! &env sym options ::columns #(or (symbol? %) (every? symbol? %)))
@@ -622,7 +622,9 @@
   [report-instance row-props {::keys      [field-formatter column-styles]
                               ::attr/keys [qualified-key type style] :as column-attribute}]
   (let [value                  (get row-props qualified-key)
-        report-field-formatter (comp/component-options report-instance ::field-formatters qualified-key)
+        report-field-formatter (or
+                                 (comp/component-options report-instance ::column-formatters qualified-key)
+                                 (comp/component-options report-instance ::field-formatters qualified-key))
         {::app/keys [runtime-atom]} (comp/any->app report-instance)
         formatter              (cond
                                  report-field-formatter report-field-formatter
