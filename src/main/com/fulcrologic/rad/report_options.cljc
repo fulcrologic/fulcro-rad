@@ -97,7 +97,7 @@
    "
   :com.fulcrologic.rad.report/column-formatters)
 
-(def filed-formatters "DEPRECATED. Use column-formatters" column-formatters)
+(def field-formatters "DEPRECATED. Use column-formatters" column-formatters)
 
 (def column-formatter
   "ATTRIBUTE OPTION. A `(fn [report-instance value row-props attribute])` which can be used on an attribute. See `column-formatters`."
