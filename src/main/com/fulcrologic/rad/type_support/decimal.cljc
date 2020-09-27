@@ -21,7 +21,7 @@
 
 (def ^:dynamic *primitive* false)
 
-(declare * div + - < > <= >= max min bigdecimal numeric)
+(declare * div + - < > <= >= max min  numeric)
 
 (defn bigdecimal? [v]
   #?(:clj  (decimal? v)
@@ -314,7 +314,7 @@
                         (-write writer (str "#" type " \"" v "\""))))))
 
 #?(:cljs
-   (reader/register-tag-parser! 'math/bigdec bigdecimal))
+   (reader/register-tag-parser! 'math/bigdec numeric))
 
 ;; In cljs, at least, we can make `compare` work via this protocol.
 ;; FIXME: This should be a more general function in transit support, since it tries to add comparison for transit tagged

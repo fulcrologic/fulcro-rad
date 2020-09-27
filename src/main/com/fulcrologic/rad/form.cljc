@@ -27,8 +27,7 @@
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
     #?@(:clj  [[cljs.analyzer :as ana]]
-        :cljs [[cognitect.transit :as ct]
-               [goog.object :as gobj]])
+        :cljs [[goog.object :as gobj]])
     [com.fulcrologic.rad.options-util :as opts :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
@@ -366,7 +365,7 @@
   (required! location options ::attributes vector?)
   (required! location options ::id attr/attribute?)
   (let [{::keys [id attributes route-prefix query-inclusion]
-         :keys [will-enter]} options
+         :keys  [will-enter]} options
         id-key                     (::attr/qualified-key id)
         form-field?                (fn [{::attr/keys [identity? computed-value]}] (and
                                                                                     (not computed-value)
@@ -396,8 +395,8 @@
                                                             :allow-route-change? form-allow-route-change
                                                             :will-leave          (fn [this props] (form-will-leave this))
                                                             :will-enter          (or will-enter
-                                                                                     (fn [app route-params]
-                                                                                       (form-will-enter app route-params (get-class))))})))
+                                                                                   (fn [app route-params]
+                                                                                     (form-will-enter app route-params (get-class))))})))
         inclusions                 (set/union attribute-query-inclusions (set query-inclusion))
         query                      (cond-> (form-options->form-query base-options)
                                      (seq inclusions) (into inclusions))]

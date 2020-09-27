@@ -25,19 +25,14 @@
                                   november december]]
     #?@(:clj  []
         :cljs [[goog.object :as gobj]
-               [java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate ZonedDateTime
-                                  Period DayOfWeek Month ZoneOffset Instant]]
+               [java.time :refer [Duration LocalTime LocalDateTime LocalDate ZonedDateTime Period Instant]]
                [java.time.format :refer [DateTimeFormatter]]
                [com.fulcrologic.rad.type-support.ten-year-timezone]
                [goog.date.duration :as g-duration]]))
   #?(:clj (:import java.io.Writer
                    [java.util Date Locale]
-                   [java.time DayOfWeek Duration Instant LocalDate LocalDateTime LocalTime Month MonthDay
-                              OffsetDateTime OffsetTime Period Year YearMonth ZonedDateTime ZoneId ZoneOffset]
-                   [java.time.zone ZoneRules]
-                   [java.time.format DateTimeFormatter]
-                   [java.time.temporal TemporalAdjusters ChronoField ChronoUnit]
-                   [com.cognitect.transit TransitFactory WriteHandler ReadHandler])))
+                   [java.time Duration Instant LocalDate LocalDateTime LocalTime Period ZonedDateTime]
+                   [java.time.format DateTimeFormatter])))
 
 #?(:cljs
    (do
