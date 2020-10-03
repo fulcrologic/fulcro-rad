@@ -481,11 +481,11 @@ A RAD attribute to store a string might look like this:
 
 [source]
 -----
-(defattr id :account/name :string
+(defattr name :account/name :string
   {})
 -----
 
-but such an attribute only be usable if you hand-generate resolvers on your server that can obtain
+but such an attribute will only be usable if you hand-generate resolvers on your server that can obtain
 the value, and can store it based on the ID you give a form.  So, such an attribute isn't useless,
 but it is made much more powerful when you add information for other plugins.
 
@@ -509,7 +509,7 @@ of fact:
   {ao/required? true
    ao/identities #{:account/id}})
 
-(defattr name :account/email :string
+(defattr email :account/email :string
   {ao/required? true
    ao/identities #{:account/id}})
 
@@ -574,7 +574,7 @@ a type.
 The core predefined attribute types include (this list is not complete yet, but most of these are present):
 
 `:string`:: A variable-length string.
-`:enum `:: An enumerated list of values. Support varies by db adapter.
+`:enum`:: An enumerated list of values. Support varies by db adapter.
 `:boolean`:: true/false
 `:int`:: A (typically 32-bit) integer
 `:long`:: A (typically 64-bit) integer
@@ -597,7 +597,7 @@ an attribute's map. Here are some examples for `attributes-options`:
   name of an `identity? true` attribute. For example
   `:account/addresses` might have a target of `:address/id`.
 `ao/cardinality`:: Defines the expected cardinality of the attribute. Supported when the type of the attribute is `:ref`,
-   and some database adapters may support it on other types. Defaults to :one, but can also be :many.
+   and some database adapters may support it on other types. Defaults to `:one`, but can also be `:many`.
 `ao/enumerated-values`:: Only when type is `:enum`. A set of keywords that represent the legal possible values when the
    type is `:enum`. Constraints on this may vary based on the db adapter chosen. Typically you will use narrowed
    keywords for this (e.g. `:account/type` might have values `:account.type/user`, etc.).
@@ -607,11 +607,11 @@ an attribute's map. Here are some examples for `attributes-options`:
 == All Attributes
 
 RAD often needs to know what attributes are in your model. Early versions tried using a registry, but the side-effect
-nature of such a thing is simply quite annoying (order-dependent, you can forgot requires, etc.).
+nature of such a thing is simply quite annoying (order-dependent, you can forget requires, etc.).
 
 When building a RAD application you should manually build up a list of all of the attributes in your model. The
 recommended pattern is to include a `def` of `attributes` at the
-bottom of each model namespace, then you can easily a list of all attributes like this:
+bottom of each model namespace, then you can easily define a list of all attributes like this:
 
 [source]
 -----
@@ -670,7 +670,7 @@ Here is the recommended config component using `mount`:
                 :or   {config "config/dev.edn"}} (args)
                loaded-config (merge (fulcro-config/load-config {:config-path config}) overrides)]
            (log/info "Loading config" config)
-           ;; set up Timber to proper levels, etc...
+           ;; set up Timbre to proper levels, etc...
            (logging/configure-logging! loaded-config)
            loaded-config))
 -----
@@ -750,7 +750,7 @@ So first, you'll generate a stateful list of all of the attributes that convert 
 -----
 
 then you'll set up a stateful parser that installs various plugins and resolvers along with a
-few standard ones any you've created elsewhere. The result will look something like this:
+few standard ones and any you've created elsewhere. The result will look something like this:
 
 [source]
 -----
@@ -862,8 +862,8 @@ At this point the server is just a standard Ring server like this (here using Im
 = Client Setup
 
 Fulcro RAD can be used with any Fulcro application. The only global configuration that is required
-is to initialize the attribute registry, but the more feature you use, the more you'll want
-to configure. RAD applications that uses HTML5 routing and UI generation, for example, will also
+is to initialize the attribute registry, but the more features you use, the more you'll want
+to configure. RAD applications that use HTML5 routing and UI generation, for example, will also
 need to configure those.
 
 Here is what a client might look like that also includes some logging output improvements and
@@ -948,7 +948,7 @@ and straightforward.
 
 == The Server-side Resolvers
 
-The EQL network API of RAD is supplied by [Pathom Resolvers] that can pull the data
+The EQL network API of RAD is supplied by https://blog.wsscode.com/pathom/v2/pathom/2.2.0/connect/resolvers.html[Pathom Resolvers] that can pull the data
 of interest from your database. Typically you'll need to have at least one
 resolver for each top-level entity that can be pulled by ID, and custom resolvers that can satisfy various other
 queries (e.g. all accounts, current user, etc.). Forms need to be able to at least resolve entities by
