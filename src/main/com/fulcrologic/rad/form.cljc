@@ -32,6 +32,7 @@
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.routing :as rad-routing]
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.rad.routing.history :as history]))
 
 (def view-action "view")
@@ -50,7 +51,7 @@
                      (let [props           (comp/props this)
                            read-only-form? (?! (comp/component-options this ::read-only?) this)
                            dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
-                       (if dirty? "Cancel" "Done")))
+                       (if dirty? (tr "Cancel") (tr "Done"))))
            :class  (fn [this]
                      (let [props  (comp/props this)
                            dirty? (or (:ui/new? props) (fs/dirty? props))]
@@ -62,7 +63,7 @@
                               read-only-form? (?! (comp/component-options this ::read-only?) this)
                               dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                           (not dirty?)))
-           :label     "Undo"
+           :label     (fn [_] (tr "Undo"))
            :action    (fn [this] (undo-all! {::master-form this}))}
    ::save {:type      :button
            :disabled? (fn [this]
@@ -71,7 +72,7 @@
                               remote-busy?    (seq (::app/active-remotes props))
                               dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                           (or (not dirty?) remote-busy?)))
-           :label     "Save"
+           :label     (fn [_] (tr "Save"))
            :class     (fn [this]
                         (let [props        (comp/props this)
                               remote-busy? (seq (::app/active-remotes props))]

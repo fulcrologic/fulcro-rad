@@ -14,6 +14,7 @@
   "
   (:require
     [com.fulcrologic.fulcro.algorithms.denormalize :as fdn]
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.data-fetch :as df]
@@ -175,7 +176,7 @@
   (let [options (current-form-options form-instance attr)
         value   (current-to-one-value form-instance attr)
         {:keys [text]} (first (filter #(= (:value %) value) options))]
-    (str (or text "UNSELECTED"))))
+    (str (or text (tr "UNSELECTED")))))
 
 (def remote
   "The keyword name of the remote that the picker options are loaded from. Defaults to :remote."

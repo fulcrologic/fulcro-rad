@@ -6,6 +6,7 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [taoensso.timbre :as log]))
 
 (defn invalid-attribute-value?
@@ -36,5 +37,5 @@
                          (?! master-message props qualified-key)
                          (?! local-message props qualified-key)
                          (?! validation-message value)
-                         "Invalid value")]
+                         (tr "Invalid value"))]
     message))
