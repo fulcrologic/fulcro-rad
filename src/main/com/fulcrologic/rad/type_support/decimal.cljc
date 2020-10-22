@@ -277,7 +277,7 @@
        (js/parseFloat (.toFixed (numeric n) decimal-digits)))
     (big->bigdec
       #?(:clj
-         (.setScale (n->big n) decimal-digits RoundingMode/HALF_UP)
+         (.setScale ^BigDecimal (n->big n) ^int decimal-digits RoundingMode/HALF_UP)
          :cljs
          (.toFixed (n->big n) decimal-digits)))))
 
