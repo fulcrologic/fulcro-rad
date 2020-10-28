@@ -19,9 +19,15 @@
                    (java.text NumberFormat)
                    (java.util Locale))))
 
-(def ^:dynamic *primitive* false)
+(def rounding-modes {:down      #?(:cljs 0 :clj RoundingMode/DOWN)
+                     :half-up   #?(:cljs 1 :clj RoundingMode/HALF_UP)
+                     :half-even #?(:cljs 2 :clj RoundingMode/HALF_EVEN)
+                     :up        #?(:cljs 3 :clj RoundingMode/UP)})
 
-(declare * div + - < > <= >= max min  numeric)
+(def ^:dynamic *primitive* false)
+(def ^:dynamic *default-rounding-mode* :half-up)
+
+(declare * div + - < > <= >= max min numeric)
 
 (defn bigdecimal? [v]
   #?(:clj  (decimal? v)
@@ -119,8 +125,11 @@
      (when n
        (str (numeric->str (* n (numeric 100))) "%"))))
 
-(defn- n->big
-  "Convert a number-like thing into a low-level js Big representation."
+(defn n->big
+  "Convert a number-like thing into a low-level js Big representation.
+
+  WARNING: This is a low-level operation that should only be used if implementing your own extended functions for
+  math."
   [n]
   (cond
     (numeric? n)
@@ -135,8 +144,11 @@
     #?(:clj  (numeric "0")
        :cljs (Big. "0"))))
 
-(defn- big->bigdec
-  "Convert a low-level js Big number into a bigdecimal."
+(defn big->bigdec
+  "Convert a low-level js Big number into a bigdecimal. No-op in CLJ.
+
+  WARNING: This is a low-level operation that should only be used if implementing your own extended functions for
+  math."
   [n]
   #?(:clj  n
      :cljs (numeric (.toString n))))
@@ -266,20 +278,23 @@
 
 (defn round
   "Round the given number to the given number of
-  decimal digits. Returns a new bigdecimal number.
+  decimal digits. Returns a new bigdecimal number. The rounding mode default to :half-up, but can also
+  be :up, :down, or :half-even.  You can change the default rounding mode via the dynamic var *default-rounding-mode*.
 
   n can be nil (returns 0), a numeric string, a regular number, or a bigdecimal."
-  [n decimal-digits]
-  (if *primitive*
-    #?(:clj
-       (double (.setScale (bigdec (n->big n)) decimal-digits RoundingMode/HALF_UP))
-       :cljs
-       (js/parseFloat (.toFixed (numeric n) decimal-digits)))
-    (big->bigdec
-      #?(:clj
-         (.setScale ^BigDecimal (n->big n) ^int decimal-digits RoundingMode/HALF_UP)
-         :cljs
-         (.toFixed (n->big n) decimal-digits)))))
+  ([n decimal-digits] (round n decimal-digits *default-rounding-mode*))
+  ([n decimal-digits rounding-mode]
+   (let [mode (get rounding-modes rounding-mode (get rounding-modes *default-rounding-mode*))]
+     (if *primitive*
+       #?(:clj
+          (double (.setScale (bigdec (n->big n)) ^int decimal-digits ^RoundingMode mode))
+          :cljs
+          (.toNumber (.round (n->big n) decimal-digits mode)))
+       (big->bigdec
+         #?(:clj
+            (.setScale ^BigDecimal (n->big n) ^int decimal-digits ^RoundingMode mode)
+            :cljs
+            (.round (n->big n) decimal-digits mode)))))))
 
 (defn negative
   "If n is positive then returns n*(-1) else returns n."

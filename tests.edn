@@ -1,0 +1,7 @@
+#kaocha/v1
+    {:tests    [{:id           :unit
+                 :ns-patterns  ["-test$" "-spec$"]
+                 :test-paths   ["src/test"]
+                 :skip-meta    [:integration]
+                 :source-paths ["src/main"]}]
+     :plugins  []}

@@ -14,14 +14,19 @@
     "url": "https://github.com/fulcrologic/fulcro-rad/issues"
   },
   "homepage": "https://github.com/fulcrologic/fulcro-rad#readme",
+  "devDependencies": {
+    "karma": "5.2.2",
+    "karma-chrome-launcher": "3.1.0",
+    "karma-cljs-test": "0.1.0"
+  },
   "dependencies": {
     "@js-joda/locale_en-us": "2.0.1",
-    "big.js": "5.2.2",
+    "big.js": "6.0.1",
     "cldr-data": "^36.0.0",
     "cldrjs": "^0.5.1",
     "js-joda": "^1.11.0",
     "js-joda-timezone": "^2.1.1",
     "react": "^16.12.0",
-    "shadow-cljs": "2.8.109"
+    "shadow-cljs": "2.11.6"
   }
 }

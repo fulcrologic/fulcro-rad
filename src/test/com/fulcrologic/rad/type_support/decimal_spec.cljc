@@ -234,31 +234,61 @@
         (math/>= (math/numeric "9") (math/numeric "9") (math/numeric "7")) => true))))
 
 (specification "round"
-  (component "Normal mode"
+  (component "Big mode"
     (assertions
       "round on regular number input"
       (math/round 3.145678 2) => (math/numeric "3.15")
       "round works on bigdecimal input"
-      (math/round (math/numeric "9.2876497654987654923427862359876") 6) => (math/numeric "9.287650")
+      (math/round (math/numeric "9.2876487654987654923427862359876") 6) => (math/numeric "9.287649")
       "round on nil gives zero"
-      (math/round nil 2) => (math/numeric "0.00")
+      (math/round nil 2) => (math/numeric "0")
       "round of empty string gives zero"
-      (math/round "" 2) => (math/numeric "0.00")
+      (math/round "" 2) => (math/numeric "0")
       "round of numeric string works"
-      (math/round "100.2222" 2) => (math/numeric "100.22")))
+      (math/round "100.2222" 2) => (math/numeric "100.22"))
+    (component "rounding mode"
+      (assertions
+        "defaults to :half-up"
+        (math/round 1.255 2) => (math/numeric 1.26)
+        (math/round 1.355 2) => (math/numeric 1.36)
+        "supports :down"
+        (math/round 1.255 2 :down) => (math/numeric 1.25)
+        (math/round 1.355 2 :down) => (math/numeric 1.35)
+        "supports :up"
+        (math/round 1.251 2 :up) => (math/numeric 1.26)
+        (math/round 1.351 2 :up) => (math/numeric 1.36)
+        "supports :half-even"
+        (math/round 5.5 0 :half-even) => (math/numeric 6M)
+        (math/round 2.5 0 :half-even) => (math/numeric 2M))))
   (component "Primitive mode"
     (math/with-primitive-ops
       (assertions
         "round on regular number input"
         (math/round 3.145678 2) => (math/numeric "3.15")
         "round works on bigdecimal input"
-        (math/round (math/numeric "9.2876497654987654923427862359876") 6) => (math/numeric "9.287650")
+        (math/round (math/numeric "9.2876487654987654923427862359876") 6) => (math/numeric "9.287649")
+
         "round on nil gives zero"
-        (math/round nil 2) => (math/numeric "0.00")
+        (math/round nil 2) => #?(:clj (math/numeric "0.00")
+                                 :cljs (math/numeric "0") )
         "round of empty string gives zero"
         (math/round "" 2) => (math/numeric "0.00")
         "round of numeric string works"
-        (math/round "100.2222" 2) => (math/numeric "100.22")))))
+        (math/round "100.2222" 2) => (math/numeric "100.22"))
+      (component "rounding mode"
+        (assertions
+          "defaults to :half-up"
+          (math/round 1.255 2) => 1.26
+          (math/round 1.355 2) => 1.36
+          "supports :down"
+          (math/round 1.255 2 :down) => 1.25
+          (math/round 1.355 2 :down) => 1.35
+          "supports :up"
+          (math/round 1.251 2 :up) => 1.26
+          (math/round 1.351 2 :up) => 1.36
+          "supports :half-even"
+          (math/round 5.5 0 :half-even) => 6.0
+          (math/round 2.5 0 :half-even) => 2.0)))))
 
 (specification "numeric->currency-str"
   (component "Normal mode"
