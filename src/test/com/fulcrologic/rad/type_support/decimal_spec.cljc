@@ -290,44 +290,6 @@
           (math/round 5.5 0 :half-even) => 6.0
           (math/round 2.5 0 :half-even) => 2.0)))))
 
-(specification "numeric->currency-str"
-  (component "Normal mode"
-    (assertions
-      "Auto-coerces inputs"
-      (math/numeric->currency-str "13433.334") => "$13,433.33"
-      (math/numeric->currency-str 13433.334) => "$13,433.33"
-      "gives a currency-string version of a number"
-      (math/numeric->currency-str (math/numeric "13433.334")) => "$13,433.33"
-      "negative numbers have - before $"
-      (math/numeric->currency-str (math/numeric "-13433.334")) => "-$13,433.33"))
-  (component "Primitive mode"
-    (math/with-primitive-ops
-      (assertions
-        "Auto-coerces inputs"
-        (math/numeric->currency-str "13433.334") => "$13,433.33"
-        (math/numeric->currency-str 13433.334) => "$13,433.33"
-        "gives a currency-string version of a bigdecimal number"
-        (math/numeric->currency-str (math/numeric "13433.334")) => "$13,433.33"
-        "negative numbers have - before $"
-        (math/numeric->currency-str (math/numeric "-13433.334")) => "-$13,433.33"))))
-
-(specification "numeric->percent-str"
-  (component "Normal mode"
-    (assertions
-      "Auto-coerces inputs"
-      (math/numeric->percent-str ".334") => "33.4%"
-      (math/numeric->percent-str 0.33457) => "33.457%"
-      "gives a currency-string version of a number"
-      (math/numeric->percent-str (math/numeric "0.334")) => "33.4%"))
-  (component "Primitive mode"
-    (math/with-primitive-ops
-      (assertions
-        "Auto-coerces inputs"
-        (math/numeric->percent-str ".33457") => "33.457%"
-        (math/numeric->percent-str 0.334) => "33.4%"
-        "gives a currency-string version of a number"
-        (math/numeric->percent-str (math/numeric "0.334")) => "33.4%"))))
-
 (specification "numeric?" :focus
   #?(:clj
      (assertions

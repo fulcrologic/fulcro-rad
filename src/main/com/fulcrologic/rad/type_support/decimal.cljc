@@ -100,7 +100,10 @@
   (not (positive? v)))
 
 (defn numeric->currency-str
-  "Convert a numeric into a locale-specific currency string. The defaults are `en`, `US`, and `USD`."
+  "DEPRECATED: Use fulcro i18n support with something like js/Intl instead. js-joda locales are no longer the way to go,
+   and this is not really a concern of numerics themselves.
+
+   Convert a numeric into a locale-specific currency string. The defaults are `en`, `US`, and `USD`."
   ([n]
    (numeric->currency-str n "en" "US" "USD"))
   ([n language country currency-code]
@@ -116,7 +119,9 @@
             (str "-" result)
             result))))))
 
-(defn numeric->percent-str [n]
+(defn numeric->percent-str
+  "DEPRECATED: Use localization functions from i18n or js/Intl. This functions should never have been added here."
+  [n]
   #?(:clj
      (let [formatter (NumberFormat/getPercentInstance (Locale. "en" "US"))]
        (.setMaximumFractionDigits formatter 3)
