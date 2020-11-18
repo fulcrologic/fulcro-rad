@@ -19,6 +19,8 @@
     [cljc.java-time.local-date :as ld]
     [cljc.java-time.zoned-date-time :as zdt]
     [cljc.java-time.format.date-time-formatter :as dtf]
+    [cljc.java-time.period :as period]
+    [cljc.java-time.duration :as duration]
     [cljc.java-time.zone-id :as zone-id]
     [taoensso.timbre :as log]
     [cljc.java-time.month :refer [january february march april may june july august september october
@@ -28,7 +30,8 @@
                [java.time :refer [Duration LocalTime LocalDateTime LocalDate ZonedDateTime Period Instant]]
                [java.time.format :refer [DateTimeFormatter]]
                [com.fulcrologic.rad.type-support.ten-year-timezone]
-               [goog.date.duration :as g-duration]]))
+               [goog.date.duration :as g-duration]])
+    [cljc.java-time.local-time :as lt])
   #?(:clj (:import java.io.Writer
                    [java.util Date Locale]
                    [java.time Duration Instant LocalDate LocalDateTime LocalTime Period ZonedDateTime]
@@ -44,15 +47,15 @@
 (>def ::year (s/int-in 1970 3000))
 (>def ::hour (s/int-in 0 24))
 (>def ::minute (s/int-in 0 60))
-(>def ::instant #(instance? Instant %))
-(>def ::local-time #(instance? LocalTime %))
-(>def ::zoned-date-time #(instance? ZonedDateTime %))
-(>def ::local-date-time #(instance? LocalDateTime %))
-(>def ::local-date #(instance? LocalDate %))
+(>def ::instant (s/with-gen #(instance? Instant %) #(s/gen #{(instant/now)})))
+(>def ::local-time (s/with-gen #(instance? LocalTime %) #(s/gen #{(lt/of 11 23 0)})))
+(>def ::zoned-date-time (s/with-gen #(instance? ZonedDateTime %) #(s/gen #{(zdt/of-instant (instant/now) (zone-id/of "America/Los_Angeles"))})))
+(>def ::local-date-time (s/with-gen #(instance? LocalDateTime %) #(s/gen #{(ldt/of 2010 1 22 11 23 0)})))
+(>def ::local-date (s/with-gen #(instance? LocalDate %) #(s/gen #{(ld/of 2019 3 21)})))
 (>def ::zone-name (set (cljc.java-time.zone-id/get-available-zone-ids)))
 (>def ::at inst?)
-(>def ::period #(instance? Period %))
-(>def ::duration #(instance? Duration %))
+(>def ::period (s/with-gen #(instance? Period %) #(s/gen #{period/zero})))
+(>def ::duration (s/with-gen #(instance? Duration %) #(s/gen #{duration/of-seconds 3})))
 (>def ::day-of-week #{java-time.day-of-week/sunday
                       java-time.day-of-week/monday
                       java-time.day-of-week/tuesday
