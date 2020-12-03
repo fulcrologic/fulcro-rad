@@ -46,18 +46,19 @@
   ([owner control-key]
    (render-control owner control-key (get (comp/component-options owner ::controls) control-key)))
   ([owner control-key control]
-   (let [{::app/keys [runtime-atom]} (comp/any->app owner)
-         input-type   (get control :type)
-         input-style  (get control :style :default)
-         style->input (some-> runtime-atom deref ::rad/controls ::type->style->control (get input-type))
-         input        (or (get style->input input-style) (get style->input :default))]
-     (if input
-       (input {:instance    owner
-               :control     control
-               :control-key control-key})
-       (do
-         (log/error "No renderer installed to support parameter " control-key "with type/style" input-type input-style)
-         nil)))))
+   (when (not= control-key :_)
+     (let [{::app/keys [runtime-atom]} (comp/any->app owner)
+           input-type   (get control :type)
+           input-style  (get control :style :default)
+           style->input (some-> runtime-atom deref ::rad/controls ::type->style->control (get input-type))
+           input        (or (get style->input input-style) (get style->input :default))]
+       (if input
+         (input {:instance    owner
+                 :control     control
+                 :control-key control-key})
+         (do
+           (log/error "No renderer installed to support parameter " control-key "with type/style" input-type input-style)
+           nil))))))
 
 (def run!
   "Run the controlled content with the current values of the controlled parameters."
