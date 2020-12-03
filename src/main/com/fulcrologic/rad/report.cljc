@@ -618,7 +618,7 @@
    returns the formatted value of that column using the field formatter(s) defined
    on the column attribute or report. If no formatter is provided a default formatter
    will be used."
-  [report-instance row-props {::keys      [field-formatter column-styles]
+  [report-instance row-props {::keys      [field-formatter column-formatter column-styles]
                               ::attr/keys [qualified-key type style] :as column-attribute}]
   (let [value                  (get row-props qualified-key)
         report-field-formatter (or
@@ -627,6 +627,7 @@
         {::app/keys [runtime-atom]} (comp/any->app report-instance)
         formatter              (cond
                                  report-field-formatter report-field-formatter
+                                 column-formatter column-formatter
                                  field-formatter field-formatter
                                  :else (let [style                (or
                                                                     (get column-styles qualified-key)
