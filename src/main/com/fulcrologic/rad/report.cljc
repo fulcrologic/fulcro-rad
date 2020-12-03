@@ -53,8 +53,8 @@
 
 (defn render-row [report-instance row-class row-props]
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
-        layout-style (or (some-> report-instance comp/component-options ::row-style) :default)
-        render       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::row-style->row-layout layout-style)]
+        layout-style       (or (some-> report-instance comp/component-options ::row-style) :default)
+        render             (some-> runtime-atom deref :com.fulcrologic.rad/controls ::row-style->row-layout layout-style)]
     (if render
       (render report-instance row-class row-props)
       (do
@@ -328,7 +328,6 @@
                                             (uism/store :raw-items-in-table (count (keys (get state-map table-name))))
                                             (uism/activate :state/gathering-parameters))))}
         :event/failed {::uism/handler (fn [env] (log/error "Report failed to load.")
-                                        ;; TASK: need global error reporting
                                         (uism/activate env :state/gathering-parameters))}}})
 
     :state/gathering-parameters
