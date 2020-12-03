@@ -155,15 +155,12 @@
           button-layout       (or action-buttons control-button-keys)
           input-layout        (or inputs (vector (into [] input-keys)))]
       (when #?(:cljs js/goog.DEBUG :clj true)
-        (let [expected-button-layout-keys (set control-button-keys)
-              button-layout-keys          (set button-layout)
-              expected-input-keys         (set input-keys)
-              input-layout-keys           (set (flatten input-layout))]
-          (when (and (seq button-layout) (not= expected-button-layout-keys button-layout-keys))
-            (log/warn "The declared (and pulled up) action buttons" control-button-keys "on" (comp/component-name class-or-instance)
-              "do not match the action button layout" button-layout))
-          (when (and (seq input-layout-keys) (not= expected-input-keys input-layout-keys))
-            (log/warn "The actual inputs" input-keys "on" (comp/component-name class-or-instance)
-              "do not match the declared layout:" input-layout))))
+        (let [expected-layout-keys (set (keys controls))
+              actual-layout-keys   (disj
+                                     (into (set button-layout) (filter keyword?) (flatten input-layout))
+                                     :_)]
+          (when (and (seq expected-layout-keys) (not= expected-layout-keys actual-layout-keys))
+            (log/warn "The control layout does not include all controls: "
+              expected-layout-keys "vs." actual-layout-keys))))
       {:action-layout button-layout
        :input-layout  input-layout})))
