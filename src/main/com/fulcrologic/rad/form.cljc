@@ -55,7 +55,7 @@
            :class  (fn [this]
                      (let [props  (comp/props this)
                            dirty? (or (:ui/new? props) (fs/dirty? props))]
-                       (if dirty? "negative" "positive")))
+                       (if dirty? "ui tiny primary button negative" "ui tiny primary button positive")))
            :action (fn [this] (cancel! {::master-form this}))}
    ::undo {:type      :button
            :disabled? (fn [this]
@@ -76,7 +76,7 @@
            :class     (fn [this]
                         (let [props        (comp/props this)
                               remote-busy? (seq (::app/active-remotes props))]
-                          (when remote-busy? "loading")))
+                          (when remote-busy? "ui tiny primary button loading")))
            :action    (fn [this] (save! {::master-form this}))}})
 
 
