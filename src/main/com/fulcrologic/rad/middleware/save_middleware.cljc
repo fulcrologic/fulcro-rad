@@ -35,3 +35,24 @@
     (let [new-save-env (rewrite-values pathom-env)]
       (handler new-save-env))))
 
+(defn wrap-rewrite-delta
+  "Save middleware that adds a step in the middleware that can rewrite the incoming delta of a save.
+  The rewrite is allowed to do anything at all to the delta: add extra entities, create relations, augment
+  entities, or even clear the delta to an empty map so nothing will be saved.
+
+  The `rewrite-fn` should be a `(fn [pathom-env delta] updated-delta)`. You *can* return nil to indicate no
+  rewrite is needed, but any other return will be used as the new thing to save (instead of what was sent).
+
+  The `delta` has the format of a normalized Fulcro form save:
+
+  ```
+  {[:account/id 19] {:account/age {:before 42 :after 43}
+                     :account/items {:before [] :after [[:item/id 1]]}}
+   [:item/id 1] {:item/value {:before 22M :after 19.53M}}}
+  ```
+  "
+  [handler rewrite-fn]
+  (fn [env]
+    (let [old-delta (get-in env [::form/params ::form/delta])
+          new-delta (or (rewrite-fn env old-delta) old-delta)]
+      (handler (assoc-in env [::form/params ::form/delta] new-delta)))))
