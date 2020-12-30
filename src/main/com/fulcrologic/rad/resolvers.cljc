@@ -42,19 +42,22 @@
   or nil."
   [attr]
   [::attr/attribute => (? ::pc/resolver)]
-  (enc/when-let [resolver (::pc/resolve attr)
+  (enc/when-let [resolver        (::pc/resolve attr)
                  secure-resolver (fn [env input]
                                    (->>
                                      (resolver env input)
                                      (auth/redact env)))
-                 k (::attr/qualified-key attr)
-                 output [k]]
+                 k               (::attr/qualified-key attr)
+                 output          [k]]
     (log/info "Building attribute resolver for" (::attr/qualified-key attr))
-    (merge
-      {::pc/output output}
-      (just-pc-keys attr)
-      {::pc/sym     (symbol (str k "-resolver"))
-       ::pc/resolve secure-resolver})))
+    (let [transform (::pc/transform attr)]
+      (cond-> (merge
+                {::pc/output output}
+                (just-pc-keys attr)
+                {::pc/sym     (symbol (str k "-resolver"))
+                 ::pc/resolve secure-resolver})
+        transform transform
+        ))))
 
 (>defn generate-resolvers
   "Generate resolvers for attributes that directly define pathom ::pc/resolve keys"
