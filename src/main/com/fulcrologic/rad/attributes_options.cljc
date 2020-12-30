@@ -153,6 +153,16 @@
   "
   :com.wsscode.pathom.connect/input)
 
+(def pc-transform
+  "ALIAS to :com.wsscode.pathom.connect/transform.
+   See the pathom transform docs: https://blog.wsscode.com/pathom/#connect-transform
+
+   Allows one to specify a function that receives the full resolver/mutation map and returns the final version.
+
+   Generally used to wrap the resolver/mutation function with some generic operation to augment its data or operations.
+  "
+  :com.wsscode.pathom.connect/transform)
+
 (def read-only?
   "Boolean or `(fn [form-instance attribute] boolean?)`. If true it indicates to the form and db layer that writes
    of this value should not be allowed.  Enforcement is an optional feature. See you database adapter and rendering
