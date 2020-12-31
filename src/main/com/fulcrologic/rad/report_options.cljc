@@ -359,5 +359,23 @@
   :com.fulcrologic.rad.report/BodyItem)
 
 (def query-inclusions
-  "A vector of things to add to the top-level report's query. "
+  "A vector of things to add to the top-level report's query. 
+   
+   Example:
+  
+   Provided you have a `Person` component and have executed
+   `(df/load! [:person/id 123] Person)` you can query it:
+  
+   ```
+   ro/query-inclusions [{[:person/id 123] (comp/get-query Person)}]
+   ```
+  
+  and then access it in the report's body:
+  
+  ```
+  (get props [:person/id 123])
+  ```
+  
+  Notice that the report will _not load_ this data for you, you must
+  ensure their presence yourself."
   :com.fulcrologic.rad.report/query-inclusions)
