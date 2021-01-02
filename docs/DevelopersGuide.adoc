@@ -158,7 +158,7 @@ sets via subselection (e.g. pagination)
 in the report, and therefore prefer to be modelled as targeted units of work (e.g. mutations) instead of "saves" of the
 entire data set.
 
-* Containers (not yet designed)
+* Containers
 ** Manage groupings of UI elements.
 ** Allow for shared controls. For example a report's links on the left trigger a form to update on the right.
 
