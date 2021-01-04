@@ -359,5 +359,22 @@
   :com.fulcrologic.rad.report/BodyItem)
 
 (def query-inclusions
-  "A vector of things to add to the top-level report's query. "
+  "A vector of things to add to the top-level report's query. 
+   
+   Example:
+  
+   Imagine you need the ID of the current user for an action:
+  
+   ```
+   ro/query-inclusions [:user/current-user-id]
+   ```
+  
+  You can then access it in the report's body:
+  
+  ```
+  (:user/current-user-id props)
+  ```
+  
+  Notice that the report will _not load_ this data for you, you must
+  ensure their presence in the client DB yourself."
   :com.fulcrologic.rad.report/query-inclusions)
