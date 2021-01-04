@@ -363,19 +363,18 @@
    
    Example:
   
-   Provided you have a `Person` component and have executed
-   `(df/load! [:person/id 123] Person)` you can query it:
+   Imagine you need the ID of the current user for an action:
   
    ```
-   ro/query-inclusions [{[:person/id 123] (comp/get-query Person)}]
+   ro/query-inclusions [:user/current-user-id]
    ```
   
-  and then access it in the report's body:
+  You can then access it in the report's body:
   
   ```
-  (get props [:person/id 123])
+  (:user/current-user-id props)
   ```
   
   Notice that the report will _not load_ this data for you, you must
-  ensure their presence yourself."
+  ensure their presence in the client DB yourself."
   :com.fulcrologic.rad.report/query-inclusions)
