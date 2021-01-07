@@ -174,6 +174,8 @@
    will also include the PK (if possible) of the source of the columns in question.  You can use `row-query-inclusion`
    and custom server-side resolvers to make any imaginable data available on a row, which can be useful in things
    like `field-formatters` and `row-actions`.
+  
+   BEWARE: If you provide your own `ro/BodyItem` then this is ignored. Modify the body item's query instead.
    "
   :com.fulcrologic.rad.report/row-query-inclusion)
 
