@@ -27,6 +27,32 @@
   `ao/style` on a column to override something like style."
   :com.fulcrologic.rad.report/columns)
 
+(def column-class
+  "ATTRIBUTE OPTION. The name of a CSS class (a string) to add to the `classes` of
+  the HTML element that represents a column (f.ex. a `<td>` when rendering the report as a table).
+
+  This option is a HINT to the rendering plugin and will be ignored if it doesn't support it.
+
+   Example:
+
+   ```
+   ro/column-class \"my-respect-newlines\"
+   ```"
+  :com.fulcrologic.rad.report/column-class)
+
+(def column-classes
+  "A map from column (qualified keyword) to a the name of a CSS class (a string) to add to the `classes` of
+  the HTML element that represents a column (f.ex. a `<td>` when rendering the report as a table).
+
+  This option is a HINT to the rendering plugin and will be ignored if it doesn't support it.
+
+   Example:
+
+   ```
+   ro/column-classes {:movie/description \"my-respect-newlines\"}
+   ```"
+  :com.fulcrologic.rad.report/column-classes)
+
 (def column-styles
   "A map from column (qualified keyword) to a formatter style, which is either a keyword or a
    `(fn [report-instance] keyword)`. Chooses an alternate rendering style for the column (if supported by
@@ -57,7 +83,7 @@
   :com.fulcrologic.rad.report/source-attribute)
 
 (def title
-  "A string or `(fn [report-instance] string-or-element?)` that generates the title for this form. Can return a string
+  "A string or `(fn [report-instance] string-or-element?)` that generates the title for this report. Can return a string
    and many rendering plugins also allow a UI element."
   :com.fulcrologic.rad.report/title)
 
