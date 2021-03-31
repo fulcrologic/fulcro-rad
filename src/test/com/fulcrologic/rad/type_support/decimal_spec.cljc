@@ -103,8 +103,8 @@
 
 (specification "Basic Math"
   (assertions
-    "Primitive mode is at least 5x faster than normal mode"
-    (is-x-times-faster? 5
+    "Primitive mode is faster than normal mode"
+    (is-x-times-faster? 2
       (fn []
         (math/with-primitive-ops
           (doseq [n (range 1000)]
