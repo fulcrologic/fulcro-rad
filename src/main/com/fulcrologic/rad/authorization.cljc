@@ -149,7 +149,7 @@
       (-reply-to-initiator :event/authenticated)
       (uism/activate :state/idle))))
 
-(defn- logged-out [env]
+(defn- login-failed [env]
   (let [provider          (-> env ::uism/event-data :provider)
         expected-provider (uism/retrieve env :provider)]
     (when (not= provider expected-provider)
@@ -157,7 +157,7 @@
     (-> env
       (remove-authenticated-provider (or provider expected-provider))
       (-reply-to-initiator :event/authentication-failed)
-      (uism/activate :state/idle))))
+      (uism/activate :state/failed))))
 
 (defn- log-out [{::uism/keys [fulcro-app] :as env}]
   (let [provider          (-> env ::uism/event-data :provider)
@@ -176,7 +176,7 @@
 (def global-events
   {:event/logout          {::uism/handler log-out}
    :event/logged-in       {::uism/handler logged-in}
-   :event/failed          {::uism/handler logged-out}
+   :event/failed          {::uism/handler login-failed}
    :event/session-checked {::uism/handler (fn [{::uism/keys [state-map fulcro-app event-data] :as env}]
                                             (let [provider (:provider event-data)
                                                   status   (get-in state-map [::authorization provider ::status])
@@ -222,6 +222,8 @@
 
     :state/idle                  {::uism/events global-events}
 
+    :state/failed                {::uism/events global-events}
+
     :state/gathering-credentials {::uism/events global-events}}})
 
 (defn start!
@@ -266,10 +268,12 @@
            :initial-state             ~initial-state}
           ;; TODO: Logic to choose the correct factory for the provider being used
           (let [~'state (uism/get-active-state ~'this machine-id)
-                ~'authenticating? (= :state/gathering-credentials ~'state)
+                ~'authenticating? (contains? #{:state/gathering-credentials :state/failed} ~'state)
+                ~'failed? (= :state/failed ~'state)
                 {:keys [~'local]} ~'props
                 ~'factory (comp/computed-factory ~(get authority-map :local))]
-            (~'factory ~'local {:visible? ~'authenticating?}))))))
+            (~'factory ~'local {:visible? ~'authenticating?
+                                :failed?  ~'failed?}))))))
 
 (>def ::action #{:read :write :execute})
 (>def ::context map?)
