@@ -14,7 +14,8 @@
     [clojure.spec.alpha :as s]
     [com.fulcrologic.guardrails.core :refer [>defn >defn- => ?]]
     [cognitect.transit :as ct]
-    [clojure.string :as str])
+    [clojure.string :as str]
+    [taoensso.timbre :as log])
   #?(:clj (:import (java.math RoundingMode)
                    (java.text NumberFormat)
                    (java.util Locale))))
@@ -41,6 +42,17 @@
   (if *primitive*
     (number? v)
     (bigdecimal? v)))
+
+(defn coerce-to-primitive
+  "Coerce a number from a big rep to a floating point one. This is lossy."
+  [n]
+  (cond
+    (bigdecimal? n) #?(:clj  (double n)
+                       :cljs (js/parseFloat (.-rep ^clj n)))
+    (number? n) n
+    (string? n) #?(:clj  (Double/parseDouble n)
+                   :cljs (js/parseFloat n))
+    :else n))
 
 (s/def ::numeric
   (s/with-gen numeric? #(s/gen #{(numeric "11.35")
@@ -164,11 +176,11 @@
   ([& numbers]
    #?(:clj
       (if *primitive*
-        (apply clojure.core/+ numbers)
+        (apply clojure.core/+ (map coerce-to-primitive numbers))
         (apply clojure.core/+ (map numeric numbers)))
       :cljs
       (if *primitive*
-        (apply cljs.core/+ numbers)
+        (apply cljs.core/+ (map coerce-to-primitive numbers))
         (big->bigdec
           (reduce (fn [acc n]
                     (.plus ^js acc (n->big n)))
@@ -180,11 +192,11 @@
   [& numbers]
   #?(:clj
      (if *primitive*
-       (apply clojure.core/- numbers)
+       (apply clojure.core/- (map coerce-to-primitive numbers))
        (apply clojure.core/- (map numeric numbers)))
      :cljs
      (if *primitive*
-       (apply cljs.core/- numbers)
+       (apply cljs.core/- (map coerce-to-primitive numbers))
        (big->bigdec
          (if (clojure.core/= 1 (count numbers))
            (.times (n->big (first numbers)) (n->big -1))
@@ -199,11 +211,11 @@
   ([& numbers]
    #?(:clj
       (if *primitive*
-        (apply clojure.core/* numbers)
+        (apply clojure.core/* (map coerce-to-primitive numbers))
         (apply clojure.core/* (map numeric numbers)))
       :cljs
       (if *primitive*
-        (apply cljs.core/* numbers)
+        (apply cljs.core/* (map coerce-to-primitive numbers))
         (big->bigdec
           (reduce (fn [acc n]
                     (.times ^js acc (n->big n)))
@@ -220,7 +232,7 @@
   ([n d precision]
    (assert (not= 0 d))
    (if *primitive*
-     (/ n d)
+     (/ (coerce-to-primitive n) (coerce-to-primitive d))
      (let [n (n->big n)
            d (n->big d)]
        #?(:clj
@@ -252,16 +264,21 @@
 (defn compare-fn
   #?(:cljs ([big-fn]
             (fn [x y & more]
-              (if (big-fn x y)
-                (if (next more)
-                  (recur y (first more) (next more))
-                  (if (first more)
-                    (big-fn y (first more))
-                    true))
-                false)))
+              (let [[x y] (if *primitive*
+                            [(coerce-to-primitive x) (coerce-to-primitive y)]
+                            [x y])]
+                (if (big-fn x y)
+                  (if (next more)
+                    (recur y (first more) (next more))
+                    (if (first more)
+                      (big-fn y (first more))
+                      true))
+                  false))))
      :clj  ([core-fn]
             (fn [& numbers]
-              (apply core-fn (map n->big numbers))))))
+              (if *primitive*
+                (apply core-fn (map coerce-to-primitive numbers))
+                (apply core-fn (map n->big numbers)))))))
 
 (def = (compare-fn #?(:cljs (if *primitive* cljs.core/= big-eq) :clj clojure.core/=)))
 (def < (compare-fn #?(:cljs (if *primitive* cljs.core/< big-lt) :clj clojure.core/<)))

@@ -8,6 +8,8 @@
 
 (declare =>)
 
+(defn bigd [s] #?(:clj (bigdec s) :cljs (ct/bigdec s)))
+
 (defn is-x-times-faster? [x fast-version slow-version]
   (let [atm       (inst-ms (datetime/now))
         _         (fast-version)
@@ -97,9 +99,12 @@
         (math/positive? (math/numeric "1.334")) => true
         (math/positive? (math/numeric "-1.334")) => false
         "Coerces raw values"
+        (math/positive? (bigd "4")) => true
+        (math/positive? (bigd "-4")) => false
         (math/positive? -4) => false
         (math/positive? 4) => true
-        (math/positive? "4") => true))))
+        (math/positive? "4") => true
+        (math/positive? "-4") => false))))
 
 (specification "Basic Math"
   (assertions
@@ -158,9 +163,14 @@
                                  :clj  0.1M)) (math/numeric 0.2)) => (+ 0.1 0.2)
         (math/- (math/numeric 0.1) 0.2) => (- 0.1 0.2)
         (math/div 0.1 0.2) => (/ 0.1 0.2)
-        (math/* 0.1 (math/numeric 0.2)) => (* 0.1 0.2)))))
+        (math/* 0.1 (math/numeric 0.2)) => (* 0.1 0.2)
+        "allows the use of bigdecimal"
+        (math/+ (bigd "0.1") (math/numeric 0.2)) => (+ 0.1 0.2)
+        (math/- (math/numeric 0.1) (bigd "0.2")) => (- 0.1 0.2)
+        (math/div 0.1 (bigd "0.2")) => (/ 0.1 0.2)
+        (math/* (bigd "0.1") (math/numeric 0.2)) => (* 0.1 0.2)))))
 
-(specification "Comparison Operators"
+(specification "Comparison Operators" :focus
   (component "Normal mode"
     (assertions
       "Allows raw (coerced) and mixed values"
@@ -202,7 +212,7 @@
         "Allows raw (coerced) and mixed values"
         (math/= 1 2 3) => false
         (math/= 2 2 2) => true
-        (math/> 3 1 -1) => true
+        (math/> 3 (bigd 1) -1) => true
         (math/> 1 3 -1) => false
         (math/>= (math/numeric 3) 3 "1" -1) => true
         (math/>= (math/numeric 3) "1" 3 -1) => false
@@ -212,8 +222,8 @@
         (math/<= 1 2 1 (math/numeric 5)) => false)
       (assertions
         "handles = comparisons"
-        (math/= (math/numeric "1") (math/numeric "1") (math/numeric "1")) => true
-        (math/= (math/numeric "1") (math/numeric "1") (math/numeric "7")) => false)
+        (math/= (math/numeric "1") (bigd "1") (math/numeric "1")) => true
+        (math/= (math/numeric "1") (bigd "1") (math/numeric "7")) => false)
       (assertions
         "handles < comparisons"
         (math/< (math/numeric "1") (math/numeric "5") (math/numeric "7")) => true
@@ -269,8 +279,8 @@
         (math/round (math/numeric "9.2876487654987654923427862359876") 6) => (math/numeric "9.287649")
 
         "round on nil gives zero"
-        (math/round nil 2) => #?(:clj (math/numeric "0.00")
-                                 :cljs (math/numeric "0") )
+        (math/round nil 2) => #?(:clj  (math/numeric "0.00")
+                                 :cljs (math/numeric "0"))
         "round of empty string gives zero"
         (math/round "" 2) => (math/numeric "0.00")
         "round of numeric string works"
