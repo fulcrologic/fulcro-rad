@@ -48,7 +48,7 @@
   [n]
   (cond
     (bigdecimal? n) #?(:clj  (double n)
-                       :cljs (js/parseFloat (.-rep ^clj n)))
+                       :cljs (js/parseFloat (.-rep ^js n)))
     (number? n) n
     (string? n) #?(:clj  (Double/parseDouble n)
                    :cljs (js/parseFloat n))
