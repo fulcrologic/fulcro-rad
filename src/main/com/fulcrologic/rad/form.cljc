@@ -288,6 +288,11 @@
   * id - The ID of the form, in the correct type (i.e. int, UUID, etc.). Use a `tempid` to create something new, otherwise
   the form will attempt to load the current value from the server.
   * form-class - The component class that will render the form and has the form's configuration.
+  * params - Extra parameters to include in the initial event data. The state machine definition you're using will
+    determine the meanings of these (if any). The default machine supports:
+    ** `:on-saved fulcro-txn` A transaction to run when the form is successfully saved. Exactly what you'd pass to `transact!`.
+    ** `:on-cancel fulcro-txn` A transaction to run when the edit is cancelled.
+    ** `:on-save-failed fulcro-txn` A transaction to run when the server refuses to save the data.
 
   The state machine definition used by this method can be overridden by setting `::form/machine` in component options
   to a different Fulcro uism state machine definition. Machines do *not* run in subforms, only in the master, which
@@ -689,6 +694,7 @@
 (defn- start-create [uism-env start-params]
   (let [form-overrides   (:initial-state start-params)
         FormClass        (uism/actor-class uism-env :actor/form)
+        routeable?       (boolean (get (comp/component-options FormClass) ::route-prefix))
         form-ident       (uism/actor->ident uism-env :actor/form)
         id               (second form-ident)
         initial-state    (merge (default-state FormClass id) form-overrides)
@@ -698,25 +704,29 @@
       (uism/apply-action merge/merge-component FormClass entity-to-merge)
       (uism/apply-action mark-filled-fields-complete* {:entity-ident     form-ident
                                                        :initialized-keys initialized-keys})
-      (route-target-ready form-ident)
+      (cond-> routeable? (route-target-ready form-ident))
       (uism/activate :state/editing))))
 
 (defn leave-form
   "Discard all changes, and attempt to change route."
   [{::uism/keys [fulcro-app] :as uism-env}]
   (let [Form         (uism/actor-class uism-env :actor/form)
-        cancel-route (?! (some-> Form comp/component-options ::cancel-route))]
-    (let [form-ident (uism/actor->ident uism-env :actor/form)]
-      (cond
-        (= :back cancel-route) (if (history/history-support? fulcro-app)
-                                 (history/back! fulcro-app)
-                                 (log/error "Back not supported. No history installed."))
-        (and (seq cancel-route) (every? string? cancel-route)) (dr/change-route! fulcro-app cancel-route)
-        (comp/component-class? cancel-route) (rad-routing/route-to! fulcro-app cancel-route {})
-        (history/history-support? fulcro-app) (history/back! fulcro-app))
-      (-> uism-env
-        (uism/store :abandoned? true)
-        (uism/apply-action fs/pristine->entity* form-ident)))))
+        cancel-route (?! (some-> Form comp/component-options ::cancel-route))
+        form-ident   (uism/actor->ident uism-env :actor/form)
+        {:keys [on-cancel]} (uism/retrieve uism-env :options)]
+    (cond
+      (= :none cancel-route) nil
+      (= :back cancel-route) (if (history/history-support? fulcro-app)
+                               (history/back! fulcro-app)
+                               (log/error "Back not supported. No history installed."))
+      (and (seq cancel-route) (every? string? cancel-route)) (dr/change-route! fulcro-app cancel-route)
+      (comp/component-class? cancel-route) (rad-routing/route-to! fulcro-app cancel-route {})
+      (history/history-support? fulcro-app) (history/back! fulcro-app))
+    (-> uism-env
+      (cond->
+        on-cancel (uism/transact on-cancel))
+      (uism/store :abandoned? true)
+      (uism/apply-action fs/pristine->entity* form-ident))))
 
 (>defn calc-diff
   "Calculates the minimal form diff from the UISM env of the master form's state machine."
@@ -814,7 +824,7 @@
     {::uism/handler (fn [env]
                       (let [{::uism/keys [event-data]} env
                             {::keys [create?]} event-data]
-                        (cond-> env
+                        (cond-> (uism/store env :options event-data)
                           create? (start-create event-data)
                           (not create?) (start-edit event-data))))}
 
@@ -852,17 +862,20 @@
      (merge
        global-events
        {:event/save-failed
-        {::uism/handler (fn [env]
-                          ;; TODO: Handle failures
-                          (uism/activate env :state/editing))}
+        {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
+                          (let [{:keys [on-save-failed]} (uism/retrieve env :options)]
+                            (cond-> (uism/activate env :state/editing)
+                              on-save-failed (uism/transact on-save-failed))))}
         :event/saved
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (let [form-ident (uism/actor->ident env :actor/form)]
+                          (let [form-ident (uism/actor->ident env :actor/form)
+                                {:keys [on-saved]} (uism/retrieve env :options)]
                             (when (history/history-support? fulcro-app)
                               (let [{:keys [route params]} (history/current-route fulcro-app)
                                     new-route (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
                                 (history/replace-route! fulcro-app new-route params)))
                             (-> env
+                              (cond-> on-saved (uism/transact on-saved))
                               (uism/apply-action fs/entity->pristine* form-ident)
                               (uism/activate :state/editing))))}})}
 

@@ -3,7 +3,7 @@
  :deps    {edn-query-language/eql        {:mvn/version "1.0.0"}
            com.taoensso/timbre           {:mvn/version "4.10.0"}
            com.taoensso/encore           {:mvn/version "2.120.0"}
-           com.fulcrologic/fulcro        {:mvn/version "3.2.17"}
+           com.fulcrologic/fulcro        {:mvn/version "3.5.0-RC3"}
            com.fulcrologic/fulcro-i18n   {:mvn/version "0.0.5-alpha"}
            com.fulcrologic/guardrails    {:mvn/version "1.0.0-SNAPSHOT"}
            com.wsscode/pathom            {:mvn/version "2.2.31"}

@@ -1,6 +1,5 @@
 = Fulcro RAD Developer's Guide
 :author: Tony Kay
-:revdate: May 3, 2020
 :lang: en
 :encoding: UTF-8
 :doctype: book
@@ -1033,7 +1032,7 @@ This simple construct allows an infinite variety of complexity to be added to yo
 
 This is very similar to save middleware, but is invoked during a request to delete an entity.
 
-== UI Rendering
+= UI Rendering
 
 RAD macros generate Fulcro components. RAD will always include code in these components that helps automate the
 management of state. Forms will manage the client-side load, save, dirty checking, validation, etc. You can simply use
@@ -1051,7 +1050,7 @@ At the time of this writing only a web plugin exists, and it uses Semantic UI CS
 (though semantic UI is easy to theme, so that is easy to style without having to resort to code). Perhaps by the
 time you read this there will also be plugins for React native.
 
-=== Attribute and Context-Specific Style
+== Attribute and Context-Specific Style
 
 Once you've selected the UI plugin for generating UI, you still have a lot of control over the site-specific style
 of a given control or format via "style".  This is nothing more than the ability to give a hint
@@ -1075,7 +1074,7 @@ be given a style:
 and forms and reports will allow you to override that style via things like `formatters` and field style overrides.
 See the `form-options` and `report-options` namespaces for particular details.
 
-=== Installing Controls
+== Installing Controls
 
 RAD places the definition of controls inside of the Fulcro application itself (which has a location for
 just such extensible data). The map for UI element lookup looks something like this (subject to change and

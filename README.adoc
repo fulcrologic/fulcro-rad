@@ -12,8 +12,9 @@ Documentation is currently available in the docstrings of the namespaces (most u
 https://github.com/fulcrologic/fulcro-rad-demo[Fulcro RAD Demo] project (status varies, but is an accurate representation
 of what is working).
 
-There is a (likely inaccurate and out of date) start on a book at http://book.fulcrologic.com/RAD.html.
-At the moment your best bet for understanding usage is to look at the https://github.com/fulcrologic/fulcro-rad-demo[RAD Demo project].
+There is a start on a book at http://book.fulcrologic.com/RAD.html.
+At the moment your best bet for knowing exactly what works is to look at the
+https://github.com/fulcrologic/fulcro-rad-demo[RAD Demo project].
 
 == Support
 

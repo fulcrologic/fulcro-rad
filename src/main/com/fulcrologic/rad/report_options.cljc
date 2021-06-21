@@ -58,8 +58,8 @@
    `(fn [report-instance] keyword)`. Chooses an alternate rendering style for the column (if supported by
    installed formatters).
 
-   Columns are formatted by `field-formatters`. You can manually set a field formatter using
-   `ro/field-formatter` or `ro/field-formatters`. If you do *not* set the formatter, then a formatter
+   Columns are formatted by `column-formatters`. You can manually set a field formatter using
+   `ro/column-formatter` or `ro/column-formatters`. If you do *not* set the formatter, then a formatter
    will be selected from an installed set of predefined formatters, which are organized by
    data type and style.
 
@@ -71,10 +71,10 @@
    * The `ao/style` set on the attribute of the column.
    * A default value of `:default`.
 
-   WARNING: This option is ignored if the column has an explicit `field-formatter`.
+   WARNING: This option is ignored if the column has an explicit `column-formatter`.
 
    See `report/install-formatter!`.
-   See also `field-formatter` and `field-formatters`."
+   See also `column-formatter` and `column-formatters`."
   :com.fulcrologic.rad.report/column-styles)
 
 (def source-attribute
@@ -89,7 +89,7 @@
 
 (def form-links
   "A shorthand for turning column values into links to their respective form for editing.  You can get similar
-   (but possibly more advanced) results using `field-formatters`, but this is a lot less code.
+   (but possibly more advanced) results using `column-formatters`, but this is a lot less code.
 
    This option is a map from *qualified key* to a RAD Form.  The qualified key *must* be something that is persisted
    (not a generated column) and co-exist at the top level of the form given (e.g. you cannot use a nested form key to access a
@@ -99,7 +99,7 @@
    ro/form-links {:account/name AccountForm}
    ```
 
-   See also `field-formatters`.
+   See also `column-formatters`.
    "
   :com.fulcrologic.rad.report/form-links)
 
@@ -199,7 +199,7 @@
    Note that reports will always include the `row-pk` in the query, and if a mix of columns are included they
    will also include the PK (if possible) of the source of the columns in question.  You can use `row-query-inclusion`
    and custom server-side resolvers to make any imaginable data available on a row, which can be useful in things
-   like `field-formatters` and `row-actions`.
+   like `column-formatters` and `row-actions`.
   
    BEWARE: If you provide your own `ro/BodyItem` then this is ignored. Modify the body item's query instead.
    "
@@ -237,9 +237,9 @@
 
 (def links
   "A map from *qualified key* to a side-effecting `(fn [report-instance row-props]). Wraps the column value
-  from field-formatters.
+  from column-formatters.
 
-   See also `form-links`, `row-actions`, and `field-formatters`."
+   See also `form-links`, `row-actions`, and `column-formatters`."
   :com.fulcrologic.rad.report/links)
 
 (def denormalize?

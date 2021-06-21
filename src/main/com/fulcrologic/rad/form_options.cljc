@@ -126,7 +126,8 @@
 (def cancel-route
   "OPTIONAL: A vector of strings, a route target class (recommended), or `:back` (default). The route to go to on cancel.
   A vector of strings will ignore history, a route target is recommended when using history, and
-  `:back` requires route history to be installed."
+  `:back` requires route history to be installed. You may also specify `:none` if you do not want to route away from
+  the form after cancelling, and instead want to do something different (e.g. via the :on-cancel event)."
   :com.fulcrologic.rad.form/cancel-route)
 
 (def controls
