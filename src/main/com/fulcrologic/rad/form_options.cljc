@@ -146,11 +146,14 @@
   :com.fulcrologic.rad.form/query-inclusion)
 
 (def default-value
-  "ATTRIBUTE KEY. Placed on an attribute to specify a default value."
+  "ATTRIBUTE KEY. The default valule for this attribute when created in a new
+  form. Can be a literal value or a `(fn [] value)`. Placed on an attribute to specify a default value."
   :com.fulcrologic.rad.form/default-value)
 
 (def default-values
-  "A map from qualified key to a value. Overrides the ::form/default-value that can be placed on an attrubute."
+  "A map from qualified key to a value, or a `(fn [] {k v})`.
+
+   Overrides the ::form/default-value that can be placed on an attrubute."
   :com.fulcrologic.rad.form/default-values)
 
 (def subforms
