@@ -47,6 +47,7 @@
 (def standard-controls
   "The default value of ::control/controls for forms. Includes a ::done, ::undo, and ::save button."
   {::done {:type   :button
+           :local? true
            :label  (fn [this]
                      (let [props           (comp/props this)
                            read-only-form? (?! (comp/component-options this ::read-only?) this)
@@ -58,6 +59,7 @@
                        (if dirty? "ui tiny primary button negative" "ui tiny primary button positive")))
            :action (fn [this] (cancel! {::master-form this}))}
    ::undo {:type      :button
+           :local?    true
            :disabled? (fn [this]
                         (let [props           (comp/props this)
                               read-only-form? (?! (comp/component-options this ::read-only?) this)
@@ -66,6 +68,7 @@
            :label     (fn [_] (tr "Undo"))
            :action    (fn [this] (undo-all! {::master-form this}))}
    ::save {:type      :button
+           :local?    true
            :disabled? (fn [this]
                         (let [props           (comp/props this)
                               read-only-form? (?! (comp/component-options this ::read-only?) this)
