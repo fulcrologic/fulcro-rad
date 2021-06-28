@@ -655,7 +655,7 @@
             (assoc result qualified-key (default-to-one FormClass attr))
 
             :otherwise
-            (if default-value
+            (if-not (nil? default-value)
               (assoc result qualified-key default-value)
               result))))
       {id-key new-id}
@@ -923,19 +923,22 @@
         :event/add-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                           (let [{::keys [order parent-relation parent child-class]} event-data
-                                id-key      (some-> child-class comp/component-options ::id ::attr/qualified-key)
-                                target-path (conj (comp/get-ident parent) parent-relation)
-                                ;; TODO: initialize all fields...use get-initial-state perhaps?
-                                new-child   (default-state child-class (tempid/tempid))
-                                child-ident (comp/get-ident child-class new-child)]
+                                target-path          (conj (comp/get-ident parent) parent-relation)
+                                new-child            (default-state child-class (tempid/tempid))
+                                child-ident          (comp/get-ident child-class new-child)
+                                mark-fields-complete (fn [state-map]
+                                                       (reduce
+                                                         (fn [s k]
+                                                           (fs/mark-complete* s child-ident k))
+                                                         state-map
+                                                         (keys new-child)))]
                             (-> env
                               (uism/apply-action
                                 (fn [s]
                                   (-> s
-                                    (merge/merge-component child-class new-child
-                                      (or order :append) target-path)
-                                    ;; TODO: mark default fields complete...
-                                    (fs/add-form-config* child-class child-ident))))
+                                    (merge/merge-component child-class new-child (or order :append) target-path)
+                                    (fs/add-form-config* child-class child-ident)
+                                    (mark-fields-complete))))
                               (apply-derived-calculations))))}
 
         :event/delete-row
@@ -1014,7 +1017,11 @@
 (defn delete-child!
   "Delete a child of a master form. Only use this on nested forms that are actively being edited. See
    also `delete!`. The rendering env that you pass to this function must be the rendering env passed *to* the
-   child that is to be deleted."
+   child that is to be deleted.
+
+   If you are rendering the child yourself via the body of a subform UI (which is a defsc-form), then
+   you must set the `env` at `::form/form-instance` to `this`.
+   "
   [{::keys [master-form] :as env}]
   (let [asm-id (comp/get-ident master-form)]
     (uism/trigger! master-form asm-id :event/delete-row env)))
@@ -1217,6 +1224,12 @@
          all-required-present? (or
                                  (empty? required-attributes)
                                  (every? #(not (nil? (get props %))) required-attributes))]
+     #?(:cljs
+        (when goog.DEBUG
+          (when (not (empty? required-attributes))
+            (doseq [k required-attributes]
+              (when (nil? (get props k))
+                (log/info "Form is not valid because required attribute is missing:" k))))))
      (and
        all-required-present?
        (or
