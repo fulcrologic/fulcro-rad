@@ -53,8 +53,8 @@
 
 (defn render-row [report-instance row-class row-props]
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
-        layout-style       (or (some-> report-instance comp/component-options ::row-style) :default)
-        render             (some-> runtime-atom deref :com.fulcrologic.rad/controls ::row-style->row-layout layout-style)]
+        layout-style (or (some-> report-instance comp/component-options ::row-style) :default)
+        render       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::row-style->row-layout layout-style)]
     (if render
       (render report-instance row-class row-props)
       (do
@@ -84,7 +84,9 @@
   [uism-env & k-or-ks]
   (apply comp/component-options (uism/actor-class uism-env :actor/report) k-or-ks))
 
-(defn- route-params-path [env control-key]
+(defn route-params-path
+  "Internal state machine helper. May be used by extensions to the stock state machine."
+  [env control-key]
   (let [report-ident (uism/actor->ident env :actor/report)
         {:keys [local?] :as control} (comp/component-options (uism/actor-class env :actor/report) ::control/controls control-key)
         id           (second report-ident)]
@@ -132,7 +134,9 @@
         $
         controls))))
 
-(defn- current-control-parameters [{::uism/keys [state-map] :as env}]
+(defn current-control-parameters
+  "Internal state machine helper. May be used by extensions to the stock state machine."
+  [{::uism/keys [state-map] :as env}]
   (let [Report       (uism/actor-class env :actor/report)
         report-ident (uism/actor->ident env :actor/report)
         controls     (comp/component-options Report ::control/controls)
@@ -165,8 +169,9 @@
                                             :target            path})
       (uism/activate :state/loading))))
 
-(defn- filter-rows
-  "Generates filtered rows, which is an intermediate cached value (not displayed)"
+(defn filter-rows
+  "Generates filtered rows, which is an intermediate cached value (not displayed). This function is used in the
+   internal state machine, and may be useful when extending the pre-defined machine."
   [{::uism/keys [state-map] :as uism-env}]
   (let [all-rows      (uism/alias-value uism-env :raw-rows)
         row-visible?  (report-options uism-env ::row-visible?)
@@ -183,8 +188,9 @@
                         all-rows)]
     (uism/assoc-aliased uism-env :filtered-rows filtered-rows)))
 
-(defn- sort-rows
-  "Sorts the filtered rows. Input is the cached intermediate filtered rows, output is cached sorted rows (not visible)"
+(defn sort-rows
+  "Sorts the filtered rows. Input is the cached intermediate filtered rows, output is cached sorted rows (not visible). This function is used in the
+   internal state machine, and may be useful when extending the pre-defined machine."
   [{::uism/keys [state-map] :as uism-env}]
   (let [all-rows     (uism/alias-value uism-env :filtered-rows)
         compare-rows (report-options uism-env ::compare-rows)
@@ -199,7 +205,10 @@
 
 (declare goto-page*)
 
-(defn- page-number-changed [env]
+(defn page-number-changed
+  "Internal state machine helper. May be used by extensions.
+   Sends a message to routing system that the page number changed. "
+  [env]
   (let [pg        (uism/alias-value env :current-page)
         row-path  (route-params-path env ::selected-row)
         page-path (route-params-path env ::current-page)]
@@ -209,8 +218,10 @@
                                                            (assoc-in page-path pg)))))
   env)
 
-(defn- postprocess-page
-  "Apply the user-defined UISM operation to the report state machine just after the current page has
+(defn postprocess-page
+  "Internal state machine helper.
+
+   Apply the user-defined UISM operation to the report state machine just after the current page has
    been populated. The :current-rows alias will have the result of filter/sort/paginate, and the
    report actor is :actor/report. See the definition of the report state machine for more information."
   [uism-env]
@@ -219,7 +230,9 @@
       (xform uism-env)
       uism-env)))
 
-(defn- populate-current-page [uism-env]
+(defn populate-current-page
+  "Internal state machine implementation. May be used by extensions to the stock state machine."
+  [uism-env]
   (->
     (if (report-options uism-env ::paginate?)
       (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
@@ -244,7 +257,9 @@
           :current-rows (uism/alias-value uism-env :sorted-rows))))
     (postprocess-page)))
 
-(defn- goto-page* [env page]
+(defn goto-page*
+  "Internal state machine implementation. May be used by extensions to the stock state machine."
+  [env page]
   (let [pg (uism/alias-value env :current-page)]
     (if (not= pg page)
       (-> env
@@ -265,8 +280,9 @@
                         (get grouped-result qualified-key [])) columns)]
     (apply mapv (fn [& args] (zipmap ks args)) row-data)))
 
-(defn- preprocess-raw-result
-  "Apply the raw result transform, if it is defined."
+(defn preprocess-raw-result
+  "Internal state machine implementation. May be used by extensions to the stock state machine.
+   Apply the raw result transform, if it is defined."
   [uism-env]
   (let [xform (report-options uism-env ::raw-result-xform)]
     (if xform
