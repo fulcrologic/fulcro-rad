@@ -498,14 +498,59 @@
 ;; -> params/env -> middleware-in -> do-saves -> middleware-out
 #?(:clj
    (pc/defmutation save-form [env params]
-     {::pc/params #{::id ::master-pk ::diff ::delta}}
+     {::pc/params #{::id ::master-pk ::delta}}
      (log/debug "Save invoked from client with " params)
      (save-form* env params))
    :cljs
    (m/defmutation save-form
-     "MUTATION: DO NOT USE. You may use save-form* within your own mutations."
+     "MUTATION: DO NOT USE. See save-as-form mutation for a mutation you can use to leverage the form save mechansims for
+      arbitrary purposes."
      [_]
      (action [_] :noop)))
+
+#?(:clj
+   (pc/defmutation save-as-form [env params]
+     {::pc/params #{::id ::master-pk ::delta}}
+     (log/debug "Save invoked from client with " params)
+     (save-form* env params))
+   :cljs
+   (m/defmutation save-as-form
+     "MUTATION: Run a full-stack write as-if it were the save of a form. This allows you to leverage the save middleware
+      to do all of the save magic without using a form. Useful for implementing simple model updates from action buttons.
+
+      Required params:
+
+      :root-ident - The ident of the entity to change
+
+      And ONE of:
+
+      :entity - A flat entity to write at :root-ident
+      :delta - A proper form delta, a map ident->attr-key->before-after-map.
+
+      If you specify both, only delta will be used.
+
+      This mutation's ok-action will also update the data in the local state."
+     [{:keys [root-ident entity delta]}]
+     (ok-action [{:keys [state]}]
+       (if delta
+         (doseq [[ident changes] delta
+                 :let [data-to-merge (reduce-kv
+                                       (fn [m k v] (assoc m k (:after v)))
+                                       {}
+                                       changes)]]
+           (swap! state update-in ident merge data-to-merge))
+         (swap! state update-in root-ident merge entity)))
+     (remote [env]
+       (let [delta (or delta
+                     {root-ident (reduce-kv
+                                   (fn [m k v]
+                                     (assoc m k {:after v}))
+                                   {}
+                                   entity)})]
+         (-> env
+           (m/with-params {::master-pk (first root-ident)
+                           ::id        (second root-ident)
+                           ::delta     delta}))))))
 
 #_(defn attr-value
     "UISM helper. When interpreting an event from a form field, this function will extract the pair of:
@@ -1274,7 +1319,7 @@
           "Form save and delete mutation resolvers. These must be installed on your pathom parser for saves and deletes to
            work, and you must also install save and delete middleware into your pathom env per the instructions of your
            database adapter."
-          [save-form delete-entity]))
+          [save-form delete-entity save-as-form]))
 
 (comment
   (opts/resolve-key {} `com.fulcrologic.rad.form-options/field-options))

@@ -26,8 +26,6 @@
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
-;; TASK: Add read middleware for things like security and such
-
 (defn just-pc-keys [m]
   (into {}
     (keep (fn [k]
