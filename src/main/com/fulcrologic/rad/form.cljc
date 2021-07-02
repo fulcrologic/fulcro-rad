@@ -139,9 +139,10 @@
     (if field-style
       (fn [env attr _] (render-field env attr))
       (let [{::keys [ui layout-styles subform-visible?]} (get subforms qualified-key)
-            subform-visible? (if (fn? subform-visible?)
-                               (subform-visible? form-instance)
-                               subform-visible?)]
+            subform-visible? (cond
+                               (fn? subform-visible?) (subform-visible? form-instance)
+                               (nil? subform-visible?) true
+                               :else subform-visible?)]
         (if subform-visible?
           (let [{target-styles ::layout-styles} (comp/component-options ui)
                 {::app/keys [runtime-atom]} (comp/any->app form-instance)
