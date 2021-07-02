@@ -138,17 +138,23 @@
         field-style (or (get field-styles qualified-key) field-style)]
     (if field-style
       (fn [env attr _] (render-field env attr))
-      (let [{::keys [ui layout-styles]} (get subforms qualified-key)
-            {target-styles ::layout-styles} (comp/component-options ui)
-            {::app/keys [runtime-atom]} (comp/any->app form-instance)
-            element      :ref-container
-            layout-style (or
-                           (get layout-styles element)
-                           (get target-styles element)
-                           :default)
-            render-fn    (some-> runtime-atom deref ::rad/controls ::element->style->layout
-                           (get-in [element layout-style]))]
-        render-fn))))
+      (let [{::keys [ui layout-styles subform-visible?]} (get subforms qualified-key)
+            subform-visible? (if (fn? subform-visible?)
+                               (subform-visible? form-instance)
+                               subform-visible?)]
+        (if subform-visible?
+          (let [{target-styles ::layout-styles} (comp/component-options ui)
+                {::app/keys [runtime-atom]} (comp/any->app form-instance)
+                element      :ref-container
+                layout-style (or
+                               (get layout-styles element)
+                               (get target-styles element)
+                               :default)
+                render-fn    (some-> runtime-atom deref ::rad/controls ::element->style->layout
+                                     (get-in [element layout-style]))]
+            render-fn)
+          (fn [env attr]
+            nil))))))
 
 (defn master-form
   "Return the master form for the given component instance."
