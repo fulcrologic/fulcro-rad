@@ -223,11 +223,6 @@
    the subform."
   :com.fulcrologic.rad.form/ui)
 
-(def subform-visible?
-  "A boolean? or `(fn [this] boolean?).`
-  Used within `subforms`. Whether or not to render the `ui`."
-  :com.fulcrologic.rad.form/subform-visible?)
-
 (def field-style-config
   "ATTRIBUTE OPTION: A map of options that are used by the rendering plugin to augment the style of a rendered input.
   Such configuration options are really up to the render plugin, but could include things like `:input/props` as

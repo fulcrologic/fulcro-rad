@@ -138,12 +138,8 @@
         field-style (or (get field-styles qualified-key) field-style)]
     (if field-style
       (fn [env attr _] (render-field env attr))
-      (let [{::keys [ui layout-styles subform-visible?]} (get subforms qualified-key)
-            subform-visible? (cond
-                               (fn? subform-visible?) (subform-visible? form-instance)
-                               (nil? subform-visible?) true
-                               :else subform-visible?)]
-        (if subform-visible?
+      (let [{::keys [ui layout-styles field-visible?]} (get subforms qualified-key)]
+        (if (?! field-visible? form-instance)
           (let [{target-styles ::layout-styles} (comp/component-options ui)
                 {::app/keys [runtime-atom]} (comp/any->app form-instance)
                 element      :ref-container
