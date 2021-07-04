@@ -26,11 +26,6 @@
 (>defn new-attribute
   "Create a new attribute, which is represented as an Attribute record.
 
-  NOTE: attributes are usable as functions which act like their qualified keyword. This allows code-navigable
-  use of attributes throughout the system...e.g (account/id props) is like (::account/id props), but will
-  be understood by an IDE's jump-to feature when you want to analyze what account/id is.  Use `defattr` to
-  populate this into a symbol.
-
   Type can be one of :string, :int, :uuid, etc. (more types are added over time,
   so see main documentation and your database adapter for more information).
 
