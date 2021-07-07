@@ -887,7 +887,7 @@
                  form-ident (uism/actor->ident env :actor/form)]
              (-> env
                (auto-create-to-one)
-               (uism/apply-action fs/add-form-config* FormClass form-ident)
+               (uism/apply-action fs/add-form-config* FormClass form-ident {:destructive? true})
                (uism/apply-action fs/mark-complete* form-ident)
                (route-target-ready form-ident)
                (uism/activate :state/editing))))}
