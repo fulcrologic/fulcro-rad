@@ -61,7 +61,9 @@
            nil))))))
 
 (def run!
-  "Run the controlled content with the current values of the controlled parameters."
+  "[this]
+
+   Run the controlled content with the current values of the controlled parameters."
   (debounce
     (fn [instance]
       (uism/trigger! instance (comp/get-ident instance) :event/run))

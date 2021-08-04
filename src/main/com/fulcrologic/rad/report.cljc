@@ -37,6 +37,14 @@
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
+(defn report-ident
+  "Returns the ident of a RAD report. The parameter can be a react instance, a class, or the registry key(word)
+   of the report."
+  [report-class-or-registry-key]
+  (if (keyword? report-class-or-registry-key)
+    [::id report-class-or-registry-key]
+    (comp/get-ident report-class-or-registry-key {})))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -413,8 +421,10 @@
 
 (defn run-report!
   "Run a report with the current parameters"
-  [this]
-  (uism/trigger! this (comp/get-ident this) :event/run))
+  ([this]
+   (uism/trigger! this (comp/get-ident this) :event/run))
+  ([app-ish class-or-registry-key]
+   (uism/trigger app-ish (report-ident class-or-registry-key) :event/run)))
 
 #?(:clj
    (defn req!
@@ -573,7 +583,9 @@
   control/run!)
 
 (def ^:deprecated set-parameter!
-  "Alias to `control/set-parameter!`. Set the given parameter value on the report. Usually used internally by controls."
+  "[instance k v]
+
+   Alias to `control/set-parameter!`. Set the given parameter value on the report. Usually used internally by controls."
   control/set-parameter!)
 
 (defn form-link
@@ -690,51 +702,70 @@
 (defn sort-rows!
   "Sort the report by the given attribute. Changes direction if the report is already sorted by that attribute. The implementation
    of sorting is built-in and uses compare, but you can override how sorting works by defining `::report/sort-rows` on your report."
-  [this by-attribute]
-  (uism/trigger! this (comp/get-ident this) :event/sort {::attr/attribute by-attribute}))
+  ([this by-attribute]
+   (uism/trigger! this (comp/get-ident this) :event/sort {::attr/attribute by-attribute}))
+  ([app class-or-reg-key by-attribute]
+   (uism/trigger! app (report-ident class-or-reg-key) :event/sort {::attr/attribute by-attribute})))
 
 (defn filter-rows!
   "Update the filtered rows based on current report parameters."
-  [this]
-  (uism/trigger! this (comp/get-ident this) :event/filter))
+  ([this]
+   (uism/trigger! this (comp/get-ident this) :event/filter))
+  ([app class-or-reg-key]
+   (uism/trigger! app (report-ident class-or-reg-key) :event/filter)))
 
 (defn goto-page!
   "Move to the next page (if there is one)"
-  [this page-number]
-  (uism/trigger! this (comp/get-ident this) :event/goto-page {:page page-number}))
+  ([this page-number]
+   (uism/trigger! this (comp/get-ident this) :event/goto-page {:page page-number}))
+  ([app class-or-reg-key page-number]
+   (uism/trigger! app (report-ident class-or-reg-key) :event/goto-page {:page page-number})))
 
 (defn next-page!
   "Move to the next page (if there is one)"
-  [this]
-  (uism/trigger! this (comp/get-ident this) :event/next-page))
+  ([this]
+   (uism/trigger! this (comp/get-ident this) :event/next-page))
+  ([app class-or-reg-key]
+   (uism/trigger! app (report-ident class-or-reg-key) :event/next-page)))
 
 (defn prior-page!
   "Move to the next page (if there is one)"
-  [this]
-  (uism/trigger! this (comp/get-ident this) :event/prior-page))
+  ([this]
+   (uism/trigger! this (comp/get-ident this) :event/prior-page))
+  ([app class-or-reg-key]
+   (uism/trigger! app (report-ident class-or-reg-key) :event/prior-page)))
 
 (defn current-page
   "Returns the current page number displayed on the report"
-  [report-instance]
-  (get-in (comp/props report-instance) [:ui/parameters ::current-page] 1))
+  ([report-instance]
+   (get-in (comp/props report-instance) [:ui/parameters ::current-page] 1))
+  ([state-map report-class-or-registry-key]
+   (get-in state-map (conj (report-ident report-class-or-registry-key) :ui/parameters ::current-page) 1)))
 
 (defn page-count
   "Returns how many pages the current report has."
-  [report-instance]
-  (get-in (comp/props report-instance) [:ui/page-count] 1))
+  ([report-instance]
+   (get-in (comp/props report-instance) [:ui/page-count] 1))
+  ([state-map report-class-or-registry-key]
+   (get-in state-map (conj (report-ident report-class-or-registry-key) :ui/page-count) 1)))
 
 (defn currently-selected-row
-  "Returns the currently-selected row index, if any."
-  [report-instance]
-  (get-in (comp/props report-instance) [:ui/parameters ::selected-row] -1))
+  "Returns the currently-selected row index, if any (-1 if nothing is selected)."
+  ([report-instance]
+   (get-in (comp/props report-instance) [:ui/parameters ::selected-row] -1))
+  ([state-map report-class-or-registry-key]
+   (get-in state-map (conj (report-ident report-class-or-registry-key) :ui/parameters ::selected-row) -1)))
 
-(defn select-row! [report-instance idx]
-  (uism/trigger! report-instance (comp/get-ident report-instance) :event/select-row {:row idx}))
+(defn select-row!
+  ([report-instance idx]
+   (uism/trigger! report-instance (comp/get-ident report-instance) :event/select-row {:row idx}))
+  ([app class-or-reg-key idx]
+   (uism/trigger! app (report-ident class-or-reg-key) :event/select-row {:row idx})))
 
 (defn column-classes
   "Returns a string of column classes that can be defined on the attribute at ::report/column-class or on the
    report in the ::report/column-classes map. The report map overrides the attribute"
-  [report-instance {::keys      [column-class]
-                    ::attr/keys [qualified-key] :as attr}]
-  (let [rpt-column-class (comp/component-options report-instance ::column-classes qualified-key)]
+  [report-instance-or-class {::keys      [column-class]
+                             ::attr/keys [qualified-key] :as attr}]
+  (let [rpt-column-class (comp/component-options report-instance-or-class ::column-classes qualified-key)]
     (or rpt-column-class column-class)))
