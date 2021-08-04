@@ -406,3 +406,22 @@
   Notice that the report will _not load_ this data for you, you must
   ensure their presence in the client DB yourself."
   :com.fulcrologic.rad.report/query-inclusions)
+
+(def column-EQL
+  "Attribute option. The EQL to use when querying for this attribute from the data model. This is useful when
+   the attribute is, for example, a recursive bag of data you'd like to resolve via a join. Defaults to the
+   keyword of the attribute itself. The most common value for this would be a map (to indicate an EQL join).
+
+   For example, say you have a report that is a list of product, but each of those products has inventory
+   in one or more locations (e.g. warehouses). You'd like to define an attribute for `:product/inventory`,
+   but just the prop alone isn't all you want to query for. Instead, you'd like the report to auto-include
+   the join:
+
+   ```
+   {:product/inventory [:location/name
+                        :inventory/quantity
+                        :inventory/unit-cost]}
+   ```
+
+   which is what you'd set this option to on that attribute."
+  :com.fulcrologic.rad.report/column-EQL)

@@ -556,7 +556,9 @@
                                                 id-attrs# (keep #(comp/component-options % ::form/id) (vals forms#))]
                                             (vec
                                               (into #{~@row-query-inclusion}
-                                                (map ::attr/qualified-key (conj (set (concat id-attrs# ~columns)) ~row-pk))))))
+                                                (map (fn [attr#] (or
+                                                                  (::column-EQL attr#)
+                                                                  (::attr/qualified-key attr#))) (conj (set (concat id-attrs# ~columns)) ~row-pk))))))
           props-sym         (gensym "props")
           row-ident         (list 'fn []
                               `(let [k# (::attr/qualified-key ~row-pk)]
