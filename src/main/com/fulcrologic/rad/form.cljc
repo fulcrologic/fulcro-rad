@@ -499,7 +499,6 @@
 #?(:clj
    (pc/defmutation save-form [env params]
      {::pc/params #{::id ::master-pk ::delta}}
-     (log/debug "Save invoked from client with " params)
      (save-form* env params))
    :cljs
    (m/defmutation save-form
@@ -511,7 +510,6 @@
 #?(:clj
    (pc/defmutation save-as-form [env params]
      {::pc/params #{::id ::master-pk ::delta}}
-     (log/debug "Save invoked from client with " params)
      (save-form* env params))
    :cljs
    (m/defmutation save-as-form
