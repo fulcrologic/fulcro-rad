@@ -104,7 +104,7 @@
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
   (-undo! [this _ {::history/keys [direction]}]
     (log/debug "Attempting to UNDO a routing request from the browser")
-    (when-let [{:keys [route params]} (log/spy :debug @prior-route)]
+    (when-let [{:keys [route params]} @prior-route]
       (reset! prior-route nil)
       (if (= :forward direction)
         (history/-replace-route! this route params)

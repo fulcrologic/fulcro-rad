@@ -121,7 +121,9 @@
       (log/error e "Unable to execute history operation."))))
 
 (>defn add-route-listener!
-  "Add the callback `f` to the list of listeners. That listener will be known as `listener-key`. You should namespace that key to prevent conflicts."
+  "Add the callback `f` to the list of listeners. That listener will be known as `listener-key`. You should namespace that key to prevent conflicts.
+
+   `f` - A `(fn [route params])`, where `route` is a vector of strings, and params is the route parameter map."
   [app-or-component listener-key f]
   [any? keyword? fn? => any?]
   (try
