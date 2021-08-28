@@ -159,7 +159,19 @@
                                                          :action (fn [this] (form/create! this AccountForm))}}
    ```
 
-   The types of controls supported will depend on your UI plugin.
+   The types of controls supported depend on your UI plugin.
+
+   A control is a map with keys:
+
+   * `:type`: OPTIONAL. Defaults to :button. Rendering plugins define what types are supported.
+   * `:style`: OPTIONAL. Defaults to :default. Rendering plugins define what styles are supported.
+   * `:action`: OPTIONAL. A side-effecting `(fn [report-instance])`.
+   * `:label` : REQUIRED. A string or `(fn [report-instance row-props] string-or-element?)`.
+   * `:visible?` : OPTIONAL. Defaults to true. A boolean or `(fn [report-class-or-instance] boolean?)`.
+      Indicates that the control should not be displayed (likely because it is an input you only intend to 
+      set via routing params). You must also omit it from `control-layout`.
+
+   Rendering plugins can expand this list of options as desired.
 
    See also `control-layout`, `row-visible?`, `initial-sort-params`, and `compare-rows`.
    "
