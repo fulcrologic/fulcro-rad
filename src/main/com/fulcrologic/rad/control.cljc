@@ -56,8 +56,8 @@
          (input {:instance    owner
                  :control     control
                  :control-key control-key})
-         (do
-           (log/error "No renderer installed to support parameter " control-key "with type/style" input-type input-style)
+         (when (and (not= input-type :none) #?(:cljs goog.DEBUG :clj true))
+           (log/warn "NOTE: No renderer is installed to support parameter " control-key "with type/style" input-type input-style)
            nil))))))
 
 (def run!
