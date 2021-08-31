@@ -157,7 +157,12 @@
           button-layout       (or action-buttons control-button-keys)
           input-layout        (or inputs (vector (into [] input-keys)))]
       (when #?(:cljs js/goog.DEBUG :clj true)
-        (let [expected-layout-keys (set (keys controls))
+        (let [expected-layout-keys (->> controls
+                                        (filter #(-> (val %)
+                                                     (get :visible? true)
+                                                     (?! class-or-instance)))
+                                        (map key)
+                                        set)
               actual-layout-keys   (disj
                                      (into (set button-layout) (filter keyword?) (flatten input-layout))
                                      :_)]
