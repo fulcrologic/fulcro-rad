@@ -57,7 +57,7 @@
                  :control     control
                  :control-key control-key})
          (when (and (not= input-type :none) #?(:cljs goog.DEBUG :clj true))
-           (log/warn "NOTE: No renderer is installed to support parameter " control-key "with type/style" input-type input-style)
+           (log/warn "NOTE: No renderer is installed to support control " control-key "with type/style" input-type input-style)
            nil))))))
 
 (def run!
