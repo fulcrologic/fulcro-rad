@@ -259,13 +259,14 @@
        ::attr/keys [qualified-key] :as attribute}]
      (let
        [url-key           (url-key qualified-key)
-        url-resolver      (pc/resolver `url {::pc/input  #{qualified-key}
-                                             ::pc/output [url-key]}
+        url-sym           (symbol url-key)
+        url-resolver      (pc/resolver url-sym {::pc/input  #{qualified-key}
+                                                ::pc/output [url-key]}
                             (fn [{::keys [permanent-stores]} input]
                               (let [sha        (get input qualified-key)
                                     file-store (get permanent-stores store)]
                                 (when-not (seq sha)
-                                  (log/error "Could not file file URL. No sha." qualified-key))
+                                  (log/error "Could not derive file URL. No sha." qualified-key))
                                 (when-not file-store
                                   (log/error "Attempt to retrieve a file URL, but there was no store in parsing env: " store))
                                 (when (and (seq sha) file-store)
@@ -280,14 +281,16 @@
                               (boolean (and sha file-store (storage/blob-exists? file-store sha)))))
         progress-key      (progress-key qualified-key)
         status-key        (status-key qualified-key)
-        progress-resolver (pc/resolver `progress {::pc/input  #{qualified-key}
-                                                  ::pc/output [progress-key]}
+        progress-sym      (symbol progress-key)
+        status-sym        (symbol status-key)
+        progress-resolver (pc/resolver progress-sym {::pc/input  #{qualified-key}
+                                                     ::pc/output [progress-key]}
                             (fn [env input]
                               (if (sha-exists? env input)
                                 {progress-key 100}
                                 {progress-key 0})))
-        status-resolver   (pc/resolver `status {::pc/input  #{qualified-key}
-                                                ::pc/output [progress-key]}
+        status-resolver   (pc/resolver status-sym {::pc/input  #{qualified-key}
+                                                   ::pc/output [progress-key]}
                             (fn [env input]
                               (if (sha-exists? env input)
                                 {status-key :available}
