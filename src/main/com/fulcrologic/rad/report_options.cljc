@@ -395,7 +395,10 @@
 (def BodyItem
   "The class that is used for rendering the rows of the report. If not supplied then one will be generated for you. This
    key will be available on the resulting report, and can be used to obtain the row class for things like denormalizing
-   row data."
+   row data.
+
+   IMPORTANT: IF you supply a BodyItem, then IT becomes the normalizing query component for the rows. I.e. You MUST include
+   an ident and query on that component that at least aligns with row-pk."
   :com.fulcrologic.rad.report/BodyItem)
 
 (def query-inclusions
@@ -437,3 +440,20 @@
 
    which is what you'd set this option to on that attribute."
   :com.fulcrologic.rad.report/column-EQL)
+
+(def layout-style
+  "Report option. Keyword. A HINT to the rendering plugin as to the preferred
+  layout of the report. The Semantic UI plugin, for example, predefines
+  :default and :list.  NOTE: If you change the layout style, then you will
+  also typically need to change `ro/row-style` as well or
+  supply your own BodyItem to render the rows.
+
+  Styles are extensible by installing additional controls into the control plugin map at application
+  start."
+  :com.fulcrologic.rad.report/layout-style)
+
+(def row-style
+  "Report option. Keyword. A HINT to the rendering plugin as to the preferred
+   style of the rows. SUI plugin predefined :default and :list, but you
+   can install your own as well."
+  :com.fulcrologic.rad.report/row-style)
