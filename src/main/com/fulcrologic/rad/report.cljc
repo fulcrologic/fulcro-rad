@@ -250,6 +250,7 @@
             stragglers?    (pos? (rem n page-size))
             pages          (cond-> (int (/ n page-size))
                              stragglers? inc)
+            current-page   (if (> current-page pages) pages current-page)
             page-start     (* (dec current-page) page-size)
             rows           (cond
                              (= pages current-page) (subvec available-rows page-start n)
@@ -258,7 +259,7 @@
         (if (and (not= 1 current-page) (empty? rows))
           (goto-page* uism-env 1)
           (-> uism-env
-            (uism/assoc-aliased :current-rows rows :page-count pages))))
+            (uism/assoc-aliased :current-page current-page :current-rows rows :page-count pages))))
       (-> uism-env
         (uism/assoc-aliased
           :page-count 1
@@ -402,10 +403,9 @@
 
         :event/do-filter         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    (-> env
-                                                     (uism/assoc-aliased :current-page 1 :busy? false)
+                                                     (uism/assoc-aliased :busy? false)
                                                      (filter-rows)
                                                      (sort-rows)
-                                                     ;; TODO: Why isn't this goto-page* 1???
                                                      (populate-current-page)))}
 
         :event/filter            {::uism/handler (fn [{::uism/keys [app] :as env}]
