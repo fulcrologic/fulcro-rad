@@ -557,8 +557,8 @@
                                             (vec
                                               (into #{~@row-query-inclusion}
                                                 (map (fn [attr#] (or
-                                                                  (::column-EQL attr#)
-                                                                  (::attr/qualified-key attr#))) (conj (set (concat id-attrs# ~columns)) ~row-pk))))))
+                                                                   (::column-EQL attr#)
+                                                                   (::attr/qualified-key attr#))) (conj (set (concat id-attrs# ~columns)) ~row-pk))))))
           props-sym         (gensym "props")
           row-ident         (list 'fn []
                               `(let [k# (::attr/qualified-key ~row-pk)]

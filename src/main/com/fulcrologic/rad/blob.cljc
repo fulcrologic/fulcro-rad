@@ -198,7 +198,7 @@
                                      (when store [qualified-key attr])))
                              all-attributes)
            blob-keys       (set (keys blob-attributes))]
-       (log/info "Wrapping persist-images with image keys" blob-keys)
+       (log/debug "Wrapping persist-images with image keys" blob-keys)
        (fn [pathom-env]
          (let [{:com.fulcrologic.rad.form/keys [params]
                 ::keys                         [temporary-store permanent-stores]} pathom-env
@@ -230,7 +230,7 @@
                    (catch Exception _
                      (log/error "Delete failed."))))
                (when (and temporary-store permanent-storage after)
-                 (log/info "Moving file to permanent storage" after)
+                 (log/debug "Moving file to permanent storage" after)
                  (try
                    (storage/move-blob! temporary-store after permanent-storage)
                    (catch Exception e
@@ -306,7 +306,7 @@
        (if (str/starts-with? uri base-path)
          (let [sha      (last (str/split uri #"/"))
                filename (:filename params)]
-           (log/info "Trying to serve file " sha)
+           (log/debug "Trying to serve file " sha)
            (if-let [stream (storage/blob-stream blob-store sha)]
              {:status  200
               :headers {"Content-Disposition" (str "attachment; filename=" filename)

@@ -457,3 +457,10 @@
    style of the rows. SUI plugin predefined :default and :list, but you
    can install your own as well."
   :com.fulcrologic.rad.report/row-style)
+
+(def load-cache-seconds
+  "Report option. How many seconds should we consider data that was previously loaded in the report valid? When set
+   this will cause the initial report run (run-on-mount?) to be skipped if the report is already populated, and
+   the cache time has not expired."
+  :com.fulcrologic.rad.report/load-cache-seconds)
+
