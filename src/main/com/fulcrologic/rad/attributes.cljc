@@ -197,6 +197,6 @@
         ::key->attribute (attribute-map all-attributes)
         ::id-keys (into #{}
                     (comp
-                      (filter ::identity? all-attributes)
-                      (map ::qualified-key)
-                      all-attributes))))))
+                      (filter ::identity?)
+                      (map ::qualified-key))
+                    all-attributes)))))
