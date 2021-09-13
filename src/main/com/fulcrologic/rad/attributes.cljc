@@ -22,6 +22,7 @@
                     :opt [::target]))
 (>def ::attributes (s/every ::attribute))
 (>def ::attribute-map (s/map-of keyword? ::attribute))
+(>def ::id-keys (s/every qualified-keyword? :kind set?))
 
 (>defn new-attribute
   "Create a new attribute, which is represented as an Attribute record.
@@ -192,4 +193,10 @@
 (defn pathom-plugin [all-attributes]
   (p/env-wrap-plugin
     (fn [env]
-      (assoc env ::key->attribute (attribute-map all-attributes)))))
+      (assoc env
+        ::key->attribute (attribute-map all-attributes)
+        ::id-keys (into #{}
+                    (comp
+                      (filter ::identity? all-attributes)
+                      (map ::qualified-key)
+                      all-attributes))))))
