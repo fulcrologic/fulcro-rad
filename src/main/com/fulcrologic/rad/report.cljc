@@ -250,10 +250,13 @@
             stragglers?    (pos? (rem n page-size))
             pages          (cond-> (int (/ n page-size))
                              stragglers? inc)
-            current-page   (if (> current-page pages) pages current-page)
+            current-page   (cond
+                             (zero? pages) 1
+                             (> current-page pages) pages
+                             :else current-page)
             page-start     (* (dec current-page) page-size)
             rows           (cond
-                             (= pages current-page) (subvec available-rows page-start n)
+                             (= pages current-page) (subvec (log/spy :info available-rows) (log/spy :info page-start) (log/spy :info n))
                              (> n page-size) (subvec available-rows page-start (+ page-start page-size))
                              :else available-rows)]
         (if (and (not= 1 current-page) (empty? rows))
