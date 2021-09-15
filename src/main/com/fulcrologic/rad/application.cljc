@@ -69,11 +69,9 @@
   "Returns an EQL transform that removes `(pred k)` keywords from network requests."
   [pred]
   (fn [ast]
-    (let [mutation? (symbol? (:dispatch-key ast))]
-      (cond-> (-> ast
-                  (elide-ast-nodes pred)
-                  (update :children conj (eql/expr->ast :com.wsscode.pathom.core/errors)))
-        mutation? (update :children conj (eql/expr->ast :tempids))))))
+    (-> ast
+        (elide-ast-nodes pred)
+        (update :children conj (eql/expr->ast :com.wsscode.pathom.core/errors)))))
 
 (defn fulcro-rad-app
   "Create a new fulcro RAD application with reasonable defaults.

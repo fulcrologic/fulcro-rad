@@ -124,7 +124,8 @@
   {::p/mutate  pc/mutate
    ::p/env     {::p/reader               [p/map-reader pc/reader2 pc/index-reader
                                           pc/open-ident-reader p/env-placeholder-reader]
-                ::p/placeholder-prefixes #{">"}}
+                ::p/placeholder-prefixes #{">"}
+                ::pc/mutation-join-globals [:tempids]}
    ::p/plugins (into []
                  (keep identity
                    (concat
