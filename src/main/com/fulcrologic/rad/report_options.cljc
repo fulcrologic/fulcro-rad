@@ -464,3 +464,26 @@
    the cache time has not expired."
   :com.fulcrologic.rad.report/load-cache-seconds)
 
+(def report-loaded
+  "A `(fn [uism-env] uism-env)` that will be threaded into the UISM handler of the report after it loads new data. This
+   function will be called as the *last* step, so all report data will be constructed (filtering, sorting, pagination).
+
+   You can do anything in this hook that you can do in a normal state machine. If you activate a new state different
+   from the default, it will override the default target state after load."
+  :com.fulcrologic.rad.report/report-loaded)
+
+(def load-cache-expired?
+  "A `(fn [uism-env cache-looks-stale?] boolean?)`.
+
+  The load cache normally expires based on:
+
+  * The cache timeout expires.
+  * The source table of ::row-pk changes (in number of objects).
+
+  If this option is specified AND it returns a non-nil result, THEN it will be used as the cache expiration logic.
+  (NO NIL PUNNING!)
+
+  The function will receive the UISM env and a boolean indicating if the default
+  algorithm thinks the cache should be expired.
+  "
+  :com.fulcrologic.rad.report/load-cache-expired?)

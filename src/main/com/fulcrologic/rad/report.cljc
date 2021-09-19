@@ -256,7 +256,7 @@
                              :else current-page)
             page-start     (* (dec current-page) page-size)
             rows           (cond
-                             (= pages current-page) (subvec (log/spy :info available-rows) (log/spy :info page-start) (log/spy :info n))
+                             (= pages current-page) (subvec available-rows page-start n)
                              (> n page-size) (subvec available-rows page-start (+ page-start page-size))
                              :else available-rows)]
         (if (and (not= 1 current-page) (empty? rows))
@@ -305,6 +305,40 @@
           new-result (uism/assoc-aliased :raw-rows new-result)))
       uism-env)))
 
+(defn handle-filter-event
+  "Internal state machien implementation of handling :event/filter."
+  [{::uism/keys [app] :as env}]
+  ;; this ensures that the do sort doesn't get the CPU until the busy state is rendered
+  (uism/trigger! app (uism/asm-id env) :event/do-filter)
+  (uism/assoc-aliased env :busy? true))
+
+(defn handle-resume-report
+  "Internal state machine implementation. Called on :event/resumt to do the steps to resume an already running report
+   that has just been re-mounted."
+  [{::uism/keys [state-map] :as env}]
+  (let [env                 (initialize-parameters env)
+        Report              (uism/actor-class env :actor/report)
+        {::keys [load-cache-seconds
+                 load-cache-expired?
+                 row-pk]} (comp/component-options Report)
+        now-ms              (inst-ms (dt/now))
+        last-load-time      (uism/retrieve env :last-load-time)
+        last-table-count    (uism/retrieve env :raw-items-in-table)
+        cache-expiration-ms (* 1000 (or load-cache-seconds 0))
+        table-name          (::attr/qualified-key row-pk)
+        current-table-count (count (keys (get state-map table-name)))
+        cache-looks-stale?  (or
+                              (nil? last-load-time)
+                              (not= current-table-count last-table-count)
+                              (< last-load-time (- now-ms cache-expiration-ms)))
+        user-cache-expired? (?! load-cache-expired? env cache-looks-stale?)
+        cache-expired?      (if (boolean user-cache-expired?)
+                              user-cache-expired?
+                              cache-looks-stale?)]
+    (if cache-expired?
+      (load-report! env)
+      (handle-filter-event env))))
+
 (defstatemachine report-machine
   {::uism/actors
    #{:actor/report}
@@ -346,7 +380,9 @@
     (merge global-events
       {::uism/events
        {:event/loaded {::uism/handler (fn [{::uism/keys [state-map] :as env}]
-                                        (let [table-name (comp/component-options (uism/actor-class env :actor/report) ::row-pk ::attr/qualified-key)]
+                                        (let [Report     (uism/actor-class env :actor/report)
+                                              {::keys [row-pk report-loaded]} (comp/component-options Report)
+                                              table-name (::attr/qualified-key row-pk)]
                                           (-> env
                                             (preprocess-raw-result)
                                             (filter-rows)
@@ -354,7 +390,8 @@
                                             (populate-current-page)
                                             (uism/store :last-load-time (inst-ms (dt/now)))
                                             (uism/store :raw-items-in-table (count (keys (get state-map table-name))))
-                                            (uism/activate :state/gathering-parameters))))}
+                                            (uism/activate :state/gathering-parameters)
+                                            (cond-> report-loaded report-loaded))))}
         :event/failed {::uism/handler (fn [env] (log/error "Report failed to load.")
                                         (uism/activate env :state/gathering-parameters))}}})
 
@@ -411,16 +448,13 @@
                                                      (sort-rows)
                                                      (populate-current-page)))}
 
-        :event/filter            {::uism/handler (fn [{::uism/keys [app] :as env}]
-                                                   ;; this ensures that the do sort doesn't get the CPU until the busy state is rendered
-                                                   (uism/trigger! app (uism/asm-id env) :event/do-filter)
-                                                   (uism/assoc-aliased env :busy? true))}
+        :event/filter            {::uism/handler handle-filter-event}
 
-        :event/set-ui-parameters {::uism/handler (fn [env]
-                                                   (-> env
-                                                     (initialize-parameters)))}
+        :event/set-ui-parameters {::uism/handler initialize-parameters}
 
-        :event/run               {::uism/handler load-report!}}})}})
+        :event/run               {::uism/handler load-report!}
+
+        :event/resume            {::uism/handler handle-resume-report}}})}})
 
 (defn run-report!
   "Run a report with the current parameters"
@@ -447,28 +481,15 @@
   ([app report-class]
    (start-report! app report-class {}))
   ([app report-class options]
-   (let [machine-def         (or (comp/component-options report-class ::machine) report-machine)
-         now-ms              (inst-ms (dt/now))
-         params              (:route-params options)
-         cache-expiration-ms (* 1000 (or (comp/component-options report-class ::load-cache-seconds) 0))
-         asm-id              (comp/ident report-class options) ; options might contain ::report/id to instance the report
-         state-map           (app/current-state app)
-         asm                 (some-> state-map (get-in [::uism/asm-id asm-id]))
-         running?            (some-> asm ::uism/active-state boolean)
-         last-load-time      (some-> asm ::uism/local-storage :last-load-time)
-         table-name          (comp/component-options report-class ::row-pk ::attr/qualified-key)
-         current-table-count (count (keys (get state-map table-name)))
-         last-table-count    (some-> asm ::uism/local-storage :raw-items-in-table)
-         cache-expired?      (or (nil? last-load-time)
-                               (not= current-table-count last-table-count)
-                               (< last-load-time (- now-ms cache-expiration-ms)))]
+   (let [machine-def (or (comp/component-options report-class ::machine) report-machine)
+         params      (:route-params options)
+         asm-id      (comp/ident report-class options)      ; options might contain ::report/id to instance the report
+         state-map   (app/current-state app)
+         asm         (some-> state-map (get-in [::uism/asm-id asm-id]))
+         running?    (some-> asm ::uism/active-state boolean)]
      (if (not running?)
        (uism/begin! app machine-def asm-id {:actor/report (uism/with-actor-class asm-id report-class)} (assoc options :params params))
-       (do
-         (uism/trigger! app asm-id :event/set-ui-parameters (assoc options :params params))
-         (if cache-expired?
-           (uism/trigger! app asm-id :event/run)
-           (uism/trigger! app asm-id :event/filter)))))))
+       (uism/trigger! app asm-id :event/resume (assoc options :params params))))))
 
 (defn default-compare-rows
   [{:keys [sort-by ascending?]} a b]
