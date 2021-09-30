@@ -1,6 +1,7 @@
 (ns ^:always-reload com.fulcrologic.rad.attributes
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
+    #?(:clj [com.fulcrologic.rad.registered-maps :refer [registered-map]])
     [com.wsscode.pathom.core :as p]
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
@@ -8,7 +9,8 @@
     [taoensso.timbre :as log]
     [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
-    [com.fulcrologic.rad.ids :refer [new-uuid]])
+    [com.fulcrologic.rad.ids :refer [new-uuid]]
+    [com.fulcrologic.fulcro.components :as comp])
   #?(:clj
      (:import (clojure.lang IFn)
               (javax.crypto.spec PBEKeySpec)
@@ -38,12 +40,13 @@
   "
   [kw type m]
   [qualified-keyword? keyword? map? => ::attribute]
-  (do
+  (let [v (-> m
+            (assoc ::type type)
+            (assoc ::qualified-key kw))]
     (when (and (= :ref type) (not (contains? m ::target)))
       (log/warn "Reference attribute" kw "does not list a target ID. Resolver generation will not be accurate."))
-    (-> m
-      (assoc ::type type)
-      (assoc ::qualified-key kw))))
+    #?(:clj  (registered-map (or (-> m meta :registration-key) kw) v)
+       :cljs v)))
 
 #?(:clj
    (defmacro ^{:arglists '[[symbol docstring? qualified-keyword data-type options-map]]} defattr
@@ -81,8 +84,10 @@
      are defined by reports, forms, database adapters, and rendering plugins. Look for `*-options` namespaces in
      order to find vars with docstrings that describe the possible options."
      [sym & args]
-     (let [[k type m] (if (string? (first args)) (rest args) args)]
-       `(def ~sym (new-attribute ~k ~type ~m)))))
+     (let [[k type m] (if (string? (first args)) (rest args) args)
+           nspc (if (comp/cljs? &env) (-> &env :ns :name str) (name (ns-name *ns*)))
+           fqkw (keyword (str nspc) (name sym))]
+       `(def ~sym (new-attribute ~k ~type (with-meta ~m {:registration-key ~fqkw}))))))
 
 (>defn to-many?
   "Returns true if the attribute with the given key is a to-many."

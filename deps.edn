@@ -8,6 +8,7 @@
            com.fulcrologic/guardrails    {:mvn/version "1.0.0-SNAPSHOT"}
            com.wsscode/pathom            {:mvn/version "2.2.31"}
            commons-codec/commons-codec   {:mvn/version "1.14"}
+           potemkin/potemkin             {:mvn/version "0.4.5"}
 
            ;; These are needed so cljdoc works. Use shadow-cljs, which means you really want them
            ;; in package.json.
