@@ -173,10 +173,10 @@
 
 #?(:clj
    (pc/defmutation upload-file [{::keys [temporary-store] :as env}
-                                {::keys             [file-sha id local-filename]
+                                {::keys             [file-sha id filename]
                                  ::file-upload/keys [files] :as params}]
      {::pc/doc "Server-side handler for an uploaded file in the RAD Blob system"}
-     (log/debug "Received file" local-filename)
+     (log/debug "Received file" filename)
      (let [file (-> files first :tempfile)]
        (cond
          (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
@@ -340,11 +340,10 @@
      (let [url-key      (url-key k)
            progress-key (progress-key k)
            status-key   (status-key k)]
-       `(def ~sym (-> (assoc (attr/new-attribute ~k :string ~attribute-map)
-                        ;; FIXME: Should NOT override user desire
-                        :com.fulcrologic.rad.form/field-style ::file-upload
-                        ::remote ~fulcro-http-remote
-                        ::store ~remote-store-name)
+       `(def ~sym (-> (merge {:com.fulcrologic.rad.form/field-style ::file-upload
+                              ::remote                              ~fulcro-http-remote
+                              ::store                               ~remote-store-name}
+                        (attr/new-attribute ~k :string ~attribute-map))
                     (update :com.fulcrologic.rad.form/query-inclusion (fnil conj [])
                       ~url-key ~progress-key ~status-key))))))
 
