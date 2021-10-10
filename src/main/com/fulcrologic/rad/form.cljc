@@ -757,14 +757,23 @@
   "Discard all changes, and attempt to change route."
   [{::uism/keys [fulcro-app] :as uism-env}]
   (let [Form         (uism/actor-class uism-env :actor/form)
-        cancel-route (?! (some-> Form comp/component-options ::cancel-route))
         form-ident   (uism/actor->ident uism-env :actor/form)
-        {:keys [on-cancel]} (uism/retrieve uism-env :options)]
+        state-map    (app/current-state fulcro-app)
+        cancel-route (?! (some-> Form comp/component-options ::cancel-route) fulcro-app (fns/ui->props state-map Form form-ident))
+        {:keys [on-cancel]} (uism/retrieve uism-env :options)
+        error!       (fn [msg] (log/error "The cancel-route option of" (comp/component-name Form) (str "(" cancel-route ")") msg))]
     (cond
+      (map? cancel-route) (let [{:keys [route target params]} cancel-route]
+                            (cond
+                              (comp/component-class? target) (rad-routing/route-to! fulcro-app target (or params {}))
+                              (every? string? route) (dr/change-route! fulcro-app route params)
+                              :else (do
+                                      (error! "did not return a valid route.")
+                                      :back)))
       (= :none cancel-route) nil
       (= :back cancel-route) (if (history/history-support? fulcro-app)
                                (history/back! fulcro-app)
-                               (log/error "Back not supported. No history installed."))
+                               (error! "Back not supported. No history installed."))
       (and (seq cancel-route) (every? string? cancel-route)) (dr/change-route! fulcro-app cancel-route)
       (comp/component-class? cancel-route) (rad-routing/route-to! fulcro-app cancel-route {})
       (history/history-support? fulcro-app) (history/back! fulcro-app))

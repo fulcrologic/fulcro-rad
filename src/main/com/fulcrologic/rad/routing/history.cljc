@@ -85,19 +85,17 @@
    (install-route-history! app history (fn [app _ _]
                                          (dr/can-change-route? app)))))
 
-(>defn push-route!
+(defn push-route!
   "Push the given route onto the route history (if history is installed)."
   [app-or-component target route-params]
-  [any? (s/coll-of string? :kind vector?) map? => any?]
   (try
     (some-> app-or-component (active-history) (-push-route! target route-params))
     (catch #?(:cljs :default :clj Exception) e
       (log/error e "Unable to execute history operation."))))
 
-(>defn replace-route!
+(defn replace-route!
   "Replace the top of the current route stack "
   [app-or-component target route-params]
-  [any? (s/coll-of string? :kind vector?) map? => any?]
   (try
     (some-> app-or-component (active-history) (-replace-route! target route-params))
     (catch #?(:cljs :default :clj Exception) e

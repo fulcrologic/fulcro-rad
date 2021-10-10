@@ -124,10 +124,19 @@
   :com.fulcrologic.rad.form/route-prefix)
 
 (def cancel-route
-  "OPTIONAL: A vector of strings, a route target class (recommended), or `:back` (default). The route to go to on cancel.
-  A vector of strings will ignore history, a route target is recommended when using history, and
-  `:back` requires route history to be installed. You may also specify `:none` if you do not want to route away from
-  the form after cancelling, and instead want to do something different (e.g. via the :on-cancel event)."
+  "OPTIONAL: A vector of strings, a route target class (recommended), a map with :route/:target and :params keys,
+   or `:back` (default).
+
+   The route to go to on cancel.
+
+   A vector of strings or a map will ignore history, a route target class is recommended when using history, and
+   `:back` requires route history to be installed. You may also specify `:none` if you do not want to route away from
+   the form after cancelling, and instead want to do something different (e.g. via the :on-cancel event).
+
+   If you return a map is must have ONE OF :route (a vector of strings) or :target (a route target class). The :params
+   is an optional map. A `:route` will not end up in history, so `:target` is preferred.
+
+   You can also supply a `(fn [app form-props] ...)` for this option that returns any of the above."
   :com.fulcrologic.rad.form/cancel-route)
 
 (def controls

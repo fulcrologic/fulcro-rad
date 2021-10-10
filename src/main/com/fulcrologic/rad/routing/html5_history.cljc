@@ -5,6 +5,7 @@
   (:require
     #?(:cljs [goog.object :as gobj])
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
+    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.routing :as routing]
     [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
@@ -150,7 +151,16 @@
    the return value of `url->route`. Returns true if it is able to route there."
   [app {:keys [route params] :as saved-route}]
   (if-let [target (dr/resolve-target app route)]
-    (do
+    (let [app-root        (app/root-class app)
+          raw-path        (dr/resolve-path app-root target params)
+          embedded-params (reduce
+                            (fn [m [raw resolved]]
+                              (if (keyword? raw)
+                                (assoc m raw resolved)
+                                m))
+                            {}
+                            (mapv vector raw-path route))
+          params          (merge embedded-params params)]
       (routing/route-to! app target params)
       true)
     (do
