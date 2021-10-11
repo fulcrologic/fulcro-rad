@@ -52,7 +52,7 @@
 (>def ::zoned-date-time (s/with-gen #(instance? ZonedDateTime %) #(s/gen #{(zdt/of-instant (instant/now) (zone-id/of "America/Los_Angeles"))})))
 (>def ::local-date-time (s/with-gen #(instance? LocalDateTime %) #(s/gen #{(ldt/of 2010 1 22 11 23 0)})))
 (>def ::local-date (s/with-gen #(instance? LocalDate %) #(s/gen #{(ld/of 2019 3 21)})))
-(>def ::zone-name (set (cljc.java-time.zone-id/get-available-zone-ids)))
+(>def ::zone-name (s/with-gen string? #(s/gen #{"America/Los_Angeles"})))
 (>def ::at inst?)
 (>def ::period (s/with-gen #(instance? Period %) #(s/gen #{period/zero})))
 (>def ::duration (s/with-gen #(instance? Duration %) #(s/gen #{duration/of-seconds 3})))
