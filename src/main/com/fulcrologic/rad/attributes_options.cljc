@@ -1,5 +1,14 @@
 (ns com.fulcrologic.rad.attributes-options
-  "symbolic names for attribute options, so you can use these instead of keywords so that doc strings work.")
+  "symbolic names for attribute options, so you can use these instead of keywords so that doc strings work."
+  (:refer-clojure :exclude [type]))
+
+(def qualified-key
+  "A Keyword. This is automatically added by `defattr` and holds the keyword name of the attribute."
+  :com.fulcrologic.rad.attributes/qualified-key)
+
+(def type
+  "A Keyword. This is automatically added by `defattr` and holds the data type name of the attribute."
+  :com.fulcrologic.rad.attributes/type)
 
 (def identity?
   "Boolean. Indicates that the attribute is used to identify rows/entities/documents in a data store.
