@@ -1,5 +1,6 @@
 (ns com.fulcrologic.rad.type-support.date-time-spec
   (:require
+    #?(:cljs ["@js-joda/locale_en-us" :refer [Locale]])
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [cljc.java-time.instant]
     [cljc.java-time.local-date :as ld]
@@ -12,7 +13,8 @@
                [goog.date.duration :as g-duration]])
     [cljc.java-time.instant :as instant]
     [com.fulcrologic.rad.type-support.date-time :as datetime]
-    [cljc.java-time.zoned-date-time :as zdt])
+    [cljc.java-time.zoned-date-time :as zdt]
+    [com.fulcrologic.rad.locale :as locale])
   #?(:clj (:import java.io.Writer
                    [java.util Date]
                    [java.time DayOfWeek Duration Instant LocalDate LocalDateTime LocalTime Month MonthDay
@@ -21,6 +23,8 @@
                    [java.time.temporal TemporalAdjusters ChronoField ChronoUnit]
                    [com.cognitect.transit TransitFactory WriteHandler ReadHandler])))
 
+#?(:cljs
+  (locale/set-locale! (.-US Locale)))
 
 (declare =>)
 

@@ -1,12 +1,9 @@
 (ns com.fulcrologic.rad.locale
   "ALPHA. Will almost certainly change."
-  #?(:cljs
-     (:require
-       ["@js-joda/locale_en-us" :refer [Locale]]))
   #?(:clj (:import (java.util Locale))))
 
 (def ^:dynamic *current-locale* #?(:clj  (Locale/getDefault)
-                                   :cljs (.-US Locale)))
+                                   :cljs nil))
 
 (defn current-locale [] *current-locale*)
 
@@ -25,5 +22,7 @@
   "
   [locale]
   #?(:clj
-     (alter-var-root (var *current-locale*) (constantly locale))))
+     (alter-var-root (var *current-locale*) (constantly locale))
+     :cljs
+     (set! *current-locale* locale)))
 

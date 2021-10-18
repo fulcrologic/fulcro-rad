@@ -7,11 +7,6 @@
   resolved "https://registry.yarnpkg.com/@js-joda/core/-/core-4.2.1.tgz#990a6167f12cc504440117c49afb00003e7077f0"
   integrity sha512-/PX1W+qCLfSYjHV3HtEuH6vaGuTtjvfA8ERt3xib8MmNkE6jSieFi/BZGPzHAbWLTgPpdNDQVDi4HgV1G7VCDg==
 
-"@js-joda/locale@4.2.1":
-  version "4.2.1"
-  resolved "https://registry.yarnpkg.com/@js-joda/locale/-/locale-4.2.1.tgz#45da926b2ddba89711110b525cf83167705e36bf"
-  integrity sha512-ZXG7CbvGm7a3U+NA0U0i9tnMIhKZBRpsU8kUTJnansIBBR6GGw2QerfalYXv+gr7yS+yibMZx1vX3Fr7VrQpKQ==
-
 "@js-joda/locale_en-us@4.2.1":
   version "4.2.1"
   resolved "https://registry.yarnpkg.com/@js-joda/locale_en-us/-/locale_en-us-4.2.1.tgz#dde07f4b7a8ada945e7a6b86f4933560926462d8"

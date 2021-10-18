@@ -5,8 +5,6 @@
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
-    #?@(:cljs
-        [["@js-joda/locale_en-us" :refer [Locale]]])
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.locale :as locale]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
@@ -274,19 +272,13 @@
    (formatter
      fmt
      #?(:clj  (Locale/getDefault)
-        :cljs (.-US Locale))))
+        :cljs nil)))
   ([fmt locale]
    (let [fmt (cond (instance? DateTimeFormatter fmt) fmt
-                   (string? fmt) (if (nil? locale)
-                                   (throw
-                                     #?(:clj  (Exception. "Locale is nil")
-                                        :cljs (js/Error. (str "Locale is nil, try adding a require for [js-joda.locale_en-us]"))))
-                                   #?(:clj  (.. DateTimeFormatter
-                                              (ofPattern fmt)
-                                              (withLocale locale))
-                                      :cljs (.withLocale
-                                              (.ofPattern DateTimeFormatter fmt)
-                                              locale))))]
+                   (string? fmt) #?(:clj  (cond-> (DateTimeFormatter/ofPattern fmt)
+                                            locale (.withLocale locale))
+                                    :cljs (cond-> (.ofPattern DateTimeFormatter fmt)
+                                            locale (.withLocale locale))))]
      fmt)))
 
 (let [get-format (memoize (fn [format locale]
@@ -303,7 +295,10 @@
 (defn inst->human-readable-date
   "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string.
 
-  Uses locale from `locale/current-locale`."
+  Uses locale from `locale/current-locale`.
+
+  IMPORTANT: You MUST set a locale in CLJS or this function will return nothing.
+  "
   [inst]
   (if (inst? inst)
     (tformat "E, MMM d, yyyy" inst)
