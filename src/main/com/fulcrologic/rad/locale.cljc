@@ -2,20 +2,28 @@
   "ALPHA. Will almost certainly change."
   #?(:cljs
      (:require
-       [goog.object :as gobj]))
+       ["@js-joda/locale_en-us" :refer [Locale]]))
   #?(:clj (:import (java.util Locale))))
 
-(defn current-locale []
-  #?(:clj  (Locale/getDefault)
-     :cljs (try
-             (some->
-               (gobj/get js/JSJodaLocale "Locale")
-               (gobj/get "US"))
-             (catch js/Error e))))
+(def ^:dynamic *current-locale* #?(:clj  (Locale/getDefault)
+                                   :cljs (.-US Locale)))
+
+(defn current-locale [] *current-locale*)
 
 (defn set-locale!
-  "Set the locale of the application to the given locale code, e.g. `en-US`.
-  CURRENTLY A NO-OP"
-  [code]
-  )
+  "Set the locale of the application to the given Locale. In CLJS you will have to require the
+  proper @js-joda/timezone file, like so:
+
+  ```
+  (:require
+    [\"@js-joda/locale_en-us\" :refer [Locale]])
+  ...
+  ```
+
+  (set-locale! (.-US Locale))
+
+  "
+  [locale]
+  #?(:clj
+     (alter-var-root (var *current-locale*) (constantly locale))))
 

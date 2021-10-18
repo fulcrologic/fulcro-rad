@@ -8,10 +8,10 @@
                            :output-dir        \"resources/public/js/main\"
                            :asset-path        \"/js/main\"
                            :js-options        {:resolve
-                                               {\"js-joda-timezone\"
+                                               {\"@js-joda/timezone\"
                                                 {:target  :npm
-                                                :require \"js-joda-timezone/dist/js-joda-timezone-10-year-range.min.js\"}}}}}}
+                                                 :require \"@js-joda/timezone/dist/js-joda-timezone-10-year-range.min.js\"}}}}}}
    ```
 "
   (:require
-    [cljsjs.js-joda-timezone]))
+    ["@js-joda/timezone"]))

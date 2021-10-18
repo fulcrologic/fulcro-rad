@@ -5,11 +5,8 @@
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
-    ;; FIXME: Straighten out our story on locale support. Right now defaulting to en-US, which is not right.
     #?@(:cljs
-        [["js-joda"]
-         ["js-joda-timezone"]
-         ["@js-joda/locale_en-us" :as js-joda-locale]])
+        [["@js-joda/locale_en-us" :refer [Locale]]])
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.locale :as locale]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
@@ -38,8 +35,8 @@
                    [java.time.format DateTimeFormatter])))
 
 #?(:cljs
-   (do
-     (js/goog.exportSymbol "JSJodaLocale" js-joda-locale)))
+   ;; DateTimeFormatter causes nightmares...
+   (set! *warn-on-infer* false))
 
 (>def ::month (s/or :month #{january february march april may june july august september october
                              november december}))
@@ -266,7 +263,7 @@
      (catch #?(:cljs :default :clj Exception) e
        nil))))
 
-(defn ^DateTimeFormatter formatter
+(defn formatter
   "Constructs a DateTimeFormatter out of either a
   * format string - \"YYYY/mm/DD\" \"YYY HH:MM\" etc.
   or
@@ -277,20 +274,19 @@
    (formatter
      fmt
      #?(:clj  (Locale/getDefault)
-        :cljs (try
-                (some->
-                  (gobj/get js/JSJodaLocale "Locale")
-                  (gobj/get "US"))
-                (catch js/Error e)))))
+        :cljs (.-US Locale))))
   ([fmt locale]
-   (let [^DateTimeFormatter fmt (cond (instance? DateTimeFormatter fmt) fmt
-                                      (string? fmt) (if (nil? locale)
-                                                      (throw
-                                                        #?(:clj  (Exception. "Locale is nil")
-                                                           :cljs (js/Error. (str "Locale is nil, try adding a require for [js-joda.locale_en-us]"))))
-                                                      (.. DateTimeFormatter
-                                                        (ofPattern fmt)
-                                                        (withLocale locale))))]
+   (let [fmt (cond (instance? DateTimeFormatter fmt) fmt
+                   (string? fmt) (if (nil? locale)
+                                   (throw
+                                     #?(:clj  (Exception. "Locale is nil")
+                                        :cljs (js/Error. (str "Locale is nil, try adding a require for [js-joda.locale_en-us]"))))
+                                   #?(:clj  (.. DateTimeFormatter
+                                              (ofPattern fmt)
+                                              (withLocale locale))
+                                      :cljs (.withLocale
+                                              (.ofPattern DateTimeFormatter fmt)
+                                              locale))))]
      fmt)))
 
 (let [get-format (memoize (fn [format locale]
