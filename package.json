@@ -27,6 +27,6 @@
     "js-joda": "^1.11.0",
     "js-joda-timezone": "^2.1.1",
     "react": "^16.12.0",
-    "shadow-cljs": "2.11.6"
+    "shadow-cljs": "2.15.12"
   }
 }

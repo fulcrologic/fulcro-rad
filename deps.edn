@@ -1,11 +1,11 @@
 {:paths   ["src/main"]
 
- :deps    {edn-query-language/eql        {:mvn/version "1.0.0"}
+ :deps    {edn-query-language/eql        {:mvn/version "1.0.1"}
            com.taoensso/timbre           {:mvn/version "4.10.0"}
            com.taoensso/encore           {:mvn/version "2.120.0"}
-           com.fulcrologic/fulcro        {:mvn/version "3.5.0-RC3"}
+           com.fulcrologic/fulcro        {:mvn/version "3.5.6"}
            com.fulcrologic/fulcro-i18n   {:mvn/version "0.0.5-alpha"}
-           com.fulcrologic/guardrails    {:mvn/version "1.0.0-SNAPSHOT"}
+           com.fulcrologic/guardrails    {:mvn/version "1.1.5"}
            com.wsscode/pathom            {:mvn/version "2.2.31"}
            commons-codec/commons-codec   {:mvn/version "1.14"}
            potemkin/potemkin             {:mvn/version "0.4.5"}
@@ -15,21 +15,21 @@
            cljsjs/js-joda                {:mvn/version "1.10.1-0"}
            cljsjs/js-joda-timezone       {:mvn/version "2.0.1-0"}
 
-           cljc.java-time/cljc.java-time {:mvn/version "0.1.7"}
+           cljc.java-time/cljc.java-time {:mvn/version "0.1.11"}
            org.clojure/clojure           {:mvn/version "1.10.1" :scope "provided"}
-           org.clojure/clojurescript     {:mvn/version "1.10.773" :scope "provided"}
-           org.clojure/core.async        {:mvn/version "1.3.610"}
+           org.clojure/clojurescript     {:mvn/version "1.10.866" :scope "provided"}
+           org.clojure/core.async        {:mvn/version "1.3.618"}
            com.taoensso/tufte            {:mvn/version "2.1.0"}}
 
  :aliases {:tests     {:extra-paths ["src/test"]
-                       :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.8"}}}
+                       :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.11"}}}
 
            :clj-tests {:extra-paths ["src/test"]
                        :main-opts   ["-m" "kaocha.runner"]
-                       :extra-deps  {lambdaisland/kaocha {:mvn/version "1.0.700"}}}
+                       :extra-deps  {lambdaisland/kaocha {:mvn/version "1.0.732"}}}
 
            :dev       {:extra-paths ["src/dev" "resources"]
-                       :extra-deps  {thheller/shadow-cljs        {:mvn/version "2.11.6"}
+                       :extra-deps  {thheller/shadow-cljs        {:mvn/version "2.15.12"}
                                      mount/mount                 {:mvn/version "0.1.12"}
                                      binaryage/devtools          {:mvn/version "1.0.0"}
                                      org.clojure/tools.namespace {:mvn/version "1.0.0"}}}}}
