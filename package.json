@@ -15,7 +15,7 @@
   },
   "homepage": "https://github.com/fulcrologic/fulcro-rad#readme",
   "devDependencies": {
-    "karma": "5.2.2",
+    "karma": "6.3.4",
     "karma-chrome-launcher": "3.1.0",
     "karma-cljs-test": "0.1.0"
   },
