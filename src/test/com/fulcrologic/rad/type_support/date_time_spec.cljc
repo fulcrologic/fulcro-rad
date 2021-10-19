@@ -6,6 +6,7 @@
     [cljc.java-time.local-time :as lt]
     [cljc.java-time.local-date-time :as ldt]
     [cljc.java-time.format.date-time-formatter :as dtf]
+    [com.fulcrologic.rad.locale :as r.locale]
     [fulcro-spec.core :refer [assertions specification behavior]]
     #?@(:clj  []
         :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
@@ -158,3 +159,15 @@
       "Converts an instant to the correct (zoned) instant at the beginning of the month."
       (datetime/beginning-of-month #inst "2020-03-01T04:00:00Z") => expected)))
 
+(specification "formatting Locale support"
+  (datetime/with-timezone "America/New_York"
+    (r.locale/with-locale "en-US"
+      (assertions
+        "Formats the date/time in the correct zone and locale"
+        (datetime/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => "08AM Sun Mar 15, 2020")))
+  (datetime/with-timezone "America/Bogota"
+    (r.locale/with-locale "es-CO"
+      (assertions
+        "Formats the date/time in the correct zone and locale"
+        (datetime/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => #?(:cljs "07a.\u00a0m. dom. mar. 15, 2020"
+                                                                               :clj  "07a. m. dom. mar. 15, 2020")))))

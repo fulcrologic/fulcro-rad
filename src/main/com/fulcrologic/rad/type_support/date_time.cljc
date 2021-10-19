@@ -5,11 +5,6 @@
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
-    ;; FIXME: Straighten out our story on locale support. Right now defaulting to en-US, which is not right.
-    #?@(:cljs
-        [["js-joda"]
-         ["js-joda-timezone"]
-         ["@js-joda/locale_en-us" :as js-joda-locale]])
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.locale :as locale]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
@@ -17,29 +12,24 @@
     [cljc.java-time.day-of-week :as java-time.day-of-week]
     [cljc.java-time.local-date-time :as ldt]
     [cljc.java-time.local-date :as ld]
+    [cljc.java-time.local-time :as lt]
     [cljc.java-time.zoned-date-time :as zdt]
-    [cljc.java-time.format.date-time-formatter :as dtf]
     [cljc.java-time.period :as period]
     [cljc.java-time.duration :as duration]
     [cljc.java-time.zone-id :as zone-id]
+    [cljc.java-time.format.date-time-formatter :as dtf]
     [taoensso.timbre :as log]
-    [cljc.java-time.month :refer [january february march april may june july august september october
-                                  november december]]
+    [cljc.java-time.month :refer [january february march april may june july august september october november december]]
     #?@(:clj  []
         :cljs [[goog.object :as gobj]
+               [com.fulcrologic.rad.type-support.js-date-formatter :as jdf]
                [java.time :refer [Duration LocalTime LocalDateTime LocalDate ZonedDateTime Period Instant]]
-               [java.time.format :refer [DateTimeFormatter]]
                [com.fulcrologic.rad.type-support.ten-year-timezone]
-               [goog.date.duration :as g-duration]])
-    [cljc.java-time.local-time :as lt])
+               [goog.date.duration :as g-duration]]))
   #?(:clj (:import java.io.Writer
                    [java.util Date Locale]
                    [java.time Duration Instant LocalDate LocalDateTime LocalTime Period ZonedDateTime]
                    [java.time.format DateTimeFormatter])))
-
-#?(:cljs
-   (do
-     (js/goog.exportSymbol "JSJodaLocale" js-joda-locale)))
 
 (>def ::month (s/or :month #{january february march april may june july august september october
                              november december}))
@@ -261,48 +251,51 @@
    (try
      (let [z         (get-zone-id (or zone-name "UTC"))
            ldt       (ldt/of-instant (inst->instant (or inst (now))) z)
-           formatter cljc.java-time.format.date-time-formatter/iso-local-date-time]
+           formatter dtf/iso-local-date-time]
        (ldt/format ldt formatter))
      (catch #?(:cljs :default :clj Exception) e
        nil))))
 
-(defn ^DateTimeFormatter formatter
-  "Constructs a DateTimeFormatter out of either a
-  * format string - \"YYYY/mm/DD\" \"YYY HH:MM\" etc.
-  or
-  * formatter name - :iso-instant :iso-local-date etc
+#?(:clj
+   (defn ^DateTimeFormatter formatter
+     "Constructs a DateTimeFormatter out of either a
+     * format string - \"YYYY/mm/DD\" \"YYY HH:MM\" etc.
+     or
+     * formatter name - :iso-instant :iso-local-date etc
 
-  and a Locale, which is optional."
-  ([fmt]
-   (formatter
-     fmt
-     #?(:clj  (Locale/getDefault)
-        :cljs (try
-                (some->
-                  (gobj/get js/JSJodaLocale "Locale")
-                  (gobj/get "US"))
-                (catch js/Error e)))))
-  ([fmt locale]
-   (let [^DateTimeFormatter fmt (cond (instance? DateTimeFormatter fmt) fmt
-                                      (string? fmt) (if (nil? locale)
-                                                      (throw
-                                                        #?(:clj  (Exception. "Locale is nil")
-                                                           :cljs (js/Error. (str "Locale is nil, try adding a require for [js-joda.locale_en-us]"))))
-                                                      (.. DateTimeFormatter
-                                                        (ofPattern fmt)
-                                                        (withLocale locale))))]
-     fmt)))
+     and a Locale, which is optional."
+     ([fmt]
+      (formatter fmt (Locale/getDefault)))
+     ([fmt locale]
+      (let [^DateTimeFormatter fmt (cond (instance? DateTimeFormatter fmt) fmt
+                                         (string? fmt) (if (nil? locale)
+                                                         (throw
+                                                           (Exception. "Locale is nil"))
+                                                         (.. DateTimeFormatter
+                                                           (ofPattern fmt)
+                                                           (withLocale locale))))]
+        fmt)))
+   :cljs
+   (defn formatter
+     ([f] (jdf/new-formatter f "en-US" (or *current-zone-name* "America/Los_Angeles")))
+     ([f l] (jdf/new-formatter f l (or *current-zone-name* "America/Los_Angeles")))))
 
-(let [get-format (memoize (fn [format locale]
-                            (formatter format locale)))]
-  (defn tformat [format inst]
-    (try
-      (let [ldt       (inst->local-datetime inst)
-            formatter (get-format format (locale/current-locale))]
-        (ldt/format ldt formatter))
-      (catch #?(:clj Exception :cljs :default) e
-        (log/error e)
-        nil))))
+#?(:clj
+   (let [get-format (memoize (fn [format locale]
+                               (formatter format locale)))]
+     (defn tformat [format inst]
+       (try
+         (let [ldt       (inst->local-datetime inst)
+               formatter (get-format format (locale/current-locale))]
+           (ldt/format ldt formatter))
+         (catch #?(:clj Exception :cljs :default) e
+           (log/error e)
+           nil))))
+   :cljs
+   (defn tformat [f inst] ((jdf/new-formatter f
+                             (or (locale/current-locale) "en-US")
+                             (or *current-zone-name* "America/Los_Angeles"))
+                           inst)))
 
 (defn inst->human-readable-date
   "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string.

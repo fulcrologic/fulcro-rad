@@ -20,14 +20,11 @@
     [com.fulcrologic.rad.options-util :refer [narrow-keyword]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
-    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
-    [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
     [com.wsscode.pathom.connect :as pc]
     [clojure.core.async :as async]
-    [clojure.spec.alpha :as s]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.networking.file-upload :as file-upload]
     #?@(:cljs [[goog.crypt :as crypt]
@@ -36,8 +33,7 @@
                [clojure.pprint :refer [pprint]]
                [clojure.java.io :as jio]])
     [com.wsscode.pathom.core :as p]
-    [clojure.string :as str]
-    [com.fulcrologic.fulcro.application :as app])
+    [clojure.string :as str])
   (:import
     #?(:clj  (org.apache.commons.codec.digest DigestUtils)
        :cljs [goog.crypt Sha256])))
