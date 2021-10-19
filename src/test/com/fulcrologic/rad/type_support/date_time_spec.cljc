@@ -165,7 +165,7 @@
       (assertions
         "Formats the date/time in the correct zone and locale"
         (datetime/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => "08AM Sun Mar 15, 2020")))
-  (datetime/with-timezone "America/Bogota"
+  #_(datetime/with-timezone "America/Bogota"
     (r.locale/with-locale "es-CO"
       (assertions
         "Formats the date/time in the correct zone and locale"
