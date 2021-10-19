@@ -1,3 +1,8 @@
+test:
+	shadow-cljs compile ci-tests
+	karma start --single-run
+	clojure -A:dev:tests:clj-tests
+
 docs/DevelopersGuide.html: docs/DevelopersGuide.adoc
 	asciidoctor -o docs/DevelopersGuide.html -b html5 -r asciidoctor-diagram docs/DevelopersGuide.adoc
 
