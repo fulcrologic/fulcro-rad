@@ -1,7 +1,6 @@
 (ns com.fulcrologic.rad.registered-maps
   (:require
-    [potemkin.collections :refer [def-map-type]]
-    [fulcro-spec.core :refer [specification behavior assertions provided! component when-mocking!]]))
+    [potemkin.collections :refer [def-map-type]]))
 
 (def registry (atom {}))
 
