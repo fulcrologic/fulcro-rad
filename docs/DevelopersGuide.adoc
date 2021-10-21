@@ -246,8 +246,8 @@ indicate the schema that the attribute should be associated with.
 The standard in RAD is for libraries to define an `*-options` namespace that defines vars for each configurable
 key that they support. This allows these vars to be used instead of raw keywords, leading to much easier development.
 
-For example, the `attributes` namespace defines `attributes-options`. This namespace includes all of the legal keys
-that RAD *itself* defines that can be placed in an attribute's map. The `form` namespace defines `form-options`, etc.
+For example, the `attributes` namespace defines https://github.com/fulcrologic/fulcro-rad/blob/develop/src/main/com/fulcrologic/rad/attributes_options.cljc[`attributes-options`]. This namespace includes all of the legal keys
+that RAD *itself* defines that can be placed in an attribute's map. The `form` namespace defines https://github.com/fulcrologic/fulcro-rad/blob/develop/src/main/com/fulcrologic/rad/form_options.cljc[`form-options`], etc.
 
 This allows you to write an attribute like so:
 
