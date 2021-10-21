@@ -956,6 +956,8 @@
                    value               (cond
                                          (and ref? many? (nil? value)) []
                                          (and many? (nil? value)) #{}
+                                         (and ref? many?) (filterv #(not (nil? (second %))) value)
+                                         ref? (if (nil? (second value)) nil value)
                                          value)
                    protected-on-change (fn [env]
                                          (let [new-env (on-change env form-ident qualified-key old-value value)]
@@ -1218,7 +1220,15 @@
 
 (defn input-changed!
   "Helper: Informs the form's state machine that an input's value has changed. Requires a form rendering env, attr keyword,
-   and the current value."
+   and the current value.
+
+   Using a value of `nil` will cause the field to become empty in an attribute-aware way:
+
+   - If the cardinality is to-one, will be dissoc'd
+   - Scalar to-many will be set to #{} instead.
+   - Ref to-many will be set to [] instead.
+
+   Furthermore, idents that contain a nil ID are considered nil."
   [{::keys [form-instance master-form] :as env} k value]
   (let [form-ident (comp/get-ident form-instance)
         old-value  (get (comp/props form-instance) k)
