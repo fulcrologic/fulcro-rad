@@ -958,7 +958,7 @@
                                          (and many? (nil? value)) #{}
                                          (and ref? many?) (filterv #(not (nil? (second %))) value)
                                          ref? (if (nil? (second value)) nil value)
-                                         value)
+                                         :else value)
                    protected-on-change (fn [env]
                                          (let [new-env (on-change env form-ident qualified-key old-value value)]
                                            (if (or (nil? new-env) (contains? new-env ::uism/state-map))
