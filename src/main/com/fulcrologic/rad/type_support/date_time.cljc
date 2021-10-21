@@ -278,7 +278,8 @@
                                                            (Exception. "Locale is nil"))
                                                          (.. DateTimeFormatter
                                                            (ofPattern fmt)
-                                                           (withLocale locale))))]
+                                                           (withLocale (cond-> locale
+                                                                         (string? locale) (Locale/forLanguageTag))))))]
         fmt)))
    :cljs
    (defn formatter
