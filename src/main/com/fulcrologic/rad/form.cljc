@@ -23,6 +23,7 @@
     [com.fulcrologic.rad.type-support.integer :as int]
     [com.wsscode.pathom.connect :as pc]
     [com.wsscode.pathom.core :as p]
+    [edn-query-language.core :as eql]
     [taoensso.tufte :refer [p profile]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
@@ -946,9 +947,16 @@
            ;; the representation needed by the UI component (e.g. string)
            (p :event/attribute-changed
              (let [{:keys       [old-value form-key value form-ident]
-                    ::attr/keys [qualified-key]} event-data
+                    ::attr/keys [cardinality type qualified-key]} event-data
                    form-class          (some-> form-key (comp/registry-key->class))
                    {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
+                   many?               (= :many cardinality)
+                   ref?                (= :ref type)
+                   missing?            (nil? value)
+                   value               (cond
+                                         (and ref? many? (nil? value)) []
+                                         (and many? (nil? value)) #{}
+                                         value)
                    protected-on-change (fn [env]
                                          (let [new-env (on-change env form-ident qualified-key old-value value)]
                                            (if (or (nil? new-env) (contains? new-env ::uism/state-map))
@@ -960,11 +968,17 @@
                                          (conj form-ident qualified-key))
                    ;; TODO: Decide when to properly set the field to marked
                    mark-complete?      true]
-               (when-not path
-                 (log/error "Unable to record attribute change. Path cannot be calculated."))
+               (when #?(:clj true :cljs goog.DEBUG)
+                 (when-not path
+                   (log/error "Unable to record attribute change. Path cannot be calculated."))
+                 (when (and ref? many? (not (every? eql/ident? value)))
+                   (log/error "Setting a ref-many attribute to incorrect type. Value should be a vector of idents:" qualified-key value))
+                 (when (and ref? (not many?) (not missing?) (not (eql/ident? value)))
+                   (log/error "Setting a ref-one attribute to incorrect type. Value should an ident:" qualified-key value)))
                (-> env
                  (cond->
                    mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
+                   (and path (nil? value)) (uism/apply-action update-in form-ident dissoc qualified-key)
                    path (uism/apply-action assoc-in path value)
                    on-change (protected-on-change))
                  (apply-derived-calculations)))))}
