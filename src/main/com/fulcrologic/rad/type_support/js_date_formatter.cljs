@@ -3,7 +3,11 @@
    to get the locale-dependent values"
   (:require
     [clojure.string :as str]
-    [taoensso.timbre :as log]))
+    [cljc.java-time.zoned-date-time :as zdt]
+    [taoensso.timbre :as log]
+    [cljc.java-time.zone-id :as zone-id]
+    [cljc.java-time.zone-offset :as zo]
+    [cljc.java-time.instant :as instant]))
 
 (def tokenize
   "[format-str]
@@ -36,8 +40,44 @@
                                                                       (dissoc options :zero-pad?))))]
         (fn [inst]
           (cond-> (.format formatter inst)
-            zero-pad? zero-pad
-            ))))))
+            zero-pad? zero-pad))))))
+
+(defn- zone-name-formatter [format]
+  (fn [locale-name zone-name]
+    (let [formatter (js/Intl.DateTimeFormat. locale-name #js {:timeZone     zone-name
+                                                              :timeZoneName format
+                                                              :minute       "numeric"})]
+      (fn [inst]
+        (last (str/split (.format formatter inst) #"\s+"))))))
+
+(defn- seconds->zone-offset [^long totalSeconds size]
+  (let [absTotalSeconds (int (Math/abs totalSeconds))
+        absSeconds      (int (mod absTotalSeconds 60))      ;
+        absHours        (int (/ absTotalSeconds 3600))
+        absMinutes      (int (mod (/ absTotalSeconds 60) 60))
+        sign            (if (neg? totalSeconds) "-" "+")
+        hours           (str (if (< absHours 10) "0" "") absHours)
+        mins            (str (if (< absMinutes 10) "0" "") absMinutes)
+        secs            (str (if (< absSeconds 10) "0" "") absSeconds)
+        ]
+    (if (zero? totalSeconds)
+      "Z"
+      (case size
+        1 (str sign hours (when (pos? absMinutes) mins))
+        2 (str sign hours mins)
+        3 (str sign hours ":" mins)
+        4 (str sign hours mins (when (pos? absSeconds) secs))
+        5 (str sign hours ":" mins (when (pos? absSeconds) (str ":" secs)))
+        nil))))
+
+(defn- zone-offset-formatter [size]
+  (fn [_ zone-name]
+    (let []
+      (fn [inst]
+        (let [z      (zone-id/of zone-name)
+              i      (instant/of-epoch-milli (inst-ms (or inst (js/Date.))))
+              offset (zdt/get-offset (zdt/of-instant i z))]
+          (seconds->zone-offset (zo/get-total-seconds offset) size))))))
 
 (def format-map
   {"a"     (fn [locale-name zone-name]
@@ -50,6 +90,16 @@
                  (or
                    (some-> (re-matches #"^\d+(.*)$" (.format formatter inst)) (second) (str/trim))
                    ""))))
+   ;; If you don't include some element of time, then zone name includes the whole darn date :(
+   "Z"     (zone-name-formatter "short")
+   "ZZ"    (zone-name-formatter "short")
+   "ZZZ"   (zone-name-formatter "short")
+   "ZZZZ"  (zone-name-formatter "long")
+   "X"     (zone-offset-formatter 1)
+   "XX"    (zone-offset-formatter 2)
+   "XXX"   (zone-offset-formatter 3)
+   "XXXX"  (zone-offset-formatter 4)
+   "XXXXX" (zone-offset-formatter 5)
    "M"     (std-formatter {:month "numeric"})
    "MM"    (std-formatter {:month "2-digit"})
    "MMM"   (std-formatter {:month "short"})

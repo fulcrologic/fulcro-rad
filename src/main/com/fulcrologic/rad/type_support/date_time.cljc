@@ -26,10 +26,11 @@
                [java.time :refer [Duration LocalTime LocalDateTime LocalDate ZonedDateTime Period Instant]]
                [com.fulcrologic.rad.type-support.ten-year-timezone]
                [goog.date.duration :as g-duration]]))
-  #?(:clj (:import java.io.Writer
-                   [java.util Date Locale]
-                   [java.time Duration Instant LocalDate LocalDateTime LocalTime Period ZonedDateTime]
-                   [java.time.format DateTimeFormatter])))
+  #?(:cljs (:import [goog.i18n DateTimeParse])
+     :clj  (:import java.io.Writer
+                    [java.util Date Locale]
+                    [java.time Duration Instant LocalDate LocalDateTime LocalTime Period ZonedDateTime]
+                    [java.time.format DateTimeFormatter])))
 
 (>def ::month (s/or :month #{january february march april may june july august september october
                              november december}))
@@ -263,7 +264,11 @@
      or
      * formatter name - :iso-instant :iso-local-date etc
 
-     and a Locale, which is optional."
+     and a Locale, which is optional.
+
+     NOTE: In CLJS this generates a formatter that uses Intl, and IS NOT a java-time DateTimeFormatter. This means
+     you CANNOT use it for parsing. If you need parsing, you must add a js-joda locale to your deps and use cljc.java-time
+     directly, or come up with some other solution."
      ([fmt]
       (formatter fmt (Locale/getDefault)))
      ([fmt locale]
@@ -285,9 +290,9 @@
                                (formatter format locale)))]
      (defn tformat [format inst]
        (try
-         (let [ldt       (inst->local-datetime inst)
+         (let [zdt       (inst->zoned-date-time inst)
                formatter (get-format format (locale/current-locale))]
-           (ldt/format ldt formatter))
+           (zdt/format zdt formatter))
          (catch #?(:clj Exception :cljs :default) e
            (log/error e)
            nil))))

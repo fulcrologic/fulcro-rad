@@ -981,7 +981,7 @@
                  (cond->
                    mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
                    (and path (nil? value)) (uism/apply-action update-in form-ident dissoc qualified-key)
-                   path (uism/apply-action assoc-in path value)
+                   (and path (not (nil? value))) (uism/apply-action assoc-in path value)
                    on-change (protected-on-change))
                  (apply-derived-calculations)))))}
 
