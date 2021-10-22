@@ -166,16 +166,28 @@
 
 (defn valid-value?
   "Checks if the value looks to be a valid value based on the ::attr/required? and ::attr/valid? options of the
-  given attribute."
-  [{::keys [required? valid?] :as attribute} value]
+   given attribute.
+
+   Returns true if:
+
+   * The value is completely missing (nil), and not marked `ao/required?`
+   * The attribute defines a `ao/valid?` predicate that returns true.
+   * The attribute has NO `ao/valid?` option but is marked `ao/required?`
+     but the value is non-nil (and if a string, non-blank).
+
+   Otherwise returns false.
+   "
+  [{::keys [required? valid?] :as attribute} value props k]
   (let [non-empty-value? (and
                            (not (nil? value))
                            (or
                              (not (string? value))
                              (not= 0 (count (str/trim value)))))]
-    (if valid?
-      (valid? value)
-      (or (not required?) non-empty-value?))))
+    (or
+      (and (nil? value) (not required?))
+      (if valid?
+        (valid? value props k)
+        (or (not required?) non-empty-value?)))))
 
 (>defn attribute-map
   "Returns a map of qualified key -> attribute for the given attributes"
@@ -186,14 +198,17 @@
     attributes))
 
 (defn make-attribute-validator
-  "Creates a function that can be used as a form validator for any form that contains the given `attributes`.  If the
-  form asks for validation on an attribute that isn't listed or has no `::attr/valid?` function then it will consider
-  that attribute valid."
+  "Creates a Fulcro form-state validator function that can be used as a form validator for any form that contains
+   the given `attributes`.
+
+   A field is considered valid in this validator IF AND ONLY IF `attr/valid-value` returns true. See that
+   function's docstring for how that interacts with the `ao/valid?` option of attributes.
+   "
   [attributes]
   (let [attribute-map (attribute-map attributes)]
     (fs/make-validator
       (fn [form k]
-        (valid-value? (get attribute-map k) (get form k))))))
+        (valid-value? (get attribute-map k) (get form k) form k)))))
 
 (defn pathom-plugin [all-attributes]
   (p/env-wrap-plugin

@@ -62,11 +62,25 @@
 ;; FIXME: Signature should be `(fn [value form k] boolean?)` so attributes can use
 ;; form context (e.g. type of tax) to determine how to check.
 (def valid?
-  "OPTIONAL. `(fn [value] boolean?)`.
+  "OPTIONAL. A `(fn [value props qualified-key] boolean?)`.
 
-   On forms this function is OVERRIDDEN by the existence of a form validator.
+   IMPORTANT: This is ONLY used in the UI when you create a validator using `attr/make-attribute-validator`,
+   AND you set that as the form validator with the `fo/validator` option.
 
-   DB adapters *may* use it. See your database plugin's documentation for more info."
+   You can combined the two by writing a custom validator like so:
+
+   ```
+   (def my-validator
+     (let [all-attributes-validator (attr/make-attribute-validator model/all-attributes)]
+       (fs/make-validator (fn [form field]
+                           (case field
+                             ;; override how :some/field is checked
+                             :some/field (boolean-predicate form field)
+                             ;; Default is to use the ones defined on the RAD model
+                             (= :valid (all-attributes-validator form field)))))))
+   ```
+
+   DB adapters and other utilities *may* use it, but that is up to the author of that code."
   :com.fulcrologic.rad.attributes/valid?)
 
 

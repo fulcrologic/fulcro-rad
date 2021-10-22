@@ -22,7 +22,7 @@
         form-validator (comp/component-options master-form ::form/validator)
         invalid?       (or
                          (and checked? required? (or (nil? value) (and (string? value) (empty? value))))
-                         (and checked? (not form-validator) (not (attr/valid-value? attribute value)))
+                         (and checked? (not form-validator) (not (attr/valid-value? attribute value props k)))
                          (and form-validator (= :invalid (form-validator props k))))]
     invalid?))
 
