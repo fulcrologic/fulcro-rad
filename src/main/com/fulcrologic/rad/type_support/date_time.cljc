@@ -1,7 +1,14 @@
 (ns com.fulcrologic.rad.type-support.date-time
-  "A common set of date/time functions for CLJC.  Libraries like `tick` are promising, and CLJC time is useful
-  (and used by this ns), but cljc-time does not have an interface that is the same between the two languages,
-  and tick is alpha (and often annoying).
+  "A common set of date/time functions for CLJC. These functions give client-server agreement on dealing with common
+   date/time processing that happens with respect to UI controls. There is a general formatting function that uses
+   Java DateTimeFormatter on the JVM for server-side, but in order to keep the UI code a light as possible that formatter
+   is hand-written using the built-in browser Intl function (which has the locale data for many locales and does not
+   bloat your js file).
+
+   As such the `formatter` from this namespace is not completely isomophic in CLJ vs CLJS, since in CLJ that formatter
+   can be used for general parsing, but in CLJS it cannot. This should not generally be a problem because the parsing
+   you usually need in the UI is for date controls, and there are functions for ISO parsing that work just fine without
+   needing locale data.
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
