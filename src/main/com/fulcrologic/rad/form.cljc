@@ -31,6 +31,7 @@
         :cljs [[goog.object :as gobj]])
     [com.fulcrologic.rad.options-util :as opts :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
+    [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
@@ -233,6 +234,27 @@
     (if render
       (render env)
       nil)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Form creation/logic
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn find-fields
+  "Recursively walks the definition of a RAD form (form and all subforms), and returns the attribute qualified keys
+   that match `(pred attribute)`"
+  [form-class pred]
+  (let [attributes        (or
+                            (comp/component-options form-class ::attributes)
+                            [])
+        local-optional    (into #{} (comp (filter pred) (map ::attr/qualified-key)) attributes)
+        children          (some->> form-class comp/get-query eql/query->ast :children (keep :component))
+        children-optional (map #(find-fields % pred) children)]
+    (apply set/union local-optional children-optional)))
+
+(defn optional-fields
+  "Returns all of the form fields from a form (recursively) that are not marked ao/required?"
+  [form-class]
+  (find-fields form-class #(not (true? (get % ::attr/required?)))))
 
 #?(:clj
    (s/def ::defsc-form-args (s/cat
@@ -718,17 +740,20 @@
           "This could mean you sent one ident, and indicated ready on another.")
         env))))
 
-(defn mark-filled-fields-complete*
-  "Helper function against app state. This function marks `initialized-keys` as complete on the form given a set of
-  keys that you consider initialized. Like form state's mark-complete, but on a set instead of a single field."
-  [state-map {:keys [entity-ident initialized-keys]}]
+(defn mark-fields-complete*
+  "Helper function against app state. This function marks `target-keys` as complete on the form given a set of
+   keys that you consider initialized. Like form state's mark-complete, but on all of the target-keys that appear
+   on the form or subforms recursively."
+  [state-map {:keys [entity-ident target-keys]}]
   (let [mark-complete* (fn [entity {::fs/keys [fields complete?] :as form-config}]
-                         (let [to-mark (set/union (set complete?) (set/intersection (set fields) (set initialized-keys)))
-                               to-mark (into #{}
-                                         (filter (fn [k] (not (nil? (get entity k)))))
-                                         to-mark)]
+                         (let [to-mark (set/union (set complete?) (set/intersection (set fields) (set target-keys)))]
                            [entity (assoc form-config ::fs/complete? to-mark)]))]
     (fs/update-forms state-map mark-complete* entity-ident)))
+
+(defn ^:deprecated mark-filled-fields-complete*
+  "Mark fields complete. Use `mark-fields-complete*` instead, but note the signature change."
+  [state-map {:keys [entity-ident initialized-keys]}]
+  (mark-fields-complete* state-map {:entity-ident entity-ident :target-keys initialized-keys}))
 
 (defn- all-keys [m]
   (reduce-kv
@@ -746,11 +771,12 @@
         id               (second form-ident)
         initial-state    (merge (default-state FormClass id) form-overrides)
         entity-to-merge  (fs/add-form-config FormClass initial-state)
-        initialized-keys (all-keys initial-state)]
+        initialized-keys (all-keys initial-state)
+        optional-keys    (optional-fields FormClass)]
     (-> uism-env
       (uism/apply-action merge/merge-component FormClass entity-to-merge)
-      (uism/apply-action mark-filled-fields-complete* {:entity-ident     form-ident
-                                                       :initialized-keys initialized-keys})
+      (uism/apply-action mark-fields-complete* {:entity-ident     form-ident
+                                                :target-keys (set/union initialized-keys optional-keys)})
       (cond-> routeable? (route-target-ready form-ident))
       (uism/activate :state/editing))))
 
