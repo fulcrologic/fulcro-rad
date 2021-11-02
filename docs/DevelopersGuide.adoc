@@ -65,20 +65,14 @@ TODO:
 
 * :sorted-set -> :sorted-set/valid-values
 * Form validator is always used from MASTER form
-* Form validation messages use merge of MASTER overrides FORM overrides ATTRIBUTE
-* Importance of defaults on attributes, which can be values or fns. Mark complete behavior.
+* Form validation messages: MASTER overrides FORM overrides ATTRIBUTE
+* Importance of defaults on attributes, which can be values or fns.
+* Mark complete behavior.
 * ::form/query-inclusion
 * ::form/sort-children
 * :semantic-ui/add-position
 
 = Introduction
-
-WARNING: Fulcro RAD is in early stages of development. The documented features are somewhat stable
-and should not change much over time; however, until RAD reaches a formal release (beyond an alpha)
-we are not committed to maintaining the APIs with backward compatibility since that would slow our initial
-development and could lock us into design decisions that have not been fully vetted. That said, the
-overall central goals are well-known, and this should prevent it from being terribly difficult
-to port an existing RAD app forward to a new version.
 
 Please let someone know on the Fulcro slack channel if this document is out of date with the live implementation
 in the RAD Demo, or even better: send a PR to fix it.
@@ -86,7 +80,7 @@ in the RAD Demo, or even better: send a PR to fix it.
 This book covers Rapid Application Development (RAD) tools for Fulcro.  The RAD system is intended to be augmented with
 any number of plugins that can handle anything from back-end database management to front-end UI automation.
 
-When reading the source code of this book we will use a number of namespace aliases. For convenience we list the
+When reading the source code of this book we will use a number of namespace aliases. We list the
 aliases we most commonly use here for easy reference:
 
 [source]
@@ -101,11 +95,15 @@ aliases we most commonly use here for easy reference:
        :cljs [com.fulcrologic.fulcro.dom :as dom :refer [div label input]])
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
     [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form :as form :refer [defsc-form]]
+    [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.routing :as rr]
     [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.report :as report :refer [defsc-report]]
+    [com.fulcrologic.rad.report-options :as ro]
     [com.fulcrologic.rad.type-support.decimal :as math]
     [com.fulcrologic.rad.type-support.date-time :as datetime]))
 -----
@@ -117,14 +115,13 @@ The core system has the following general ideals:
 application code.
 ** EQL is more ideally suited to this task than GraphQL, as the latter's stricter schema (which limits dynamically
 shaping the query to better fit client needs), paltry primitive data types (EQL uses EDN, which is trivially extensible
-to keep binary types in tact across platforms), and class-based model make GraphQL much less flexible as needs emerge in a data model over time.
+to keep binary types in tact across platforms), and class-based model make GraphQL much less flexible as needs
+emerge in a data model over time.
 * Everything is optional.  Applications written using RAD should be able to choose which aspects are useful, and easily
 escape from aspects if they don't fit their needs.
 * Reasonable defaults and utilities for common needs.
 * UI Platform independent: RAD is intended to be usable for development in web and native environments. The majority of
 the namespaces are not hard-linked to a rendering/UI technology.
-** A Default UI plugin is included that targets web development with Semantic UI CSS, but it is trivial to build your
-own UI plugin.
 
 The common features that are intended to be well-supported in early versions of the library include:
 
@@ -132,7 +129,6 @@ The common features that are intended to be well-supported in early versions of 
 * Reasonable defaults for CRUD interfaces (form generation) to arbitrary graphs of that data model, including to-one
 and to-many relations.
 * Reasonable defaults for common reporting needs, especially when tabular.
-* An opt-in extensible authentication mechanism (not yet fleshed out).
 
 == Core Elements
 
@@ -141,25 +137,25 @@ RAD defines a few central component types, with the following generalized meanin
 * Forms: A form is a (potentially recursive) UI element that loads data from any number of sources, keeps track
 of changes to that data over time (including validating it), and allows the user to save/undo their work as a unit. Note
 that a form *need not* use traditional inputs. The main purpose of a form is to load/manage a cluster of persistent data
-over a fixed time period (typically while on screen).
+fields over a fixed time period (typically while on screen).
 
 * Forms:
-** Obtain data from source(s) for the primary purpose of editing that data.
+** Obtain (or create) data from source(s) for the primary purpose of editing that data.
 ** The primary actions in a form are to save/discard changes as a unit.
 ** Forms can also be used in read-only mode as a way to allow viewing of that data when editing is not allowed.
 
 * Reports
-** Obtain data from source(s) which is *often derived or read-only* (may include aggregations, inferences, etc.).
+** Obtain data from source(s) which is *often derived or read-only* (may include aggregations, inferences, etc.)
 ** Display that data in a manner that is convenient to the viewer for some particular use-case.
 ** Interactions commonly include specifying input parameters, filters, and possibly the ability to manage large result
 sets via subselection (e.g. pagination)
-** Reports *may* be allow interactions that change the persisted data, but those actions are targeted to subsets of items
+** Reports *may* allow interactions that change the persisted data, but those actions are targeted to subsets of items
 in the report, and therefore prefer to be modelled as targeted units of work (e.g. mutations) instead of "saves" of the
 entire data set.
 
 * Containers
 ** Manage groupings of UI elements.
-** Allow for shared controls. For example a report's links on the left trigger a form to update on the right.
+** Allow for shared controls. For example a report's links on the left might trigger a form to update on the right.
 
 * Routing (and optionally History)
 ** Allows for direct navigation to a place in the application.
@@ -174,44 +170,38 @@ and bookmark pages.
 ** Can be saved into the data model via forms (or report mutations)
 ** Can be previewed or downloaded
 
-As you can see there is some overlap in forms and reports.  A read-only form is very much a report that happens to
-not have derived data, and a report with sufficient "row actions" (i.e. each cell can be clicked to edit)
-can behave very much like a form.
+As you can see there is some overlap in forms and reports.  A read-only form is very much like a report, and a report
+with sufficient "row actions" (i.e. each cell can be clicked to edit) can behave very much like a form.
 
 == Required Dependencies
 
 See the README files on the various libraries and plugins you use for the correct set of dependencies. The
-core library supplies CLJC code that requires at least:
+current version of the demo project will have an up-to-date list. The most complex dependency is on js-joda for
+date/time consistency. The latest versions of RAD do *not* require a js-joda locale, but versions prior to 1.0.28 did.
 
-[source, json]
-----
-{
-  "dependencies": {
-    "big.js": "5.2.2",
-    "js-joda": "1.11.0",
-    "js-joda-timezone": "2.1.1",
-    "@js-joda/locale_en-us": "2.0.1",
-    "react": "^16.12.0"
-  }
-}
-----
+If you use the isomorphic math support you will also need `big.js`. If you do not use big decimals, then you can
+safely ignore that ns and dependency.
 
-If you target the web, then you'll also need `react-dom` and any other UI libraries it might use, etc.
+Of course if you target the web then you'll also need things like `react`, `react-dom` and any other UI libraries
+it might use, etc.
 
 == Attribute-Centric
 
-Fulcro encourages the use of a graph-based data model that is agnostic to the underlying representation of your data.
+Fulcro encourages the use of a graph-based data model that is _agnostic_ to the underlying representation of your data.
 This turns out to be a quite powerful abstraction, as it frees you from the general limitations and restrictions of a
 rigid class/table-based schema while still giving you adequate structure for your data model.
 
 The central artifact that you write when building with RAD is an *attribute*, which is an RDF-style concept where you
-define everything of interest about a particular fact in the world in a common map.  The only two required things that
-you must say about an attribute are a distinct name and a distinct type.  The *name* must be a
-fully-qualified keyword.  The namespace should be distinct enough to co-exist in the data realm of your application
+define everything of interest about a particular fact in the world in a simple map.  The only two required things that
+you must say about an attribute are its distinct name and type.  The *name* must be a fully-qualified keyword.
+
+The namespace should be distinct enough to co-exist in the data realm of your application
 (i.e. if you are working on the internet level you should consider using domain-style naming).
-The *type* must be a data type that is supported by your database back-end.  The type system of RAD is extensible, and
+The *type* is meant to be an open concept, but usually you will want to make sure that it is supported by your database
+back-end and possibly your rendering plugin.
+The type system of RAD is extensible, and
 you must refer to the documentation of your selected database adapter and rendering layer to find out if the data type
-is already supported.  It is generally easy to extend the data type support of RAD.
+is already supported.  It is generally easy to extend the data type support of RAD at extension points in these plugins.
 
 A minimal attribute will look something like this:
 
