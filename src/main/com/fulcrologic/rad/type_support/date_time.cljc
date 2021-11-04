@@ -148,8 +148,9 @@
 (>defn html-date-string->local-date
   "Convert a standard HTML5 date input string to a local date"
   [s]
-  [string? => date?]
-  (ld/parse s))
+  [string? => (? date?)]
+  (when-not (= "" s)
+    (ld/parse s)))
 
 (>defn local-date->html-date-string
   "Convert a standard HTML5 date input string to a local date"
@@ -240,13 +241,14 @@
    [string? => inst?]
    (html-datetime-string->inst *current-zone-name* date-time-string))
   ([zone-name date-time-string]
-   [(? ::zone-name) string? => inst?]
+   [(? ::zone-name) string? => (? inst?)]
    (try
-     (let [z   (get-zone-id zone-name)
-           dt  (ldt/parse date-time-string)
-           zdt (ldt/at-zone dt z)
-           i   (zdt/to-instant zdt)]
-       (new-date (instant/to-epoch-milli i)))
+     (when-not (= "" date-time-string)
+       (let [z (get-zone-id zone-name)
+             dt (ldt/parse date-time-string)
+             zdt (ldt/at-zone dt z)
+             i (zdt/to-instant zdt)]
+         (new-date (instant/to-epoch-milli i))))
      (catch #?(:cljs :default :clj Exception) e
        nil))))
 
@@ -332,10 +334,11 @@
   "Convert an HTML date input string to an inst at the given local time, adjusted to the correct *current-timezone*. Returns
    `now` if the string isn't a proper ISO string."
   [html-date local-time]
-  [(? string?) ::local-time => inst?]
-  (let [date      (or (ld/parse html-date) (ld/now))
-        date-time (ld/at-time date local-time)]
-    (local-datetime->inst date-time)))
+  [(? string?) ::local-time => (? inst?)]
+  (when-not (= "" html-date)
+    (let [date      (or (ld/parse html-date) (ld/now))
+          date-time (ld/at-time date local-time)]
+      (local-datetime->inst date-time))))
 
 (>defn zoned-date-time->inst
   "Convert a zoned-date-time back to a low-level inst?"
