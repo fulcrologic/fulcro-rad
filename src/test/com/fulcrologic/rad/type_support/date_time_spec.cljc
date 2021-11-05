@@ -52,7 +52,10 @@
     "Converts an ISO string into a LocalDate"
     (dt/html-date-string->local-date "2019-03-01") => (ld/of 2019 3 1)
     "Can convert LocalDate to an HTML input string"
-    (dt/local-date->html-date-string (ld/of 2019 3 1)) => "2019-03-01"))
+    (dt/local-date->html-date-string (ld/of 2019 3 1)) => "2019-03-01"
+    "Empty string and nil HTML input string return nil LocalDate"
+    (dt/html-date-string->local-date "") => nil
+    (dt/html-date-string->local-date nil) => nil))
 
 (specification "local-datetime string conversion"
   (let [la-1130 (dt/local-datetime->inst "America/Los_Angeles" 4 1 2019 11 30)]
@@ -63,8 +66,11 @@
       (dt/html-datetime-string->inst "2019-04-01T11:30") => la-1130
       "Can convert an instant into a localized time string"
       (dt/inst->html-datetime-string "America/Los_Angeles" la-1130) => "2019-04-01T11:30:00"
-      "Converts an ISO string into a LocalDate"
-      (dt/html-datetime-string->inst "America/Los_Angeles" "2019-04-01T11:30") => la-1130)))
+      "Converts an ISO string into an instant"
+      (dt/html-datetime-string->inst "America/Los_Angeles" "2019-04-01T11:30") => la-1130
+      "Empty string and nil HTML input string return nil instant"
+      (dt/html-datetime-string->inst "") => nil
+      (dt/html-datetime-string->inst nil) => nil)))
 
 (specification "inst->local-datetime"
   (let [tm          (datetime/new-date (instant/to-epoch-milli (cljc.java-time.instant/parse "2019-03-05T12:00:00Z")))
@@ -137,7 +143,10 @@
       (datetime/set-timezone! "America/Los_Angeles")
       (assertions
         "LA"
-        (datetime/html-date->inst dt tm) => #inst "2020-03-01T14:00:00Z"))))
+        (datetime/html-date->inst dt tm) => #inst "2020-03-01T14:00:00Z")))
+  "Empty string and nil HTML input string return nil instant"
+  (dt/html-date->inst "" (lt/now)) => nil
+  (dt/html-date->inst nil (lt/now)) => nil)
 
 (specification "inst->zoned-date-time"
   (let [expected (zdt/of (ldt/of (ld/of 2020 3 1) (lt/of 6 0)) (datetime/get-zone-id "America/Los_Angeles"))]
