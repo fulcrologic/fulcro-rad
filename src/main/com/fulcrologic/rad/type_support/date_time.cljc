@@ -12,6 +12,7 @@
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
+    [clojure.string :as str]
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.locale :as locale]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
@@ -148,8 +149,9 @@
 (>defn html-date-string->local-date
   "Convert a standard HTML5 date input string to a local date"
   [s]
-  [string? => date?]
-  (ld/parse s))
+  [(? string?) => (? date?)]
+  (when-not (str/blank? s)
+    (ld/parse s)))
 
 (>defn local-date->html-date-string
   "Convert a standard HTML5 date input string to a local date"
@@ -237,16 +239,17 @@
 
 (>defn html-datetime-string->inst
   ([date-time-string]
-   [string? => inst?]
+   [(? string?) => (? inst?)]
    (html-datetime-string->inst *current-zone-name* date-time-string))
   ([zone-name date-time-string]
-   [(? ::zone-name) string? => inst?]
+   [(? ::zone-name) (? string?) => (? inst?)]
    (try
-     (let [z   (get-zone-id zone-name)
-           dt  (ldt/parse date-time-string)
-           zdt (ldt/at-zone dt z)
-           i   (zdt/to-instant zdt)]
-       (new-date (instant/to-epoch-milli i)))
+     (when-not (str/blank? date-time-string)
+       (let [z (get-zone-id zone-name)
+             dt (ldt/parse date-time-string)
+             zdt (ldt/at-zone dt z)
+             i (zdt/to-instant zdt)]
+         (new-date (instant/to-epoch-milli i))))
      (catch #?(:cljs :default :clj Exception) e
        nil))))
 
@@ -329,13 +332,13 @@
     (tformat "yyyy-MM-dd" (now))))
 
 (>defn html-date->inst
-  "Convert an HTML date input string to an inst at the given local time, adjusted to the correct *current-timezone*. Returns
-   `now` if the string isn't a proper ISO string."
+  "Convert an HTML date input string to an inst at the given local time, adjusted to the correct *current-timezone*."
   [html-date local-time]
-  [(? string?) ::local-time => inst?]
-  (let [date      (or (ld/parse html-date) (ld/now))
-        date-time (ld/at-time date local-time)]
-    (local-datetime->inst date-time)))
+  [(? string?) ::local-time => (? inst?)]
+  (when-not (str/blank? html-date)
+    (let [date      (or (ld/parse html-date) (ld/now))
+          date-time (ld/at-time date local-time)]
+      (local-datetime->inst date-time))))
 
 (>defn zoned-date-time->inst
   "Convert a zoned-date-time back to a low-level inst?"
