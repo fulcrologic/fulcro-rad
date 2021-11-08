@@ -1058,12 +1058,13 @@
                                 target-path          (conj (comp/get-ident parent) parent-relation)
                                 new-child            (default-state child-class (tempid/tempid))
                                 child-ident          (comp/get-ident child-class new-child)
+                                optional-keys        (optional-fields child-class)
                                 mark-fields-complete (fn [state-map]
                                                        (reduce
                                                          (fn [s k]
                                                            (fs/mark-complete* s child-ident k))
                                                          state-map
-                                                         (keys new-child)))]
+                                                         (concat optional-keys (keys new-child))))]
                             (-> env
                               (uism/apply-action
                                 (fn [s]
