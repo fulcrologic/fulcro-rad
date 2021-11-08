@@ -118,6 +118,12 @@
   [this]
   (some-> this comp/get-computed ::parent-relation))
 
+(defn form-key->attribute
+  "Get the RAD attribute definition for the given attribute key, given a FormClass that has that attribute
+   as a field. Returns a RAD attribute, or nil if that attribute isn't a form field on the form."
+  [FormClass attribute-key]
+  (some-> FormClass comp/component-options ::key->attribute attribute-key))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -223,7 +229,6 @@
 
    NOTE: This function will automatically extract the master form from the computed props of form-instance in cases
    where you are in the context of a sub-form."
-  ;; TASK: Document how to manually and correctly render subforms
   ([form-instance]
    (let [props  (comp/props form-instance)
          cprops (comp/get-computed props)]
@@ -1055,6 +1060,8 @@
         :event/add-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                           (let [{::keys [order parent-relation parent child-class]} event-data
+                                relation-attr        (form-key->attribute parent parent-relation)
+                                many?                (attr/to-many? relation-attr)
                                 target-path          (conj (comp/get-ident parent) parent-relation)
                                 new-child            (default-state child-class (tempid/tempid))
                                 child-ident          (comp/get-ident child-class new-child)
@@ -1069,19 +1076,26 @@
                               (uism/apply-action
                                 (fn [s]
                                   (-> s
-                                    (merge/merge-component child-class new-child (or order :append) target-path)
+                                    (merge/merge-component child-class new-child (if many?
+                                                                                   (or order :append)
+                                                                                   :replace) target-path)
                                     (fs/add-form-config* child-class child-ident)
                                     (mark-fields-complete))))
                               (apply-derived-calculations))))}
 
         :event/delete-row
         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                          (let [{::keys [form-instance parent parent-relation]} event-data
-                                child-ident (comp/get-ident form-instance)
-                                path        (and parent (conj (comp/get-ident parent) parent-relation))]
+                          (let [{::keys [form-instance child-ident parent parent-relation]} event-data
+                                relation-attr (form-key->attribute parent parent-relation)
+                                many?         (attr/to-many? relation-attr)
+                                child-ident   (or child-ident (and form-instance (comp/get-ident form-instance)))
+                                parent-ident  (comp/get-ident parent)
+                                path          (conj parent-ident parent-relation)]
                             (when path
                               (-> env
-                                (uism/apply-action fns/remove-ident child-ident path)
+                                (cond->
+                                  many? (uism/apply-action fns/remove-ident child-ident path)
+                                  (not many?) (uism/apply-action update-in parent-ident dissoc parent-relation))
                                 (apply-derived-calculations)))))}
 
         :event/save
@@ -1167,17 +1181,30 @@
 
 (defn delete-child!
   "Delete the current form instance from the parent relation of its containing form. You may pass either a
-   rendering env (if you've constructed one via `rendering-env` in the current form) or `this`.
+   rendering env (if you've constructed one via `rendering-env` in the current form) or `this` OF THE
+   ITEM THAT IS TO BE DELETED.
 
-   Only use this from within a nested form that is actively being edited. See
-   also `delete!` for deleting the top-level (entire) form/entity.
+   If you want to use this FROM the parent, then you have to pass the parent-instance, parent-relation,
+   and child ident to remove.
+
+   NOTE: This removes the child from the form. You are responsible for augmenting save middleware to
+   actually completely remove the child from the database since there is no way from the form or base
+   model to know if removing a relationship to the child should also remove the child itself.
+
+   See also `delete!` for deleting the top-level (entire) form/entity.
    "
-  [this-or-rendering-env]
-  (let [{::keys [master-form] :as env} (if (comp/component-instance? this-or-rendering-env)
-                                         (rendering-env this-or-rendering-env)
-                                         this-or-rendering-env)
-        asm-id (comp/get-ident master-form)]
-    (uism/trigger! master-form asm-id :event/delete-row env)))
+  ([this-or-rendering-env]
+   (let [{::keys [master-form] :as env} (if (comp/component-instance? this-or-rendering-env)
+                                          (rendering-env this-or-rendering-env)
+                                          this-or-rendering-env)
+         asm-id (comp/get-ident master-form)]
+     (uism/trigger! master-form asm-id :event/delete-row env)))
+  ([parent-instance relation-key child-ident]
+   (let [env (assoc (rendering-env parent-instance)
+               ::parent parent-instance
+               ::parent-relation relation-key
+               ::child-ident child-ident)]
+     (delete-child! env))))
 
 (defn read-only?
   "Returns true if the given attribute is meant to show up as read only on the given form instance. Attributes
