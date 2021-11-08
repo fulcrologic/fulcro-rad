@@ -487,3 +487,10 @@
   algorithm thinks the cache should be expired.
   "
   :com.fulcrologic.rad.report/load-cache-expired?)
+
+(def on-select-row
+  "A `(fn [report-instance row-props]) that is called when a user selects a report row. Support for
+   this option is dependent on the rendering plugin.
+
+   See also `form-links`, `links`, `row-actions`, and `column-formatters`."
+  :com.fulcrologic.rad.report/on-select-row)

@@ -18,6 +18,7 @@
     [com.fulcrologic.rad.control :as control]
     [com.fulcrologic.rad.errors :refer [required!]]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.application :as rapp]
     [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
     [com.fulcrologic.rad.type-support.integer :as int]
@@ -40,7 +41,7 @@
 (def view-action "view")
 (def create-action "create")
 (def edit-action "edit")
-(declare form-machine valid? invalid? cancel! undo-all! save!)
+(declare form-machine valid? invalid? cancel! undo-all! save! render-field rendering-env)
 
 (def standard-action-buttons
   "The standard ::form/action-buttons button layout. Requires you include stardard-controls in your ::control/controls key."
@@ -94,6 +95,29 @@
   (keyword "ui" (str (namespace qualified-key) "-"
                   (name qualified-key)
                   "-picker")))
+
+(defn master-form
+  "Return the master form for the given component instance."
+  [component]
+  (or (some-> component comp/get-computed ::master-form) component))
+
+(defn master-form?
+  "Returns true if the given react element `form-instance` is the master form in the supplied rendering env. You can
+   also supply `this` if you have not already created a form rendering env, but that will be less efficient if you
+   need the rendering env in other places."
+  ([this]
+   (let [env (rendering-env this)]
+     (master-form? env this)))
+  ([rendering-env form-instance]
+   (let [master-form (::master-form rendering-env)]
+     (= form-instance master-form))))
+
+(defn parent-relation
+  "Returns the keyword that was used in the join of the parent form when querying for the data of the current
+   `form-instance`. Returns nil if there is no parent relation."
+  [this]
+  (some-> this comp/get-computed ::parent-relation))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -127,13 +151,17 @@
    fields in nested forms. This renderer can determine layout of the fields themselves."
   [form-env] (render-fn form-env :form-body-container))
 
-(declare render-field)
-
 (defn ref-container-renderer
   "Given the current rendering environment and an attribute: Returns the renderer that wraps and lays out
    elements of refs. This function interprets the ::form/subforms settings for referenced objects that
-   will render as sub-forms, and looks for ::form/layout-style first in the subform, and next on the
-   component options of the ::form/ui class."
+   will render as sub-forms, and looks for ::form/layout-style first in the subform settings, and next on the
+   component options of the ::form/ui class itself:
+
+   ```
+   fo/subforms {ref-field-key {fo/layout-style some-style ; optional, choose/override style
+                               fo/subform MyForm}
+   ```
+   "
   [{::keys [form-instance] :as form-env} {::keys      [field-style]
                                           ::attr/keys [qualified-key] :as attr}]
   (let [{::keys [subforms field-styles] :as options} (comp/component-options form-instance)
@@ -151,11 +179,6 @@
             render-fn    (some-> runtime-atom deref ::rad/controls ::element->style->layout
                            (get-in [element layout-style]))]
         render-fn))))
-
-(defn master-form
-  "Return the master form for the given component instance."
-  [component]
-  (or (some-> component comp/get-computed ::master-form) component))
 
 (defn attr->renderer
   "Given a form rendering environment and an attribute: returns the renderer that can render the given attribute.
@@ -200,6 +223,7 @@
 
    NOTE: This function will automatically extract the master form from the computed props of form-instance in cases
    where you are in the context of a sub-form."
+  ;; TASK: Document how to manually and correctly render subforms
   ([form-instance]
    (let [props  (comp/props form-instance)
          cprops (comp/get-computed props)]
@@ -216,11 +240,25 @@
         ::props          props
         ::computed-props cprops}))))
 
-(defn master-form?
-  "Returns true if the given react element `form-instance` is the master form in the supplied rendering env."
-  [rendering-env form-instance]
-  (let [master-form (::master-form rendering-env)]
-    (= form-instance master-form)))
+(defn render-form-fields
+  "Render JUST the form fields (and subforms). This will skip rendering the header/controls on the top-level form, and
+   will skip the form container on subforms.
+
+   If you use this on the top-level form then you will need to provide your own rendering of the controls for
+   navigation, save, undo, etc.  You can use the support functions in this
+   namespace (e.g. `save!`, `undo-all!`, `cancel!`) to implement the behavior of those controls.
+
+   This function bypasses the body container for the form elements, so you may need to do additional work to wrap
+   them for appropriate rendering (e.g. in the semantic-ui plugin, you'll need a div with the `form` class on it).
+   "
+  [form-instance props]
+  (when-not (comp/component? form-instance)
+    (throw (ex-info "Invalid form instance." {:form-instance form-instance})))
+  (let [env    (rendering-env form-instance props)
+        render (form-layout-renderer env)]
+    (if render
+      (render env)
+      nil)))
 
 (defn render-layout
   "Render the complete layout of a form. This is the default body of normal form classes. It will call a render factory
@@ -775,8 +813,8 @@
         optional-keys    (optional-fields FormClass)]
     (-> uism-env
       (uism/apply-action merge/merge-component FormClass entity-to-merge)
-      (uism/apply-action mark-fields-complete* {:entity-ident     form-ident
-                                                :target-keys (set/union initialized-keys optional-keys)})
+      (uism/apply-action mark-fields-complete* {:entity-ident form-ident
+                                                :target-keys  (set/union initialized-keys optional-keys)})
       (cond-> routeable? (route-target-ready form-ident))
       (uism/activate :state/editing))))
 
@@ -1092,7 +1130,14 @@
   (uism/trigger! this (comp/get-ident this) :event/cancel {}))
 
 (defn add-child!
-  "Add a child. You must pass a form rendering environment that includes additional keys:
+  "Add a child.
+
+  * form-instance - The form that has the relation to the children. E.g. `this` of a `Person`.
+  * parent-relation - The keyword of the join to the children. E.g. `:person/addresses`
+  * ChildForm - The form UI component that represents the child form.
+  * options - Additional options. Currently only supports `::form/order`, which defaults to `:prepend`.
+
+  If you pass just an `env`, then you must manually augment it with:
 
   ```
   (form/add-child! (assoc env
@@ -1104,20 +1149,33 @@
 
   See renderers for usage examples.
   "
-  [{::keys [master-form] :as env}]
-  (let [asm-id (comp/get-ident master-form)]
-    (uism/trigger! master-form asm-id :event/add-row env)))
+  ([{::keys [master-form] :as env}]
+   (let [asm-id (comp/get-ident master-form)]
+     (uism/trigger! master-form asm-id :event/add-row env)))
+  ([form-instance parent-relation ChildForm]
+   (add-child! form-instance parent-relation ChildForm {}))
+  ([form-instance parent-relation ChildForm options]
+   (let [env (rendering-env form-instance)]
+     (add-child! (merge
+                   env
+                   {::order :prepend}
+                   options
+                   {::parent-relation parent-relation
+                    ::parent          form-instance
+                    ::child-class     ChildForm})))))
 
 (defn delete-child!
-  "Delete a child of a master form. Only use this on nested forms that are actively being edited. See
-   also `delete!`. The rendering env that you pass to this function must be the rendering env passed *to* the
-   child that is to be deleted.
+  "Delete the current form instance from the parent relation of its containing form. You may pass either a
+   rendering env (if you've constructed one via `rendering-env` in the current form) or `this`.
 
-   If you are rendering the child yourself via the body of a subform UI (which is a defsc-form), then
-   you must set the `env` at `::form/form-instance` to `this`.
+   Only use this from within a nested form that is actively being edited. See
+   also `delete!` for deleting the top-level (entire) form/entity.
    "
-  [{::keys [master-form] :as env}]
-  (let [asm-id (comp/get-ident master-form)]
+  [this-or-rendering-env]
+  (let [{::keys [master-form] :as env} (if (comp/component-instance? this-or-rendering-env)
+                                         (rendering-env this-or-rendering-env)
+                                         this-or-rendering-env)
+        asm-id (comp/get-ident master-form)]
     (uism/trigger! master-form asm-id :event/delete-row env)))
 
 (defn read-only?
@@ -1378,6 +1436,124 @@
            database adapter."
           [save-form delete-entity save-as-form]))
 
-(comment
-  (opts/resolve-key {} `com.fulcrologic.rad.form-options/field-options))
+(defn invalid-attribute-value?
+  "Returns true if the given `attribute` is invalid in the given form `env` context. This is meant to be used in UI
+  functions, not resolvers/mutations. If there is a validator defined on the form it completely overrides all
+  attribute validators."
+  [{::keys [form-instance master-form] :as env} attribute]
+  (let [k              (::attr/qualified-key attribute)
+        props          (comp/props form-instance)
+        value          (and attribute (get props k))
+        checked?       (fs/checked? props k)
+        required?      (get attribute ao/required? false)
+        form-validator (comp/component-options master-form ::validator)
+        invalid?       (or
+                         (and checked? required? (or (nil? value) (and (string? value) (empty? value))))
+                         (and checked? (not form-validator) (not (attr/valid-value? attribute value props k)))
+                         (and form-validator (= :invalid (form-validator props k))))]
+    invalid?))
 
+(defn validation-error-message
+  "Get the string that should be shown for the error message on a given attribute in the given form context."
+  [{::keys [form-instance master-form] :as env} {:keys [::validation-message ::attr/qualified-key] :as attribute}]
+  (let [props          (comp/props form-instance)
+        value          (and attribute (get props qualified-key))
+        master-message (comp/component-options master-form ::validation-messages qualified-key)
+        local-message  (comp/component-options form-instance ::validation-messages qualified-key)
+        message        (or
+                         (?! master-message props qualified-key)
+                         (?! local-message props qualified-key)
+                         (?! validation-message value)
+                         (tr "Invalid value"))]
+    message))
+
+(defn field-context
+  "Get the field context for a given form field. `env` is the rendering env (see `rendering-env`) and attribute
+   is the full RAD attribute for the field in question.
+
+   Returns live details about the given field of the form as a map containing:
+
+   :value - The current field's value
+   :invalid? - True if the field is marked complete AND is invalid. See `form-state` validation.
+   :validation-message - The string that has been configured (or dynamically generated) to be the validation message. Only
+                         available when `:invalid?` is true.
+   :field-label - The desired label on the field
+   :visible? - Indicates when the field should be shown/hidden
+   :read-only? - Indicates when the field should not be editable
+   :field-style-config - Additional options that were configured for the field as field-style-config.
+   "
+  [{::keys [form-instance] :as env} {::attr/keys [qualified-key] :as attribute}]
+  (let [props              (comp/props form-instance)
+        value              (or (computed-value env attribute)
+                             (and attribute (get props qualified-key)))
+        addl-props         (?! (field-style-config env attribute :input/props) env)
+        invalid?           (invalid-attribute-value? env attribute)
+        validation-message (when invalid? (validation-error-message env attribute))
+        field-label        (field-label env attribute)
+        visible?           (field-visible? form-instance attribute)
+        read-only?         (read-only? form-instance attribute)]
+    {:value              value
+     :invalid?           invalid?
+     :validation-message validation-message
+     :field-label        field-label
+     :read-only?         read-only?
+     :visible?           visible?
+     :field-style-config addl-props}))
+
+(defmacro with-field-context
+  "MACRO: Efficiently extracts the destructured values of `field-context` without actually issuing a
+   function call. Can be used to improve overall rendering performance of form fields.
+
+   Used just like a single `let` for form-context:
+
+   ```
+   (with-field-context [{:keys [value field-label]} (field-context env attribute)
+                        additional-let-binding 42
+                        ...]
+     (dom/div :.field
+       (dom/label field-label)
+       (dom/input {:value value})))
+   ```
+
+   The FIRST binding MUST be for form context. The remaining ones are passed through untouched.
+
+   Will only *compute* the elements desired and does not incur the form-context function call, intermediate
+   map creation, or destructing overhead.
+   "
+  [bindings & body]
+  (let [binding-syntax-error  (str "The binding of with-field-context must START with a destructuring map\n"
+                                "and a call to field-context with the env and attribute for the field.\n"
+                                "e.g. `[{:keys [value]} (field-context env attr)]`")
+        e!                    #(throw (ex-info % {:tag :cljs/analysis-error}))
+        all-bindings          (partition 2 bindings)
+        form-context-binding  (first all-bindings)
+        pass-through-bindings (drop 2 bindings)]
+    (when-not (zero? (mod (count bindings) 2)) (e! "You must specify an even number of binding forms!"))
+    (when-not (vector? bindings) (e! binding-syntax-error))
+    (when-not (map? (first form-context-binding)) (e! binding-syntax-error))
+    (when-not (seq? (second form-context-binding)) (e! binding-syntax-error))
+    (when-not (= 3 (count (second form-context-binding))) (e! binding-syntax-error))
+    (let [desired-keys     (-> form-context-binding (first) :keys set)
+          source           (second form-context-binding)
+          env-sym          (second source)
+          attr-sym         (nth source 2)
+          binding-forms    {'value              `(or (computed-value ~env-sym ~attr-sym)
+                                                   (and ~attr-sym (get (comp/props ~'form-instance) ~'qualified-key)))
+                            'invalid?           `(invalid-attribute-value? ~env-sym ~attr-sym)
+                            'validation-message `(validation-error-message ~env-sym ~attr-sym)
+                            'field-label        `(field-label ~env-sym ~attr-sym)
+                            'visible?           `(field-visible? ~'form-instance ~attr-sym)
+                            'read-only?         `(read-only? ~'form-instance ~attr-sym)
+                            'field-style-config `(?! (field-style-config ~env-sym ~attr-sym :input/props) ~env-sym)}
+          valid-keys       (set (clojure.core/keys binding-forms))
+          invalid-keys     (set/difference desired-keys valid-keys)
+          context-bindings (mapcat (fn [k] [k (get binding-forms k)]) desired-keys)]
+      (when (empty? desired-keys)
+        (e! (str "The destructuring in bindings must be a map with `:keys`.")))
+      (when (seq invalid-keys)
+        (e! (str "The following destructured items will never be present: " invalid-keys)))
+      `(let [{::keys [~'form-instance]} ~env-sym
+             {::attr/keys [~'qualified-key]} ~attr-sym
+             ~@context-bindings
+             ~@pass-through-bindings]
+         ~@body))))
