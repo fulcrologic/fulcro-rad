@@ -70,7 +70,7 @@
         nil))))
 
 (defn control-renderer
-  "Get the report controls renderer for the given report instance."
+  "Get the report controls renderer for the given report instance. Returns a `(fn [this])`."
   [report-instance]
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
         control-style (or (some-> report-instance comp/component-options ::control-style) :default)
@@ -80,6 +80,18 @@
       (do
         (log/error "No layout function found for report control style" control-style)
         nil))))
+
+(defn render-controls
+  "Renders just the control section of the report. See also `control-renderer` if you desire rendering the controls in
+   more than one place in the UI at once (e.g. top/bottom)."
+  [report-instance]
+  ((control-renderer report-instance) report-instance))
+
+(def render-control
+  "[report-instance control-key]
+
+   Render a single control, wrapped by minimal chrome. This is just an alias for control/render-control."
+  control/render-control)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LOGIC
@@ -661,7 +673,7 @@
                :time            (fn [_ value] (dt/tformat "h:mma" value))}
      :enum    {:default (fn [_ value _ column-attribute]
                           (if-let [labels (::attr/enumerated-labels column-attribute)]
-                              (labels value) (str value)))}
+                            (labels value) (str value)))}
      :int     {:default (fn [_ value] (str value))}
      :decimal {:default    (fn [_ value] (math/numeric->str value))
                :currency   (fn [_ value] (math/numeric->str (math/round value 2)))
