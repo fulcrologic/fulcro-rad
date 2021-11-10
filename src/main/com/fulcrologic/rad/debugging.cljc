@@ -17,7 +17,8 @@
     [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.form :as form]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [com.fulcrologic.rad.attributes-options :as ao]))
 
 (defonce ^:private form-info-plugins (atom {}))
 
@@ -100,7 +101,53 @@
 (def ui-form-diff-viewer (comp/computed-factory FormDiffViewer))
 
 (add-form-info-plugin! ::save-delta {:title  "Form Save Delta"
-                                    :render (fn [props cprops] (ui-form-diff-viewer props cprops))})
+                                     :render (fn [props cprops] (ui-form-diff-viewer props cprops))})
+
+(defn- form-attributes
+  "Gets all of the attributes in use by a form and its subforms."
+  [form]
+  (let [base-attributes (comp/component-options form fo/attributes)
+        subforms        (mapv fo/ui (vals (comp/component-options form fo/subforms)))]
+    (into base-attributes
+      (mapcat
+        #(comp/component-options % fo/attributes)
+        subforms))))
+
+(defsc RADAttributeInfo [this props {:keys [form-instance]}]
+  {}
+  (let [all-attributes (form-attributes form-instance)]
+    (table :.ui.small.compact.table {}
+      (thead nil
+        (tr nil
+          (th nil "Key")
+          (th nil "Schema")
+          (th :.center.aligned nil "Type")
+          (th nil "Style")
+          (th nil "Card.")
+          (th nil "Req?")
+          (th nil "Validator")))
+      (tbody nil
+        (for [{::attr/keys [qualified-key required? type valid? schema target style]
+               :as         attr} (sort-by ao/qualified-key all-attributes)
+              :let [required?        (if required? "Y" "N")
+                    type-description (if (= type :ref)
+                                       (str "ref => " target)
+                                       (str (some-> type name)))
+                    card             (if (attr/to-many? attr) "Many" "One")
+                    valid            (if (fn? valid?) "Local")]]
+          (tr {:key (str qualified-key)}
+            (td nil (str qualified-key))
+            (td nil (str (if schema (name schema) "--")))
+            (td :.center.aligned nil type-description)
+            (td nil (str (or style "default")))
+            (td nil card)
+            (td nil required?)
+            (td nil (str valid))))))))
+
+(def ui-rad-attribute-info (comp/computed-factory RADAttributeInfo))
+
+(add-form-info-plugin! ::rad-info {:title  "RAD Attribute Field Info"
+                                   :render (fn [props cprops] (ui-rad-attribute-info props cprops))})
 
 (defsc FormInfo [this form-props {:keys [validator
                                          form-instance
