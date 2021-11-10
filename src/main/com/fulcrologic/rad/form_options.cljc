@@ -286,3 +286,7 @@
   "Override the state machine definition that is used to control this form. Defaults to form/form-machine, which
    you can use as a basis of your replacement (a state machine definition is just a map)."
   :com.fulcrologic.rad.form/machine)
+
+(def debug?
+  "Indicate a desire to show debug information about the form. Requires support from the rendering plugin."
+  :com.fulcrologic.rad.form/debug?)
