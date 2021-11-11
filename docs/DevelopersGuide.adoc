@@ -87,25 +87,26 @@ aliases we most commonly use here for easy reference:
 -----
 (ns some-ns
   (:require
-    [clojure.string :as str]
-    [edn-query-language.core :as eql]
-    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
-    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     #?(:clj  [com.fulcrologic.fulcro.dom-server :as dom :refer [div label input]]
        :cljs [com.fulcrologic.fulcro.dom :as dom :refer [div label input]])
+    [clojure.string :as str]
+    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
+    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr :refer [defrouter]]
-    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
     [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.rad.form :as form :refer [defsc-form]]
     [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
-    [com.fulcrologic.rad.routing :as rr]
-    [com.fulcrologic.rad.routing.history :as history]
+    [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.rad.report :as report :refer [defsc-report]]
     [com.fulcrologic.rad.report-options :as ro]
+    [com.fulcrologic.rad.routing :as rr]
+    [com.fulcrologic.rad.routing.history :as history]
+    [com.fulcrologic.rad.type-support.date-time :as datetime]
     [com.fulcrologic.rad.type-support.decimal :as math]
-    [com.fulcrologic.rad.type-support.date-time :as datetime]))
+    [edn-query-language.core :as eql]))
 -----
 
 The core system has the following general ideals:
@@ -120,8 +121,8 @@ emerge in a data model over time.
 * Everything is optional.  Applications written using RAD should be able to choose which aspects are useful, and easily
 escape from aspects if they don't fit their needs.
 * Reasonable defaults and utilities for common needs.
-* UI Platform independent: RAD is intended to be usable for development in web and native environments. The majority of
-the namespaces are not hard-linked to a rendering/UI technology.
+* UI Platform independent: RAD is intended to be usable for development in web and native environments. The core
+namespaces are not tied to a rendering/UI technology (though React-based is the practical choice).
 
 The common features that are intended to be well-supported in early versions of the library include:
 
@@ -236,8 +237,10 @@ indicate the schema that the attribute should be associated with.
 The standard in RAD is for libraries to define an `*-options` namespace that defines vars for each configurable
 key that they support. This allows these vars to be used instead of raw keywords, leading to much easier development.
 
-For example, the `attributes` namespace defines https://github.com/fulcrologic/fulcro-rad/blob/develop/src/main/com/fulcrologic/rad/attributes_options.cljc[`attributes-options`]. This namespace includes all of the legal keys
-that RAD *itself* defines that can be placed in an attribute's map. The `form` namespace defines https://github.com/fulcrologic/fulcro-rad/blob/develop/src/main/com/fulcrologic/rad/form_options.cljc[`form-options`], etc.
+For example, the `attributes` namespace defines
+https://github.com/fulcrologic/fulcro-rad/blob/develop/src/main/com/fulcrologic/rad/attributes_options.cljc[`attributes-options`].
+This namespace includes all of the legal keys that RAD *itself* defines that can be placed in an attribute's map.
+The `form` namespace defines https://github.com/fulcrologic/fulcro-rad/blob/develop/src/main/com/fulcrologic/rad/form_options.cljc[`form-options`], etc.
 
 This allows you to write an attribute like so:
 
@@ -255,13 +258,12 @@ This allows you to write an attribute like so:
 which helps you ensure that you're using a key that has *not* been mis-typed, and also gives you docstring access
 in your IDE.
 
-Most of the useful documentation in RAD and libraries should generally be concentrated into these options namespace
-to assist in ease of use.
+The documentation on these options is intended to be an important source of information when using RAD.
 
 === Extensibility
 
 Attributes are represented as open maps (you can add your own namespaced key/value pairs).  There are a core set of keys
-that the core library defines for generalized use, but most plugins will use keywords namespaced to their library to
+that the library defines for generalized use, but most plugins will use keywords namespaced to their library to
 extend the configuration stored on attributes.  These keys can define anything, and form the central feature of RAD's
 extensibility.
 
@@ -280,7 +282,7 @@ with this aspect of RAD.
 
 === Resolvers
 
-Resolvers are part of the pathom library.  Resolvers figure out how to get from a context to data that is needed by the
+Resolvers are part of the Pathom library.  Resolvers figure out how to get from a context to data that is needed by the
 client.  Attributes describe the data model, so storage plugins can _usually_ generate resolvers (if your schema conforms
 to something it can understand) and provide a base EQL API for your data model.  All you have to do is hook it into
 your server's middleware.
@@ -365,7 +367,7 @@ the UI bodies of the forms/reports yourself. This still gives you a *lot* of pre
 * Loading/saving/controlling form data
 * Loading/manipulating report data.
 
-In fact, as your application grows it is *our expectation and design* that you almost take over much of detailed code
+In fact, as your application grows it is *our expectation and design* that you take over much of detailed code
 in your application. It is *not* the intention of RAD to do everything in your final production application. The point
 of RAD is to make it possible to rapidly stand up your application, and then gradually take over the parts that
 make sense while not having to worry over a bunch of boilerplate.
@@ -374,18 +376,18 @@ make sense while not having to worry over a bunch of boilerplate.
 
 The recommended setup of attributes is as follows:
 
-* Create a `model` package, such as `com.yourcompany.model`.
+* Create a `model` package, such as `com.example.model`.
+* Use CLJC!  A major point is to reuse this information in the full stack.
 * Organize your attributes around the concepts and entities that use them.
 ** Try *not* to think of attributes as _strictly_ belonging to an *entity* or *table* so much as describing a particular fact. For
 example the attribute `:password/hashed-value` might live on a `File` or `Account` entity. Entity-centric attributes
 certainly exist, but you should not constrain your thinking about them.
-* Place attributes in a namespace that most closely represents the concept/entity for that attribute. For example
-`com.yourcompany.model.account`. Use CLJC!
+* Place attributes in the namespace whose name that matches that attribute's namespace. E.g. `:accout/*` should be
+ in something like `com.example.model.account`.  This ensures you don't accidentally
+model the same attribute twice, which would confuse many of the facilities of RAD.
 * At the end of each file include a `def` for `attributes` and `resolvers`. Each should be a vector containing
 all of the attributes and Pathom resolvers defined in that file.
-** Resolvers should generally be `mutations`.  Use attributes with co-located resolver logic for reads so that
-   you can treat them like normal attributes everywhere.
-* Create a central model namespace that has all attributes. I.e. `com/yourcompany/model.cljc` containing
+* Create a central model namespace that has all attributes. I.e. `com/example/model.cljc` containing
 a `def` for `all-attributes`.
 
 Thus your overall source tree could look like this:
@@ -429,6 +431,11 @@ The first thing you'll typically create will be namespaces like this:
 The namespace makes it easy for you to find the attributes when you want to read all of the details
 about them, and the final `def` make it easy to combine the declared attributes into a single
 collection for use in APIs that need to know them all.
+
+You can also make your own `defattr` macro that side-effects these into a global registry. We prefer
+the explicit combination of attributes because it forces you to require the proper namespaces to make
+the compiler happy, whereas a registry *needs* you to require the namespaces, but the compiler won't complain
+if you clean up requires and accidentally remove a model from your program. It'll just fail at runtime.
 
 == Identity Attributes
 
@@ -624,6 +631,22 @@ bottom of each model namespace, then you can easily define a list of all attribu
 The list of all attributes is required in a number of places in RAD: automatic resolver generation, schema support,
 save-middleware, etc.
 
+It is also quite useful to have a way to quickly look up an attribute by its keyword:
+
+[source]
+-----
+(def key->attribute (attr/attribute-map all-attributes))
+-----
+
+and to have a Form Validator that is based on the attribute definitions that can be used in derived validators
+and directly on forms:
+
+[source]
+-----
+(def default-validator (attr/make-attribute-validator all-attributes))
+-----
+
+
 = Server Setup
 
 A RAD server must have an EQL API endpoint, typically at `/api`. This is standard Fulcro stuff, and you should refer
@@ -683,7 +706,7 @@ There are currently two middlewares that must be created: save and delete.
 === Save Middleware
 
 The save middleware is simply a function that will receive the Pathom mutation `env`, which
-is augmented with `::form/params`.  Usually you will just compose a set of pre-supplied middleware
+is augmented with `::form/params`.  Usually you will at least compose a set of pre-supplied middleware
 like so:
 
 [source]
@@ -702,6 +725,8 @@ like so:
     (r.s.middleware/wrap-rewrite-values)))
 -----
 
+This is also the best place to put things like security and schema validation enforcement for save.
+
 === Delete Middleware
 
 Very similar to save middleware, but is invoked during a request to delete an entity.
@@ -714,6 +739,8 @@ Very similar to save middleware, but is invoked during a request to delete an en
 
 (def middleware (datomic/wrap-datomic-delete))
 -----
+
+Of course you'll also want to add things to this middleware to check security and such.
 
 == Pathom Parser
 
