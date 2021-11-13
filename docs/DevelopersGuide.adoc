@@ -6,15 +6,15 @@
 :source-highlighter: coderay
 :source-language: clojure
 :toc: left
-:toclevels: 2
+:toclevels: 3
 :sectlinks:
 :sectanchors:
 :leveloffset: 1
 :sectnums:
 :imagesdir: /assets/img
 :scriptsdir: js
-:imagesoutdir: assets/img
-:favicon: assets/favicon.ico
+:imagesoutdir: docs/assets/img
+:favicon: docs/assets/favicon.ico
 
 ifdef::env-github[]
 :tip-caption: :bulb:
@@ -60,17 +60,6 @@ endif::[]
 .tall.example { min-height: 800px; }
 </style>
 ++++
-
-TODO:
-
-* :sorted-set -> :sorted-set/valid-values
-* Form validator is always used from MASTER form
-* Form validation messages: MASTER overrides FORM overrides ATTRIBUTE
-* Importance of defaults on attributes, which can be values or fns.
-* Mark complete behavior.
-* ::form/query-inclusion
-* ::form/sort-children
-* :semantic-ui/add-position
 
 = Introduction
 
@@ -1049,7 +1038,7 @@ This simple construct allows an infinite variety of complexity to be added to yo
 
 This is very similar to save middleware, but is invoked during a request to delete an entity.
 
-= UI Rendering
+= Leveraging Rendering Plugins
 
 RAD macros generate Fulcro components. RAD will always include code in these components that helps automate the
 management of state. Forms will manage the client-side load, save, dirty checking, validation, etc. You can simply use
@@ -2719,83 +2708,3 @@ and then set the `::report/layout-style :custom-layout` option on the report.
 
 NOTE: At present you must write the row rendering yourself. The design of the recursive pluggable report rendering
 is still in progress.  You can, of course, place renderers in the global controls map to generalize things.
-
-= Authorization Middleware
-
-WARNING: This element of RAD is still in the design phases.
-
-== Client Authorization Management
-
-WARNING: Not yet implemented.
-
-== Authorization and Validation
-
-There are several places in form support that you may want to do a security or data validation when working with forms.
-
-First, we could consider the three broadest categories by which we might constrain action:
-
-. Read: Which things in the form should be visible to the given user.
-. Write: Which things in the form the user is allowed to change, along with enforcing valid values.
-. Execution (routing): Is the user even allowed to "run" the form (route to it)?
-
-Of course there are always both the client and server contexts for these concerns.  Going to a form in the server
-context is both a top-level and granular read restriction, whereas displaying a form in the client layer is both a UI
-routing and form field visibility/interaction concern.
-
-Ultimately there is an aspect of _granularity_: an entire route might be constrained, or a single property on a form
-(e.g. a password should only be editable by an admin or the proven owner of the account).
-
-All of these aspects of authorization and validation are meant to be declaratively controlled in RAD, but that control
-is meant to be generally extensible.  Therefore authorization and validation middleware can be augmented and installed
-at the following locations in the RAD stack:
-
-* At the Ring middleware layer (standard Ring security).
-* At the UI routing layer.
-* At the global parser layer.
-* At the individual attribute resolver and mutation layer.
-* In the form save pipeline (both at the complete form and field granularity).
-
-Pre-written plugins for forms give you pre-written functionality, but writing your own plugin for any one of these
-layers allows you to customize these aspects as much as you desire.
-
-We won't be covering Ring middleware in this book, since that is well-documented elsewhere.
-
-=== UI Routing Middleware
-
-WARNING: Not yet implemented
-
-When you define a form using `defsc-form` you end up creating a routing target in Fulcro's dynamic routing system.  The
-`:will-enter` handler is automatically supplied for you, and runs the various operations necessary for starting up a
-state machine on the form and completing the route.
-
-RAD's form system has an optional routing middleware system that can be configured to do client-side authorization tasks
-that can prevent (or redirect) routing.  This middleware has access to the state map, the target form. and the target
-route.  Individual forms can override this middleware on a per-component basis with the `::form/routing-middleware` key.
-
-=== Parser-level Validation and Authorization
-
-WARNING: Not yet implemented
-
-You can add middleware to the pathom parser in RAD that analyze the overall query or mutation being processed, and
-modify the outcome in any way.  This is a standard Pathom feature.
-
-=== Resolver and Mutation validation
-
-WARNING: Not yet implemented
-
-Auto-generated resolvers and mutations use ...
-
-Of course when you hand-write a resolver or mutation you can leverage attribute definitions, the `env`, and anything
-else to determine the validity of the operation in question.
-
-=== Form Authorization
-
-WARNING: Not yet implemented
-
-Individual fields are represented by one (or a small group) of attributes.  Those attributes are a great location to
-place things like data specifications, user-facing validation checks, etc.
-
-The form save mechanism in RAD has a standard server-side entry point that splits off an incoming save across any number
-of low-level database adapters.  You can install middleware that sits between these two (the entry point and actual
-save).  Such middleware can redact information, reject invalid requests, verify security, etc.
-
