@@ -267,7 +267,7 @@
    (inst->html-datetime-string *current-zone-name* inst))
   ([zone-name inst]
    [(? ::zone-name) (? inst?) => string?]
-   (inst->html-datetime-string zone-name inst))
+   (inst->html-datetime-string zone-name inst (now)))
   ([zone-name inst default-value]
    [(? ::zone-name) (? inst?) (? inst?) => string?]
    (try
