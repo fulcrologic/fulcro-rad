@@ -47,6 +47,8 @@
 (>def ::hour (s/int-in 0 24))
 (>def ::minute (s/int-in 0 60))
 (>def ::instant (s/with-gen #(instance? Instant %) #(s/gen #{(instant/now)})))
+(>def ::inst-or-instant (s/or :inst inst?
+                              :instant ::instant))
 (>def ::local-time (s/with-gen #(instance? LocalTime %) #(s/gen #{(lt/of 11 23 0)})))
 (>def ::zoned-date-time (s/with-gen #(instance? ZonedDateTime %) #(s/gen #{(zdt/of-instant (instant/now) (zone-id/of "America/Los_Angeles"))})))
 (>def ::local-date-time (s/with-gen #(instance? LocalDateTime %) #(s/gen #{(ldt/of 2010 1 22 11 23 0)})))
@@ -199,43 +201,49 @@
 (>defn inst->local-date
   "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) LocalDate."
   ([inst]
-   [(? (s/or :inst inst?
-         :instant ::instant)) => ::local-date]
+   [(? ::inst-or-instant) => ::local-date]
    (inst->local-date *current-zone-name* inst))
   ([zone-name inst]
-   [(? ::zone-name) (? (s/or :inst inst?
-                         :instant ::instant)) => ::local-date]
-   (let [z   (get-zone-id zone-name)
-         i   (instant/of-epoch-milli (inst-ms (or inst (now))))
-         ldt (ldt/of-instant i z)]
-     (ldt/to-local-date ldt))))
+   [(? ::zone-name) (? ::inst-or-instant) => ::local-date]
+   (inst->local-date zone-name inst (now)))
+  ([zone-name inst default-value]
+   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => ::local-date]
+   (when-let [inst (or inst default-value)]
+     (let [z   (get-zone-id zone-name)
+           i   (instant/of-epoch-milli (inst-ms inst))
+           ldt (ldt/of-instant i z)]
+       (ldt/to-local-date ldt)))))
 
 (>defn inst->local-datetime
   "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) LocalDateTime."
   ([inst]
-   [(? (s/or :inst inst?
-         :instant ::instant)) => ::local-date-time]
+   [(? ::inst-or-instant) => ::local-date-time]
    (inst->local-datetime *current-zone-name* inst))
   ([zone-name inst]
-   [(? ::zone-name) (? (s/or :inst inst?
-                         :instant ::instant)) => ::local-date-time]
-   (let [z   (get-zone-id zone-name)
-         i   (instant/of-epoch-milli (inst-ms (or inst (now))))
-         ldt (ldt/of-instant i z)]
-     ldt)))
+   [(? ::zone-name) (? ::inst-or-instant) => ::local-date-time]
+   (inst->local-datetime zone-name inst (now)))
+  ([zone-name inst default-value]
+   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => ::local-date-time]
+   (when-let [inst (or inst default-value)]
+     (let [z   (get-zone-id zone-name)
+           i   (instant/of-epoch-milli (inst-ms inst))
+           ldt (ldt/of-instant i z)]
+       ldt))))
 
 (>defn inst->zoned-date-time
   "Converts a UTC Instant into the correctly-offset (e.g. America/Los_Angeles) ZonedDateTime."
   ([inst]
-   [(? (s/or :inst inst?
-         :instant ::instant)) => ::zoned-date-time]
+   [(? ::inst-or-instant) => ::zoned-date-time]
    (inst->zoned-date-time *current-zone-name* inst))
   ([zone-name inst]
-   [(? ::zone-name) (? (s/or :inst inst?
-                         :instant ::instant)) => ::zoned-date-time]
-   (let [z (get-zone-id zone-name)
-         i (instant/of-epoch-milli (inst-ms (or inst (now))))]
-     (zdt/of-instant i z))))
+   [(? ::zone-name) (? ::inst-or-instant) => ::zoned-date-time]
+   (inst->zoned-date-time zone-name inst (now)))
+  ([zone-name inst default-value]
+   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => ::zoned-date-time]
+   (when-let [inst (or inst default-value)]
+     (let [z (get-zone-id zone-name)
+           i (instant/of-epoch-milli (inst-ms inst))]
+       (zdt/of-instant i z)))))
 
 (>defn html-datetime-string->inst
   ([date-time-string]
@@ -259,13 +267,16 @@
    (inst->html-datetime-string *current-zone-name* inst))
   ([zone-name inst]
    [(? ::zone-name) (? inst?) => string?]
+   (inst->html-datetime-string zone-name inst))
+  ([zone-name inst default-value]
+   [(? ::zone-name) (? inst?) (? inst?) => string?]
    (try
      (let [z         (get-zone-id (or zone-name "UTC"))
-           ldt       (ldt/of-instant (inst->instant (or inst (now))) z)
+           ldt       (ldt/of-instant (inst->instant (or inst default-value)) z)
            formatter dtf/iso-local-date-time]
        (ldt/format ldt formatter))
      (catch #?(:cljs :default :clj Exception) e
-       nil))))
+       ""))))
 
 #?(:clj
    (defn ^DateTimeFormatter formatter
@@ -325,11 +336,14 @@
 (>defn inst->html-date
   "Convert an inst to an HTML date input string. Assumes *current-timezone*. Always returns a string. Will return
   today's date if inst is nil or otherwise fails to convert."
-  [inst]
-  [(? inst?) => string?]
-  (if inst
-    (tformat "yyyy-MM-dd" inst)
-    (tformat "yyyy-MM-dd" (now))))
+  ([inst]
+   [(? inst?) => string?]
+   (inst->html-date inst (now)))
+  ([inst default-value]
+   [(? inst?) (? inst?) => string?]
+   (if-let [inst (or inst default-value)]
+     (tformat "yyyy-MM-dd" inst)
+     "")))
 
 (>defn html-date->inst
   "Convert an HTML date input string to an inst at the given local time, adjusted to the correct *current-timezone*."
