@@ -1585,3 +1585,42 @@
              ~@context-bindings
              ~@pass-through-bindings]
          ~@body))))
+
+(defn install-field-renderer!
+  "Install a `renderer` for the given attribute `type`, to be known as field `style`.
+
+   See `field-context` for obtaining the data to render, and `input-changed!` and `input-blur!` for
+   communcating model changes."
+  [app type style render]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls
+                                  :com.fulcrologic.rad.form/type->style->control
+                                  type
+                                  style] render)))
+
+(defn install-form-container-renderer!
+  "Install a renderer for a given `style` of form container."
+  [app style render]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls
+                                  :com.fulcrologic.rad.form/element->style->layout
+                                  :form-container
+                                  style] render)))
+
+(defn install-form-body-renderer!
+  "Install a renderer for a given `style` of form body."
+  [app style render]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls
+                                  :com.fulcrologic.rad.form/element->style->layout
+                                  :form-body-container
+                                  style] render)))
+
+(defn install-form-ref-renderer!
+  "Install a renderer for a given `style` of subform reference container."
+  [app style render]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls
+                                  :com.fulcrologic.rad.form/element->style->layout
+                                  :ref-container
+                                  style] render)))

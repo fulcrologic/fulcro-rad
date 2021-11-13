@@ -1393,17 +1393,20 @@ until everything it is considered "complete". RAD will automatically mark things
 interact with form fields (often on blur), but creation needs you to indicate what (pre-filled) fields
 should be considered "already complete".
 
-TODO: Needs review/documentation.
+The rules the built-in RAD form state machine uses:
 
-- The ID must be a Fulcro tempid, but usually you let this auto-generate.
-- You can indicate which items should be pre-marked as complete.
-- Nested support: to-one, to-many, auto-create, manual create, etc.
+* Any existing (loaded) form is automatically fully-marked as complete.
+* New top-level forms pre-mark fields complete if:
+** The field is optional.
+** The field has a default value.
+** The field is passed in (via route parameters :initial-state)
+** These rules are applied recursively by the top-level form.
 
-The attributes of interest for setting defaults when things are created are:
+The attributes options for setting defaults when things are created are:
 
 `::attr/default-value`:: Can be placed on an attribute to indicate a default value for this attribute.
 
-`::form/default`:: A map from attribute name (as a keyword) to a default value. Subform data can be placed in this
+`::form/default-values`:: A map from attribute name (as a keyword) to a default value. Subform data can be placed in this
 tree.
 
 === Relationship Lifecycle
@@ -1428,17 +1431,15 @@ The following sections cover various relational use-cases that RAD forms support
 
 === To-One Relation, Owned by Reference
 
-WARNING: This use-case is not yet implemented. More work needs to be done on initializing the case where the target does
-not yet exist, but the owner does.
-
 In this case the referenced item springs into existence when the parent creates it, and drops from existence when
 it is no longer referenced. Database adapters model this in various ways, but the concept at the form layer is
 simple: If you're creating it then you'll be creating a new thing, an edit will edit the current thing, and if you
-drop the reference you'll depend on the database adapter's save logic to delete it.
+drop the reference you'll depend on the database adapter's save logic to delete it (which may or may not be implemented,
+you may need to add save middleware).
 
 The form rendering system can derive that it is a to-one relation from the cardinality declared on the reference
 attribute. The ownership nature is more of a rendering concern than anything: If the new thing is exclusively owned
-then we know we have to generate a subform that can fill out all of the interesting details.
+then we know we have to generate a subform that can fill out the details.
 
 NOTE: This kind of relation can also be modelled by folding the referred items attributes into the owner. For example
 if you have an edge called `:account/primary-address` that is a to-one relation to an address, but you don't plan
@@ -1459,10 +1460,11 @@ are several sub-aspects to this problem:
 
 At the time of this writing the answers are:
 
-. No. You must use a different interaction to make one.  Setting a to-one relation is always a selection process
-unless you hand-write the UI yourself.
+. Not yet generically implemented.  Setting a to-one relation is a selection process
+unless you hand-write the UI yourself; However, it is relatively easy to implement a UI control that can do both.
 . This is an option of the UI control used to do the selection. At present all of the potential matches are pre-loaded.
-. This is something you configure.
+  This is also something you can easily customize by simply writing your own control.
+. This is something you can configure.
 
 A demonstration of this case is as follows: Assume we want to generate a form for an invoice. The invoice will
 have line items (to many, owned by the invoice), and each line item will point to an item from our inventory (owned
@@ -1572,24 +1574,6 @@ attribute to resolver generator in your parser) would fit the bill:
                       #?(:clj
                          {:item/all-items (queries/get-all-items env query-params)}))})
 -----
-
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-WARNING: Book is out of date below this line.
-See the RAD Demo project for working examples.
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
 
 === To-Many Relationships, Owned by Parent
 
@@ -1797,18 +1781,18 @@ every time the form changes). This is a prime use-case for an `:on-change`, and 
 [source]
 -----
 (form/defsc-form LineItemForm [this props]
-  {::form/id            line-item/id
-   ::form/attributes    [line-item/item line-item/quantity line-item/quoted-price line-item/subtotal]
-   ::form/triggers      {:on-change     (fn [{::uism/keys [state-map] :as uism-env} form-ident k old-value new-value]
-                                          (case k
-                                            ;; In this example items are normalized, so `new-value` will be the ident
-                                            ;; of an item in the database, which in turn has an :item/price field.
-                                            :line-item/item
-                                            (let [item-price  (get-in state-map (conj new-value :item/price))
-                                                  target-path (conj form-ident :line-item/quoted-price)]
-                                              ;; apply-action allows you to update the Fulcro state database. It works
-                                              ;; as-if you were doing an `update` on `state-map`.
-                                              (uism/apply-action uism-env assoc-in target-path item-price))
+  {fo/id            line-item/id
+   fo/attributes    [line-item/item line-item/quantity line-item/quoted-price line-item/subtotal]
+   fo/triggers      {:on-change     (fn [{::uism/keys [state-map] :as uism-env} form-ident k old-value new-value]
+                                       (case k
+                                         ;; In this example items are normalized, so `new-value` will be the ident
+                                         ;; of an item in the database, which in turn has an :item/price field.
+                                         :line-item/item
+                                         (let [item-price  (get-in state-map (conj new-value :item/price))
+                                               target-path (conj form-ident :line-item/quoted-price)]
+                                           ;; apply-action allows you to update the Fulcro state database. It works
+                                           ;; as-if you were doing an `update` on `state-map`.
+                                           (uism/apply-action uism-env assoc-in target-path item-price))
 -----
 
 The `:on-change` triggers *always* precede `:derive-fields` triggers, so that the global derivation can depend upon
@@ -1850,9 +1834,8 @@ simple UI control style:
 [source]
 -----
 (defattr date :invoice/date :instant
-  {::form/field-style                                        :date-at-noon
-   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:invoice/id}
-   :com.fulcrologic.rad.database-adapters.datomic/schema     :production})
+  {fo/field-style    :date-at-noon
+   ...})
 -----
 
 Of course you can provide your own style definitions for controls, and you can also choose to store
@@ -2098,34 +2081,30 @@ A sample `file` entity (backed by Datomic) might be defined like this:
 
 [source]
 -----
-(ns com.example.model.file
+(ns com.example.model-rad.file
   (:require
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
-    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.attributes :refer [defattr]]
+    [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.blob :as blob]))
 
 (defattr id :file/id :uuid
-  {::attr/identity?                                          true
-   :com.fulcrologic.rad.database-adapters.datomic/schema     :production
-   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:file/id}
-   :com.fulcrologic.rad.database-adapters.sql/schema         :production
-   :com.fulcrologic.rad.database-adapters.sql/tables         #{"file"}})
+  {ao/identity? true
+   ao/schema    :production})
 
+;; :files is the name of the BLOB store, and :remote is the Fulcro remote that uploads go to.
 (blob/defblobattr sha :file/sha :files :remote
-  {:com.fulcrologic.rad.database-adapters.datomic/schema     :production
-   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:file/id}
-   :com.fulcrologic.rad.database-adapters.sql/schema         :production
-   :com.fulcrologic.rad.database-adapters.sql/tables         #{"file"}})
+  {ao/identities #{:file/id}
+   ao/schema     :production})
 
 (defattr filename :file.sha/filename :string
-  {:com.fulcrologic.rad.database-adapters.datomic/schema     :production
-   :com.fulcrologic.rad.database-adapters.datomic/entity-ids #{:file/id}
-   :com.fulcrologic.rad.database-adapters.sql/schema         :production
-   :com.fulcrologic.rad.database-adapters.sql/tables         #{"file"}})
+  {ao/schema     :production
+   ao/identities #{:file/id}})
 
-;; TODO: other attributes the are useful, such as size and mime-type.
+(defattr uploaded-on :file/uploaded-on :instant
+  {ao/schema     :production
+   ao/identities #{:file/id}})
 
-(def attributes [id sha filename])
+(def attributes [id sha filename uploaded-on])
 -----
 
 The `defblobattr` requires you supply a keyword for the attribute, the name of the permanent store for the content
@@ -2152,7 +2131,6 @@ covered in the Fulcro Developer's guide, but looks like this:
 
 The server setup needs several things.
 
-
 First, you need to define a temporary and permanent store. RAD requires a store to implement the
 `com.fulcrologic.rad.blob-storage/Storage` protocol.
 The temporary store can just use the pre-supplied transient store, which uses (and tries to garbage collect) temporary
@@ -2167,24 +2145,47 @@ There are two parts to the Ring middleware, and one is optional and is only nece
 
 [source]
 -----
-(ns app.ring-middleware
+(ns com.example.components.blob-store
   (:require
-    [com.fulcrologic.fulcro.networking.file-upload :as file-upload]
-    [ring.middleware.defaults :refer [wrap-defaults]]
-    [com.example.components.blob-store :as bs]
-    [com.fulcrologic.rad.blob :as blob]))
+    [com.fulcrologic.rad.blob-storage :as storage]
+    [mount.core :refer [defstate]]))
 
-(def middleware
-  (-> not-found-handler
-    (wrap-api "/api")
-    ;; Fulcro upload middleware is needed to recognize file uploads
-    (file-upload/wrap-mutation-file-uploads {})
-    ;; Only needed if you plan to serve the file URLs from this server
-    (blob/wrap-blob-service "/files" bs/file-blob-store)
-    (server/wrap-transit-params {})
-    (server/wrap-transit-response {})
-    ;; wrap defaults should have param and multipart support turned on
-    (wrap-defaults defaults-config)))
+(defstate temporary-blob-store
+  :start
+  (storage/transient-blob-store "" 1))
+
+(defstate file-blob-store
+  :start
+  (storage/transient-blob-store "/files" 10000))
+
+;; -------------------------------------------
+
+(ns com.example.components.ring-middleware
+  (:require
+    [com.example.components.blob-store :as bs]
+    [com.example.components.config :as config]
+    [com.fulcrologic.fulcro.networking.file-upload :as file-upload]
+    [com.fulcrologic.fulcro.server.api-middleware :as server]
+    [com.fulcrologic.rad.blob :as blob]
+    [mount.core :refer [defstate]]
+    [ring.middleware.defaults :refer [wrap-defaults]]
+    [ring.util.response :as resp]
+    [taoensso.timbre :as log]))
+
+(defstate middleware
+  :start
+  (let [defaults-config (:ring.middleware/defaults-config config/config)]
+    (-> not-found-handler
+      (wrap-api "/api")
+      ;; Fulcro support for integrated file uploads
+      (file-upload/wrap-mutation-file-uploads {})
+      ;; RAD integration for *serving* files FROM RAD blob store (at /files URI)
+      (blob/wrap-blob-service "/files" bs/file-blob-store)
+      (server/wrap-transit-params {})
+      (server/wrap-transit-response {})
+      (wrap-html-routes)
+      (wrap-defaults defaults-config))))
+
 -----
 
 You must also install plugins and resolvers to your parser:
@@ -2193,40 +2194,30 @@ You must also install plugins and resolvers to your parser:
 -----
 (ns com.example.components.parser
   (:require
-    [com.example.components.auto-resolvers :refer [automatic-resolvers]]
-    [com.example.components.config :refer [config]]
-    [com.example.components.datomic :refer [datomic-connections]]
-    [com.example.components.save-middleware :as save]
-    [com.example.components.delete-middleware :as delete]
-    [com.example.model.account :as account]
-    [com.example.model :refer [all-attributes]]
-    [com.fulcrologic.rad.blob :as blob]
-    [com.fulcrologic.rad.form :as form]
     [com.example.components.blob-store :as bs]
+    [com.example.components.database :refer [datomic-connections]]
+    [com.example.model-rad.attributes :refer [all-attributes]]
+    [com.fulcrologic.rad.blob :as blob]
     [com.fulcrologic.rad.pathom :as pathom]
-    [mount.core :refer [defstate]]
-    [com.fulcrologic.rad.database-adapters.datomic :as datomic]
-    [com.fulcrologic.rad.attributes :as attr]))
+    [mount.core :refer [defstate]]))
+
+...
 
 (defstate parser
   :start
   (pathom/new-parser config
-    [(attr/pathom-plugin all-attributes)
-     (form/pathom-plugin save/middleware delete/middleware)
-     (datomic/pathom-plugin (fn [env] {:production (:main datomic-connections)}))
-     ;; Configures the temp/permanent stores
-     (blob/pathom-plugin bs/temporary-blob-store {:files bs/file-blob-store})]
-    [automatic-resolvers
-     form/resolvers
-     ;; Adds automatic resolvers for blob attributes (URL, progress, and status)
-     (blob/resolvers all-attributes)
-     ...]))
+    [...
+     ;; Enables binary object upload integration with RAD
+     (blob/pathom-plugin bs/temporary-blob-store {:files bs/file-blob-store})
+     ...]
+    [resolvers
+     ...
+     (blob/resolvers all-attributes)]))
 -----
 
 The blob plugin mainly puts the temporary store and permanent store(s) into the parsing env so that they are available
 when built-in blob-related reads/mutations are called. The BLOB resolvers use the keyword narrowing of your SHA attribute
 and the `env` to provide values that can be derived from the SHA and the store (i.e. `:file.sha/url`).
-
 
 === File Arity
 
@@ -2265,6 +2256,330 @@ serves them at a URI on your server.
 Thus, you might configure your permanent blob store to return the URL `/files/<SHA>`, and then configure your Ring middleware
 to provide the correct file when asked for `/files/<SHA>`. This is what the middleware configuration shown earlier will
 do.
+
+= Advancing Your Forms: Taking Control of Form Implementation
+
+RAD has a core design principle that you must be able to take control of *any* aspect of system with minimal trouble. The
+default features are meant to be useful for rapidly developing your idea, but it is inevitable that any system that
+does this much work for you will fail to meet your needs in any number of ways.
+
+This chapter covers details of how to augment and modify the RAD Form system.
+
+== Form System Architecture
+
+The UI plugin is probably the first and most obvious element that you'll want control over. RAD is built to give you
+escape hatches for every element of rendering.
+
+The first thing to realize is that a `defsc-form` is just a Fulcro component that has a bunch of data in the
+component options that the various plugins use to do their work. However, forms can be nested, and that creates a bit
+of additional complexity.
+
+The overall architecture of a RAD form is roughly like this:
+
+[ditaa]
+-----
+
+    +---------------------+
+    | Server              |
+    + ------------------- +
+    |   Pathom resolvers  |
+    |   save middleware   |
+    |   save form mutation|
+    |                     |
+    +---+-----------------+
+        |          ^
+  Query |          | minimal form diff
+        v          |
+    +--------------+------+       +---------------------+
+    | UI State Machine    |       | Top Form            |
+    |                     |<----->|                     |
+    +---------------------+       +---------------------+
+
+                                  +---------------------+
+                                  | Nested Form         |
+                                  |                     |
+                                  +---------------------+
+
+                                  +---------------------+
+                                  | Nested Form         |
+                                  |                     |
+                                  +---------------------+
+
+-----
+
+== Server
+
+The server is the easy part. A single `form/save-form` mutation is the source of all writes (except delete) and
+resolvers are the source of form data for reads. The form data is sent via Fulcro's `form-state` minimal diff,
+which makes implementing generic save logic very easy (the Datomic one is just a couple hundred lines of code).
+Security and such can be added to the form and Pathom middleware.
+
+=== Save Operation
+
+The core code element on the server for controlling saves is the save middleware. All saves flow through this
+middleware as a minimal diff, which looks like this:
+
+[source]
+-----
+{ident {attr-key {:before val :after val}
+        ...}
+ ...}
+-----
+
+It is *very* similar to the Fulcro database format, with the only difference being that every value has
+a before/after version. This can be used to implement optimistic concurrent transactions, and is also
+necessary for determining the correct database operation when the attribute is to-many.
+
+Note that many adapters don't use the `:before` for anything *except* resolving to-many operations. For
+example:
+
+[source]
+-----
+{[:person/id 1] {:person/addresses {:before [[:address/id 3]] :after []}}}
+-----
+
+means "remove address 3 from person 1's addresses."
+
+[source]
+-----
+{[:person/id 1] {:person/addresses {:before [[:address/id 3]] :after [[:address/id 4]]}}}
+-----
+
+means "replace address 3 with address 4 in person 1's addresses." The Datomic adapter, for example, can
+use this for a to-many diff where the existing full set of addresses does not have to be in the
+before/after. Only the diff itself is used for the operation.
+
+This makes it very easy to implement *custom* mutations in terms of form's save mutation! In fact, there
+is a `form/save-form*` public function that is meant to be used exactly this way. This means you
+can write all of your server mutations in a database agnostic fashion, with centralized middleware
+that manages the custom aspects of your write architecture:
+
+[source]
+-----
+(pc/defmutation disable-account [env {:account/keys [id]}]
+  {::pc/output [:account/id]}
+  (form/save-form* env {::form/id id
+                        ::form/master-key :account/id
+                        ::form/delta {[:account/id id] {:account/enabled? {:after false}}}}))
+-----
+
+Note that since the database plugin uses Pathom plugins to augment the env there's no need
+to couple the mutation to *any* database logic (assuming your parameters contain enough info
+an no query is needed). Also note that attributes can span schema, meaning that such a save could
+cross more than one database, and the middleware can just "handle" it!
+
+=== Save Middleware
+
+Now that you know what data is flowing to the server for a save, it is pretty easy to understand how
+save middleware works: It's a middleware pattern where the pathom-env (containing the form info) is
+threaded through.
+
+Here's sample middleware that let's you add in a function to arbitrarily rewrite an incoming diff
+(this one in supplied in RAD's `save-middleware` ns):
+
+[source]
+-----
+(defn wrap-rewrite-delta
+  "Save middleware that adds a step in the middleware that can rewrite the incoming delta of a save.
+  The rewrite is allowed to do anything at all to the delta: add extra entities, create relations, augment
+  entities, or even clear the delta to an empty map so nothing will be saved.
+
+  The `rewrite-fn` should be a `(fn [pathom-env delta] updated-delta)`. You *can* return nil to indicate no
+  rewrite is needed, but any other return will be used as the new thing to save (instead of what was sent).
+
+  The `delta` has the format of a normalized Fulcro form save:
+
+  ```
+  {[:account/id 19] {:account/age {:before 42 :after 43}
+                     :account/items {:before [] :after [[:item/id 1]]}}
+   [:item/id 1] {:item/value {:before 22M :after 19.53M}}}
+  ```
+  "
+  [handler rewrite-fn]
+  (fn [env]
+    (let [old-delta (get-in env [::form/params ::form/delta])
+          new-delta (or (rewrite-fn env old-delta) old-delta)]
+      (handler (assoc-in env [::form/params ::form/delta] new-delta)))))
+-----
+
+As long as the RAD model understands the attributes you're placing in the diff, then a database
+plugin should be able to write them. So, it is perfectly value to *expand* what is in the diff.
+
+Here are some ideas for middleware that we've found useful:
+
+* Pull each entity of the diff from the database, apply the diff to them, then run Clojure
+specs on them to ensure the save won't violate data specs.
+* Add entity ownership to new entities (which will have a Fulcro tempid in their ident).
+* Augment the diff with session-relation information (e.g. for auditing)
+* Check the ownership on every entity (by ident) in the database as a security measure for writing to them.
+* Make sure the diff doesn't contain other security violations (such as changing the ownership of an entity).
+
+=== Delete Middleware
+
+Delete middleware is similar to save middleware, but quite a bit simpler. See, for example, the Datomic
+RAD plugin for the basic implementation of implementing delete middleware.
+
+== UI
+
+The UI is a bit more complex in structure.
+
+There is a single UISM that is started with the top-level form. Subforms are controlled by this same top-level
+machine. The real communication layer is the standard Fulcro state database (query) and mutations (UISM trigger),
+but for simplicity we show the communcation going through the UISM.
+
+Each form has a query and ident that follows the exact rules of Fulcro, and the `props` in any form are exactly
+the content of that component's query; however, every nested form (no matter the depth) must know its
+immediate parent, and also the master form (because the UISM is identified by that top-level form's ident).
+
+=== Rendering Environment
+
+To facilitate this the top-level form and all nested forms leverage `computed` Fulcro props to pass
+additional information about the form set. This information is referred to as the `rendering-env`, and can include:
+
+[source]
+-----
+{::form/master-form react-instance
+ ::form/form-instance this
+ ::form/parent parent-react-instance
+ ::form/parent-relation keyword-navigated-to-child-form}
+-----
+
+Many of the helper functions in the RAD `form` namespace will accept this as a potential argument, and
+some of them may require you to construct one (there's a `rendering-env` helper for this).
+
+=== Custom Field Rendering
+
+The most common and easy customization is simply to provide a new form field renderer. These can be
+installed (even via hot code reload) and then selected with `fo/field-style`. You should consider
+the `fulcro-rad-semantic-ui` source code a good resource for examples.
+
+The most important things to be aware of when creating a new field renderer are:
+
+* `com.fulcrologic.fulcro.dom.inputs`: This namespace includes `StringBufferedInput` and some sample of making
+low-level input controls that use DOM inputs, but support non-string data types.
+* `com.fulcrologic.rad.form/with-field-context`: A `let`-like macro that can efficiently pre-extract important
+  details about a given field. There is also `field-context` as a function.
+* `com.fulcrologic.rad.rendering.semantic-ui.field/render-field-factory`: An example of how you could create
+your own field factory. If you're using the SUI library, it is already the factory you might want.
+* Any of the namespaces ending in `-field` in the SUI plugin, as examples.
+
+Installing a new form field style can be done with a simple assoc-in on the controls you install
+in your client (which can be called on a hot reload hook):
+
+[source]
+-----
+;; Install some plugin
+(rad-app/install-ui-controls! app sui/all-controls)
+;; Install a custom control for a given style
+(form/install-field-renderer! app :string :email email-field-render)
+-----
+
+Then you can select your custom control by setting the `fo/field-style` on an attribute or
+override it on a given form via `fo/field-styles`.
+
+There are also plugin points for the wrappers around the form body, subforms, and such. See the
+RAD Semantic UI plugin for example implementations of these.
+
+=== Augmenting Form Behavior
+
+There are times when your form will need more than just the content of the form itself. This is commonly
+the case for things like autocomplete fields. RAD comes with a prewritten version of this (pickers), but
+they have the limitation of having to be able to pre-load all of the options in advance. This is
+insufficient when the number of options might be very large.
+
+One way to do things like autocompletes is to use React hooks and Fulcro's `hooks/use-component` combined
+with things like `hooks/use-generated-id`, `df/load!`, and such inside of a custom control.
+
+At other times, though, you may just need to augment how the I/O or other logic of a form operates.
+
+Forms are completely controlled by their UI State Machine, and you can augment or even replace that machine
+via the `fo/machine` option.
+
+A very common pattern is to grab an existing handler from the state machine and add a step to it. You can
+create simple helpers like this to make that easy:
+
+[source]
+-----
+(defn augment-event
+  "Add `additional-action` to the end of the actions performed by the `base-machine` in `state` for `event`. `event` can
+  be nil if there is just a global handler for that state. Returns the modified machine, so more than one of these
+  can be threaded together to modify a machine in multiple places."
+  [base-machine state event additional-action]
+  (let [handler-path     (if event
+                           [::uism/states state ::uism/events event ::uism/handler]
+                           [::uism/states state ::uism/handler])
+        original-handler (get-in base-machine handler-path)]
+    (assoc-in base-machine handler-path (fn [env]
+                                          (-> env
+                                            (original-handler)
+                                            (additional-action))))))
+-----
+
+Note that the above function would add your additional action at the end of the chain of operations. A similar
+pattern can be used to add new event types, etc. See
+https://book.fulcrologic.com/#_ui_state_machines[Fulcro's UISM documentation] for more information on how
+to program UI state machines.
+
+=== Taking Over Rendering
+
+Many forms can be customized to look and behave exactly like you want by using the techniques
+of the prior sections; however, at some point you will run into a situation where customizing the plugin
+elements themselves isn't worth it. Sometimes there's just a single form that has some strange
+custom look and feel that isn't worth generalizing.
+
+At that point you can take control of the rendering but still leverage all of the form's state machine,
+loading, saving, undo, and even individual field rendering! This lets you take over exactly what you
+need to take over without doing an inordinate amount of extra work.
+
+Remember, this is just a Fulcro component! The props are pretty much exactly what you'd expect.
+
+The first step is very easy: just supply the form with a body! If you do that, then RAD no longer uses the
+rendering plugin for that form (each subform will have the same rule: add a body to take over the render).
+
+If you're doing the rendering, then some options (like `fo/layout`) are ignored, but
+you still need to specify things like the `fo/id`, `fo/attributes`, `fo/subforms` and such, since those
+are part of how RAD generates the query for the form, and how it understands how to do things like initialize it.
+
+Within the render body, the basic functions to know about are:
+
+* `form/rendering-env`: Used to create the `env` that a lot of other helper functions want.
+* `form/render-layout`: This is exactly what the form *normally* calls to render itself. You can use it if you
+want to embed the content of the form in additional elements.
+* `form/render-form-fields`: Renders everything that would normally be in the form, but does NOT render the
+container/controls.
+* `form/render-field`: Renders the specified field using the rendering plugin.
+* `form/save!`: Save the form to the server.
+* `form/undo-all!`: Undo all changes.
+* `form/cancel!`: Cancel the edits. Also used as "done". Undoes the changed and possibly triggers routing.
+* `form/add-child!`: Used to add a child form (to-one or many).
+* `form/delete-child!`: Used (usually *within* the sub-form) to delete that element from the form set.
+
+==== Subforms
+
+The primary thing to understand about rendering subforms is that you must create a proper `rendering-env` for
+the subform and pass it along as the computed props of that subform.
+It is useful to create `comp/computed-factory`s for your subforms so you can do this as a simple third argument.
+
+[source]
+-----
+
+(defsc-form Address [this props env]
+ { ... }
+ ...)
+
+(defn ui-address (comp/computed-factory Address))
+
+...
+
+;; in parent Person form, rendering subform through :person/address
+(let [env (render-env this props)]
+  ...
+  (ui-address address
+    (merge
+      env
+      {::form/parent          this
+       ::form/parent-relation :person/address}))
+-----
 
 = Reports
 
