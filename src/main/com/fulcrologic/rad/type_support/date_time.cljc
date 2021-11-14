@@ -207,7 +207,7 @@
    [(? ::zone-name) (? ::inst-or-instant) => ::local-date]
    (inst->local-date zone-name inst (now)))
   ([zone-name inst default-value]
-   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => ::local-date]
+   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => (? ::local-date)]
    (when-let [inst (or inst default-value)]
      (let [z   (get-zone-id zone-name)
            i   (instant/of-epoch-milli (inst-ms inst))
@@ -223,7 +223,7 @@
    [(? ::zone-name) (? ::inst-or-instant) => ::local-date-time]
    (inst->local-datetime zone-name inst (now)))
   ([zone-name inst default-value]
-   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => ::local-date-time]
+   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => (? ::local-date-time)]
    (when-let [inst (or inst default-value)]
      (let [z   (get-zone-id zone-name)
            i   (instant/of-epoch-milli (inst-ms inst))
@@ -239,7 +239,7 @@
    [(? ::zone-name) (? ::inst-or-instant) => ::zoned-date-time]
    (inst->zoned-date-time zone-name inst (now)))
   ([zone-name inst default-value]
-   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => ::zoned-date-time]
+   [(? ::zone-name) (? ::inst-or-instant) (? ::inst-or-instant) => (? ::zoned-date-time)]
    (when-let [inst (or inst default-value)]
      (let [z (get-zone-id zone-name)
            i (instant/of-epoch-milli (inst-ms inst))]
