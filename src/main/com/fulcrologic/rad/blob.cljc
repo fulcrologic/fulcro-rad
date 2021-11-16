@@ -167,18 +167,18 @@
 
 #?(:clj
    (def upload-file
-     {:com.wsscode.pathom.connect/sym      `upload-file
-      :com.wsscode.pathom.connect/doc      "Server-side handler for an uploaded file in the RAD Blob system"
-      :com.wsscode.pathom.connect/mutation (fn [{::keys [temporary-store] :as env}
-                                                {::keys             [file-sha id filename]
-                                                 ::file-upload/keys [files] :as params}]
-                                             (log/debug "Received file" filename)
-                                             (let [file (-> files first :tempfile)]
-                                               (cond
-                                                 (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
-                                                 (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
-                                                 :else (storage/save-blob! temporary-store file-sha file)))
-                                             {})}))
+     {:com.wsscode.pathom.connect/sym    `upload-file
+      :com.wsscode.pathom.connect/doc    "Server-side handler for an uploaded file in the RAD Blob system"
+      :com.wsscode.pathom.connect/mutate (fn [{::keys [temporary-store] :as env}
+                                              {::keys             [file-sha id filename]
+                                               ::file-upload/keys [files] :as params}]
+                                           (log/debug "Received file" filename)
+                                           (let [file (-> files first :tempfile)]
+                                             (cond
+                                               (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
+                                               (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
+                                               :else (storage/save-blob! temporary-store file-sha file)))
+                                           {})}))
 
 #?(:clj
    (defn wrap-persist-images

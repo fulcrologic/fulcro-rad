@@ -575,7 +575,7 @@
 #?(:clj
    (def save-as-form
      {:com.wsscode.pathom.connect/mutate (fn [env params] (save-form* env params))
-      :com.wsscode.pathom.connect/sym    `save-form
+      :com.wsscode.pathom.connect/sym    `save-as-form
       :com.wsscode.pathom.connect/params #{::id ::master-pk ::delta}})
    :cljs
    (m/defmutation save-as-form

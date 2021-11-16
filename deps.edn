@@ -6,7 +6,6 @@
            com.fulcrologic/fulcro        {:mvn/version "3.5.6"}
            com.fulcrologic/fulcro-i18n   {:mvn/version "0.0.5-alpha"}
            com.fulcrologic/guardrails    {:mvn/version "1.1.7"}
-           com.wsscode/pathom            {:mvn/version "2.3.1"}
            commons-codec/commons-codec   {:mvn/version "1.14"}
            potemkin/potemkin             {:mvn/version "0.4.5"}
 
@@ -24,7 +23,9 @@
                        :extra-deps  {lambdaisland/kaocha {:mvn/version "1.60.945"}}}
 
            :dev       {:extra-paths ["src/dev" "resources"]
-                       :extra-deps  {thheller/shadow-cljs        {:mvn/version "2.15.12"}
+                       :extra-deps  {binaryage/devtools          {:mvn/version "1.0.0"}
+                                     com.wsscode/pathom          {:mvn/version "2.4.0"}
+                                     com.wsscode/pathom3         {:mvn/version "2021.10.20-alpha"}
                                      mount/mount                 {:mvn/version "0.1.12"}
-                                     binaryage/devtools          {:mvn/version "1.0.0"}
-                                     org.clojure/tools.namespace {:mvn/version "1.0.0"}}}}}
+                                     org.clojure/tools.namespace {:mvn/version "1.0.0"}
+                                     thheller/shadow-cljs        {:mvn/version "2.15.12"}}}}}

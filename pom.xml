@@ -73,11 +73,6 @@
       <version>1.10.1</version>
     </dependency>
     <dependency>
-      <groupId>com.wsscode</groupId>
-      <artifactId>pathom</artifactId>
-      <version>2.3.1</version>
-    </dependency>
-    <dependency>
       <groupId>commons-codec</groupId>
       <artifactId>commons-codec</artifactId>
       <version>1.14</version>

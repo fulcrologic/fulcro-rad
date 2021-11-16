@@ -97,15 +97,15 @@
 
 ;; FIXME: to-many? now takes an attr, not a key
 #_(defn add-empty-vectors
-  "For cardinality many attributes, replaces ::p/not-found with an empty vector."
-  [input]
-  (with-meta
-    (p/transduce-maps (map (fn [[k v]]
-                             (if (and (= ::p/not-found v) (attr/to-many? k))
-                               [k []]
-                               [k v])))
-      input)
-    (meta input)))
+    "For cardinality many attributes, replaces ::p/not-found with an empty vector."
+    [input]
+    (with-meta
+      (p/transduce-maps (map (fn [[k v]]
+                               (if (and (= ::p/not-found v) (attr/to-many? k))
+                                 [k []]
+                                 [k v])))
+        input)
+      (meta input)))
 
 (def query-params-to-env-plugin
   "Adds top-level load params to env, so nested parsing layers can see them."
@@ -122,11 +122,11 @@
              env          (assoc env :query-params query-params)]
          (parser env tx))))})
 
-(defn parser-args [{::keys [trace? log-requests? log-responses?] :as config} plugins resolvers]
+(defn parser-args [{{:keys [trace? log-requests? log-responses?]} ::config} plugins resolvers]
   {::p/mutate  pc/mutate
-   ::p/env     {::p/reader               [p/map-reader pc/reader2 pc/index-reader
-                                          pc/open-ident-reader p/env-placeholder-reader]
-                ::p/placeholder-prefixes #{">"}
+   ::p/env     {::p/reader                 [p/map-reader pc/reader2 pc/index-reader
+                                            pc/open-ident-reader p/env-placeholder-reader]
+                ::p/placeholder-prefixes   #{">"}
                 ::pc/mutation-join-globals [:tempids]}
    ::p/plugins (into []
                  (keep identity
