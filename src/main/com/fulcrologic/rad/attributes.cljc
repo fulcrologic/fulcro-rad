@@ -2,7 +2,6 @@
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     #?(:clj [com.fulcrologic.rad.registered-maps :refer [registered-map]])
-    [com.wsscode.pathom.core :as p]
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [clojure.walk :as walk]
@@ -210,13 +209,45 @@
       (fn [form k]
         (valid-value? (get attribute-map k) (get form k) form k)))))
 
-(defn pathom-plugin [all-attributes]
-  (p/env-wrap-plugin
-    (fn [env]
-      (assoc env
-        ::key->attribute (attribute-map all-attributes)
-        ::id-keys (into #{}
-                    (comp
-                      (filter ::identity?)
-                      (map ::qualified-key))
-                    all-attributes)))))
+(defn wrap-env
+  "Build a (fn [env] env') that adds RAD attribute data to an env. If `base-wrapper` is supplied, then it will be called
+   as part of the evaluation, allowing you to build up a chain of environment middleware.
+
+   ```
+   (def build-env
+     (-> (wrap-env all-attributes)
+        ...))
+
+   ;; Pathom 2
+   (def env-plugin (p/env-wrap-plugin build-env))
+
+   ;; Pathom 3
+   (let [base-env (pci/register [...])
+         env (build-env base-env)]
+      (process env eql))
+   ```
+
+   similar to Ring middleware.
+   "
+  ([all-attributes] (wrap-env nil all-attributes))
+  ([base-wrapper all-attributes]
+   (let [key->attribute (attribute-map all-attributes)
+         id-keys        (into #{}
+                          (comp
+                            (filter ::identity?)
+                            (map ::qualified-key))
+                          all-attributes)]
+     (fn [env]
+       (cond-> (assoc env
+                 ::key->attribute key->attribute
+                 ::id-keys id-keys)
+         base-wrapper (base-wrapper))))))
+
+(defn pathom-plugin
+  "Pathom 2 plugin. See also `wrap-env`."
+  [all-attributes]
+  (let [augment (wrap-env all-attributes)]
+    {:com.wsscode.pathom.core/wrap-parser
+     (fn env-wrap-wrap-parser [parser]
+       (fn env-wrap-wrap-internal [env tx]
+         (parser (augment env) tx)))}))

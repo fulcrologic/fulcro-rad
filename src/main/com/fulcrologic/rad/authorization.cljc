@@ -38,7 +38,7 @@
   (:require
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
-    [com.wsscode.pathom.core :as p]
+    [clojure.walk :as walk]
     [com.fulcrologic.guardrails.core :refer [>defn => ? >def]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
@@ -288,13 +288,29 @@
       (or (nil? permissions)
         (and permissions (contains? (set (permissions env)) :read))))))
 
+(defn- native-map? [x]
+  #?(:clj  (or (= (type x) clojure.lang.PersistentArrayMap)
+             (= (type x) clojure.lang.PersistentHashMap))
+     :cljs (or (= (type x) cljs.core/PersistentArrayMap)
+             (= (type x) cljs.core/PersistentHashMap))))
+
+(defn- transduce-maps
+  "Walk the structure and transduce every map with xform."
+  [xform input]
+  (walk/prewalk
+    (fn elide-items-walk [x]
+      (if (native-map? x)
+        (with-meta (into {} xform x) (meta x))
+        x))
+    input))
+
 (defn redact
   "Creates a post-processing plugin that redacts attributes that are marked as non-readable"
   [{attr-map ::attr/key->attribute
     :as      env} query-result]
-  (p/transduce-maps (map (fn [[k v]]
-                           (let [a (get attr-map k)]
-                             (if (readable? env a)
-                               [k v]
-                               [k ::REDACTED]))))
+  (transduce-maps (map (fn [[k v]]
+                         (let [a (get attr-map k)]
+                           (if (readable? env a)
+                             [k v]
+                             [k ::REDACTED]))))
     query-result))

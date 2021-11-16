@@ -23,7 +23,6 @@
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
-    [com.wsscode.pathom.connect :as pc]
     [clojure.core.async :as async]
     [taoensso.timbre :as log]
     [com.fulcrologic.fulcro.networking.file-upload :as file-upload]
@@ -32,7 +31,6 @@
         :clj  [[com.fulcrologic.rad.blob-storage :as storage]
                [clojure.pprint :refer [pprint]]
                [clojure.java.io :as jio]])
-    [com.wsscode.pathom.core :as p]
     [clojure.string :as str])
   (:import
     #?(:clj  (org.apache.commons.codec.digest DigestUtils)
@@ -168,17 +166,19 @@
            {:abort-id sha})))))
 
 #?(:clj
-   (pc/defmutation upload-file [{::keys [temporary-store] :as env}
-                                {::keys             [file-sha id filename]
-                                 ::file-upload/keys [files] :as params}]
-     {::pc/doc "Server-side handler for an uploaded file in the RAD Blob system"}
-     (log/debug "Received file" filename)
-     (let [file (-> files first :tempfile)]
-       (cond
-         (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
-         (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
-         :else (storage/save-blob! temporary-store file-sha file)))
-     {}))
+   (def upload-file
+     {:com.wsscode.pathom.connect/sym      `upload-file
+      :com.wsscode.pathom.connect/doc      "Server-side handler for an uploaded file in the RAD Blob system"
+      :com.wsscode.pathom.connect/mutation (fn [{::keys [temporary-store] :as env}
+                                                {::keys             [file-sha id filename]
+                                                 ::file-upload/keys [files] :as params}]
+                                             (log/debug "Received file" filename)
+                                             (let [file (-> files first :tempfile)]
+                                               (cond
+                                                 (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
+                                                 (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
+                                                 :else (storage/save-blob! temporary-store file-sha file)))
+                                             {})}))
 
 #?(:clj
    (defn wrap-persist-images
@@ -233,20 +233,49 @@
                      (log/error e "Failed to persist blob" after)))))
              handler-result))))))
 
+(defn wrap-env
+  "Build a (fn [env] env') that adds RAD BLOB info to an env. If `base-wrapper` is supplied, then it will be called
+   as part of the evaluation, allowing you to build up a chain of environment middleware.
+
+   ```
+   (def build-env
+     (-> (wrap-env temp-store perm-store)
+        ...))
+
+   ;; Pathom 2
+   (def env-plugin (p/env-wrap-plugin build-env))
+
+   ;; Pathom 3
+   (let [base-env (pci/register [...])
+         env (build-env base-env)]
+      (process env eql))
+   ```
+
+   similar to Ring middleware.
+   "
+
+  ([temporary-store permanent-stores] (wrap-env nil temporary-store permanent-stores))
+
+  ([base-wrapper temporary-store permanent-stores]
+   (fn [env]
+     (cond-> (assoc env
+               ::temporary-store temporary-store
+               ::permanent-stores permanent-stores)
+       base-wrapper (base-wrapper)))))
+
 #?(:clj
    (defn pathom-plugin
-     "A pathom plugin to configure blob stores.
+     "A pathom 2 plugin to configure blob stores.
 
      - temporary-store: A Storage object that is used to track temporary files between upload and final form save.
      - permanent-stores: A map from store name (keyword) to Storage objects that act as the permanent location for the
      file data."
      [temporary-store permanent-stores]
-     (p/env-wrap-plugin
-       (fn [env]
-         (assoc env
-           ::temporary-store temporary-store
-           ::permanent-stores permanent-stores)))))
-
+     (let [f (wrap-env temporary-store permanent-stores)]
+       {:com.wsscode.pathom.core/wrap-parser
+        (fn env-wrap-wrap-parser [parser]
+          (fn env-wrap-wrap-internal [env tx]
+            (parser (f env) tx)))})))
 
 #?(:clj
    (defn blob-resolvers
@@ -256,17 +285,18 @@
      (let
        [url-key           (url-key qualified-key)
         url-sym           (symbol url-key)
-        url-resolver      (pc/resolver url-sym {::pc/input  #{qualified-key}
-                                                ::pc/output [url-key]}
-                            (fn [{::keys [permanent-stores]} input]
-                              (let [sha        (get input qualified-key)
-                                    file-store (get permanent-stores store)]
-                                (when-not (seq sha)
-                                  (log/error "Could not derive file URL. No sha." qualified-key))
-                                (when-not file-store
-                                  (log/error "Attempt to retrieve a file URL, but there was no store in parsing env: " store))
-                                (when (and (seq sha) file-store)
-                                  {url-key (storage/blob-url file-store sha)}))))
+        url-resolver      {:com.wsscode.pathom.connect/resolve (fn [{::keys [permanent-stores]} input]
+                                                                 (let [sha        (get input qualified-key)
+                                                                       file-store (get permanent-stores store)]
+                                                                   (when-not (seq sha)
+                                                                     (log/error "Could not derive file URL. No sha." qualified-key))
+                                                                   (when-not file-store
+                                                                     (log/error "Attempt to retrieve a file URL, but there was no store in parsing env: " store))
+                                                                   (when (and (seq sha) file-store)
+                                                                     {url-key (storage/blob-url file-store sha)})))
+                           :com.wsscode.pathom.connect/input   #{qualified-key}
+                           :com.wsscode.pathom.connect/sym     url-sym
+                           :com.wsscode.pathom.connect/output  [url-key]}
         sha-exists?       (fn [{::keys [permanent-stores]} input]
                             (let [sha        (get input qualified-key)
                                   file-store (get permanent-stores store)]
@@ -279,18 +309,20 @@
         status-key        (status-key qualified-key)
         progress-sym      (symbol progress-key)
         status-sym        (symbol status-key)
-        progress-resolver (pc/resolver progress-sym {::pc/input  #{qualified-key}
-                                                     ::pc/output [progress-key]}
-                            (fn [env input]
-                              (if (sha-exists? env input)
-                                {progress-key 100}
-                                {progress-key 0})))
-        status-resolver   (pc/resolver status-sym {::pc/input  #{qualified-key}
-                                                   ::pc/output [progress-key]}
-                            (fn [env input]
-                              (if (sha-exists? env input)
-                                {status-key :available}
-                                {status-key :not-found})))]
+        progress-resolver {:com.wsscode.pathom.connect/resolve (fn [env input]
+                                                                 (if (sha-exists? env input)
+                                                                   {progress-key 100}
+                                                                   {progress-key 0}))
+                           :com.wsscode.pathom.connect/input   #{qualified-key}
+                           :com.wsscode.pathom.connect/sym     progress-sym
+                           :com.wsscode.pathom.connect/output  [progress-key]}
+        status-resolver   {:com.wsscode.pathom.connect/resolve (fn [env input]
+                                                                 (if (sha-exists? env input)
+                                                                   {status-key :available}
+                                                                   {status-key :not-found}))
+                           :com.wsscode.pathom.connect/input   #{qualified-key}
+                           :com.wsscode.pathom.connect/sym     status-sym
+                           :com.wsscode.pathom.connect/output  [status-key]}]
        [url-resolver progress-resolver status-resolver])))
 
 #?(:clj

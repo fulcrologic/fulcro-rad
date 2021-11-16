@@ -1,5 +1,7 @@
 (ns com.fulcrologic.rad.pathom
-  "Plugins and a default generated parser for working with RAD applications. You may use the source of this namespace
+  "PATHOM 2 Support. If you're using pathom 3, do NOT use/require this namespace!
+
+   Plugins and a default generated parser for working with RAD applications. You may use the source of this namespace
    as reference for making your own custom parser, or simply start with the `new-parser` function."
   (:require
     [clojure.pprint :refer [pprint]]

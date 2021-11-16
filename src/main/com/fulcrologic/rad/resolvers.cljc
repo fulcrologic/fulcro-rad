@@ -1,5 +1,5 @@
 (ns com.fulcrologic.rad.resolvers
-  "Support for allowing resolvers to be declared on attributes via ::pc/input ::pc/output and ::pc/resolve. This is
+  "Support for allowing Pathom 2 resolvers to be declared on attributes via ::pc/input ::pc/output and ::pc/resolve. This is
   useful because it allows custom resolution of an attribute that then has all of the RAD abilities attributes have.
 
   ```
@@ -14,15 +14,11 @@
   Then install them in your parser as a list of resolvers you can obtain from `(resolvers/generate-resolvers all-attributes)`.
 
   You may also, of course, define resolvers using `defresolver` and other pathom functions, but you must install those
-  separately.
-
-  "
+  separately."
   (:require
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.authorization :as auth]
-    [com.wsscode.pathom.connect :as pc :refer [defresolver defmutation]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
@@ -35,12 +31,11 @@
               [k (get m k)])))
     (keys m)))
 
-(>defn attribute-resolver
-  "Generate a resolver for an attribute that specifies a ::pc/resolve key. Returns a resolver
+(defn attribute-resolver
+  "Generate a resolver for an attribute that specifies a :com.wsscode.pathom.connect/resolve key. Returns a resolver
   or nil."
   [attr]
-  [::attr/attribute => (? ::pc/resolver)]
-  (enc/when-let [resolver        (::pc/resolve attr)
+  (enc/when-let [resolver        (:com.wsscode.pathom.connect/resolve attr)
                  secure-resolver (fn [env input]
                                    (->>
                                      (resolver env input)
@@ -48,19 +43,17 @@
                  k               (::attr/qualified-key attr)
                  output          [k]]
     (log/info "Building attribute resolver for" (::attr/qualified-key attr))
-    (let [transform (::pc/transform attr)]
+    (let [transform (:com.wsscode.pathom.connect/transform attr)]
       (cond-> (merge
-                {::pc/output output}
+                {:com.wsscode.pathom.connect/output output}
                 (just-pc-keys attr)
-                {::pc/sym     (symbol (str k "-resolver"))
-                 ::pc/resolve secure-resolver})
-        transform transform
-        ))))
+                {:com.wsscode.pathom.connect/sym     (symbol (str k "-resolver"))
+                 :com.wsscode.pathom.connect/resolve secure-resolver})
+        transform transform))))
 
-(>defn generate-resolvers
-  "Generate resolvers for attributes that directly define pathom ::pc/resolve keys"
+(defn generate-resolvers
+  "Generate resolvers for attributes that directly define pathom :com.wsscode.pathom.connect/resolve keys"
   [attributes]
-  [::attr/attributes => (s/every ::pc/resolver :kind vector?)]
   (into []
     (keep attribute-resolver)
     attributes))

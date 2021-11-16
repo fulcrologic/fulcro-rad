@@ -22,8 +22,6 @@
     [com.fulcrologic.rad.application :as rapp]
     [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
     [com.fulcrologic.rad.type-support.integer :as int]
-    [com.wsscode.pathom.connect :as pc]
-    [com.wsscode.pathom.core :as p]
     [edn-query-language.core :as eql]
     [taoensso.tufte :refer [p profile]]
     [taoensso.encore :as enc]
@@ -563,9 +561,10 @@
 ;; do-saves! params/env => return value
 ;; -> params/env -> middleware-in -> do-saves -> middleware-out
 #?(:clj
-   (pc/defmutation save-form [env params]
-     {::pc/params #{::id ::master-pk ::delta}}
-     (save-form* env params))
+   (def save-form
+     {:com.wsscode.pathom.connect/mutate (fn [env params] (save-form* env params))
+      :com.wsscode.pathom.connect/sym    `save-form
+      :com.wsscode.pathom.connect/params #{::id ::master-pk ::delta}})
    :cljs
    (m/defmutation save-form
      "MUTATION: DO NOT USE. See save-as-form mutation for a mutation you can use to leverage the form save mechansims for
@@ -574,9 +573,10 @@
      (action [_] :noop)))
 
 #?(:clj
-   (pc/defmutation save-as-form [env params]
-     {::pc/params #{::id ::master-pk ::delta}}
-     (save-form* env params))
+   (def save-as-form
+     {:com.wsscode.pathom.connect/mutate (fn [env params] (save-form* env params))
+      :com.wsscode.pathom.connect/sym    `save-form
+      :com.wsscode.pathom.connect/params #{::id ::master-pk ::delta}})
    :cljs
    (m/defmutation save-as-form
      "MUTATION: Run a full-stack write as-if it were the save of a form. This allows you to leverage the save middleware
@@ -1299,12 +1299,13 @@
                                                 :id     (str (new-uuid))}))))
 
 #?(:clj
-   (pc/defmutation delete-entity [env params]
-     {}
-     (if-let [delete-middleware (::delete-middleware env)]
-       (let [delete-env (assoc env ::params params)]
-         (delete-middleware delete-env))
-       (throw (ex-info "form/pathom-plugin in not installed on Pathom parser." {}))))
+   (def delete-entity
+     {:com.wsscode.pathom.connect/sym    `delete-entity
+      :com.wsscode.pathom.connect/mutate (fn [env params]
+                                           (if-let [delete-middleware (::delete-middleware env)]
+                                             (let [delete-env (assoc env ::params params)]
+                                               (delete-middleware delete-env))
+                                             (throw (ex-info "form/pathom-plugin in not installed on Pathom parser." {}))))})
    :cljs
    (m/defmutation delete-entity [params]
      (ok-action [{:keys [state]}]
@@ -1447,16 +1448,44 @@
         autocomplete (if (boolean? autocomplete) (if autocomplete "on" "off") autocomplete)]
     autocomplete))
 
+(defn wrap-env
+  "Build a (fn [env] env') that adds RAD form-related data to an env. If `base-wrapper` is supplied, then it will be called
+   as part of the evaluation, allowing you to build up a chain of environment middleware.
+
+   ```
+   (def build-env
+     (-> (wrap-env save-middleware delete-middleware)
+        ...))
+
+   ;; Pathom 2
+   (def env-plugin (p/env-wrap-plugin build-env))
+
+   ;; Pathom 3
+   (let [base-env (pci/register [...])
+         env (build-env base-env)]
+      (process env eql))
+   ```
+
+   similar to Ring middleware.
+   "
+  ([save-middleware delete-middleware] (wrap-env nil save-middleware delete-middleware))
+  ([base-wrapper save-middleware delete-middleware]
+   (fn [env]
+     (cond-> (assoc env
+               ::save-middleware save-middleware
+               ::delete-middleware delete-middleware)
+       base-wrapper (base-wrapper)))))
+
 (defn pathom-plugin
-  "A pathom plugin that installs general form save/delete support on the pathom parser. Requires
+  "A pathom 2 plugin that installs general form save/delete support on the pathom parser. Requires
   save and delete middleware, which will accomplish the actual actions.  Calling RAD form save/delete
   without this plugin and both bits of middleware will result in a runtime error."
   [save-middleware delete-middleware]
-  (p/env-wrap-plugin
-    (fn [env]
-      (assoc env
-        ::save-middleware save-middleware
-        ::delete-middleware delete-middleware))))
+  (let [augment (wrap-env save-middleware delete-middleware)]
+    {:com.wsscode.pathom.core/wrap-parser
+     (fn env-wrap-wrap-parser [parser]
+       (fn env-wrap-wrap-internal [env tx]
+         (parser (augment env) tx)))}))
 
 #?(:clj (def resolvers
           "Form save and delete mutation resolvers. These must be installed on your pathom parser for saves and deletes to
