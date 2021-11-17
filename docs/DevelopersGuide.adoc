@@ -371,7 +371,7 @@ The recommended setup of attributes is as follows:
 ** Try *not* to think of attributes as _strictly_ belonging to an *entity* or *table* so much as describing a particular fact. For
 example the attribute `:password/hashed-value` might live on a `File` or `Account` entity. Entity-centric attributes
 certainly exist, but you should not constrain your thinking about them.
-* Place attributes in the namespace whose name that matches that attribute's namespace. E.g. `:accout/*` should be
+* Place attributes in the namespace whose name that matches that attribute's namespace. E.g. `:account/*` should be
  in something like `com.example.model.account`.  This ensures you don't accidentally
 model the same attribute twice, which would confuse many of the facilities of RAD.
 * At the end of each file include a `def` for `attributes` and `resolvers`. Each should be a vector containing
@@ -1806,7 +1806,7 @@ interfaces also need to localize the date and time to either the user or context
 
 There are standard implementations of localization for js and the JVM, but since we're using CLJC already it makes the
 most since to us to just use `cljc.java-time`, which is a library that unifies the API of the standard JVM Time API.
-This makes it much simple to write localized support for dates and times in CLJC files. To date we are avoiding the
+This makes it much simpler to write localized support for dates and times in CLJC files. To date we are avoiding the
 `tick` library because it is not yet as mature, and is overkill for RAD itself (though you can certainly use it
 in your applications).
 
