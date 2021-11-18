@@ -85,8 +85,11 @@
               (mutate env ast)
               (catch Throwable e
                 (log/errorf e "Mutation %s failed." (:key ast))
+                ;; TASK: Need a bit more work on returning errors that are handled globally.
+                ;; Probably should just propagate exceptions out, so the client sees a server error
                 ;; Pathom 2 compatible message so UI can detect the problem
-                {:com.wsscode.pathom.core/errors (ex-message e)}))))]
+                {:com.wsscode.pathom.core/errors [{:message (ex-message e)
+                                                   :data    (ex-data e)}]}))))]
   (p.plugin/defplugin rewrite-mutation-exceptions {::pcr/wrap-mutate wrap-mutate-exceptions})
   (defn new-processor
     "Create a new EQL processor. You may pass Pathom 2 resolvers or mutations to this function, but beware
@@ -98,7 +101,7 @@
      - `:log-responses? boolean` Enable logging of parser results.
      - `:sensitive-keys` a set of keywords that should not have their values logged
      "
-    [{{:keys [trace? log-requests? log-responses?]} :com.fulcrologic.rad.pathom/config :as config} env-middleware extra-plugins resolvers]
+    [{{:keys [log-requests? log-responses?]} :com.fulcrologic.rad.pathom/config :as config} env-middleware extra-plugins resolvers]
     (let [base-env (-> {}
                      (p.plugin/register extra-plugins)
                      (p.plugin/register-plugin attribute-error-plugin)

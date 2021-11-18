@@ -1,4 +1,4 @@
-(ns ^:always-reload com.fulcrologic.rad.attributes
+(ns com.fulcrologic.rad.attributes
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
     #?(:clj [com.fulcrologic.rad.registered-maps :refer [registered-map]])
