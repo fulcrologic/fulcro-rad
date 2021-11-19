@@ -2708,3 +2708,23 @@ and then set the `::report/layout-style :custom-layout` option on the report.
 
 NOTE: At present you must write the row rendering yourself. The design of the recursive pluggable report rendering
 is still in progress.  You can, of course, place renderers in the global controls map to generalize things.
+
+== Report Performance
+
+Just some notes...
+
+Normalization can be expensive for large reports. Denormalize reports that don't share info with forms. This can
+save many seconds of processing if you have thousands of data points, will also affect rendering speed if you
+are doing something like a chart.
+
+Reports filter, sort, and paginate in phases. For large reports, disabling the filter or sort stages can be quite
+helpful when they are not needed. Use `ro/skip-filtering?` to programatically force the report to skip the processing
+of filters (normally if you provide a `row-visible?` it is called once per row no matter what). Sorting can be disabled
+by calling `report/clear-sort!`, which does not re-render or re-sort the table. It just sets a flag so that future
+operations won't call the sort stage. This dissoc's the :sort-by sort paramter, so NOT including a `:sort-by` in your
+`ro/initial-sort-params` is how to disable sorting on initial load. Pagination is cheap, so it should never be the
+source of problems.
+
+Note also that filtering happens first, then sorting, then pagination. If you re-sort, then filtering will never
+be re-applied, but if you change the filters sorting will also happen (unless disabled).
+

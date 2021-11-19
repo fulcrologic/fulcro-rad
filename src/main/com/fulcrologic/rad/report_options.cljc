@@ -494,3 +494,12 @@
 
    See also `form-links`, `links`, `row-actions`, and `column-formatters`."
   :com.fulcrologic.rad.report/on-select-row)
+
+(def skip-filtering?
+  "A boolean or `(fn [ control-values] boolean)` that can be used to short-circuit the filtering step. Normally,
+   if a `ro/row-visible?` option is set then that function will be called once for every row in your
+   report, which can cause a significant performance hit on large reports. This allows you to indicate
+   that the current filtering selection does not require this step.
+
+   `control-values` will be a map that contains the values of all of the controls that have one."
+  :com.fulcrologic.rad.report/skip-filtering?)

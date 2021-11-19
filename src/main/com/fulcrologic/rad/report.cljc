@@ -35,7 +35,8 @@
     [com.fulcrologic.rad.picker-options :as picker-options]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [taoensso.tufte :refer [profile p]]))
 
 (defn report-ident
   "Returns the ident of a RAD report. The parameter can be a react instance, a class, or the registry key(word)
@@ -97,7 +98,8 @@
 ;; LOGIC
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(def global-events {})
+(def global-events {:event/clear-sort
+                    {::uism/handler (fn [env] (uism/dissoc-aliased env :sort-by))}})
 
 (defn report-options
   "Returns the report options from the current report actor."
@@ -193,35 +195,40 @@
   "Generates filtered rows, which is an intermediate cached value (not displayed). This function is used in the
    internal state machine, and may be useful when extending the pre-defined machine."
   [{::uism/keys [state-map] :as uism-env}]
-  (let [all-rows      (uism/alias-value uism-env :raw-rows)
-        row-visible?  (report-options uism-env ::row-visible?)
-        normalized?   (some-> all-rows (first) (eql/ident?))
-        report        (uism/actor-class uism-env :actor/report)
-        BodyItem      (comp/component-options report ro/BodyItem)
-        filtered-rows (if row-visible?
-                        (let [parameters (current-control-parameters uism-env)]
-                          (filterv
-                            (fn [row]
-                              (let [row (if normalized? (fstate/ui->props state-map BodyItem row) row)]
-                                (row-visible? parameters row)))
-                            all-rows))
-                        all-rows)]
-    (uism/assoc-aliased uism-env :filtered-rows filtered-rows)))
+  (p `filter-rows
+    (let [all-rows   (uism/alias-value uism-env :raw-rows)
+          parameters (current-control-parameters uism-env)
+          {::keys [row-visible? skip-filtering?]} (report-options uism-env)]
+      (if (and row-visible? (not (true? (?! skip-filtering? parameters))))
+        (let [normalized?   (some-> all-rows (first) (eql/ident?))
+              report        (uism/actor-class uism-env :actor/report)
+              BodyItem      (comp/component-options report ro/BodyItem)
+              filtered-rows (filterv
+                              (fn [row]
+                                (let [row (if normalized? (fstate/ui->props state-map BodyItem row) row)]
+                                  (row-visible? parameters row)))
+                              all-rows)]
+          (uism/assoc-aliased uism-env :filtered-rows filtered-rows))
+        (uism/assoc-aliased uism-env :filtered-rows all-rows)))))
 
 (defn sort-rows
   "Sorts the filtered rows. Input is the cached intermediate filtered rows, output is cached sorted rows (not visible). This function is used in the
    internal state machine, and may be useful when extending the pre-defined machine."
   [{::uism/keys [state-map] :as uism-env}]
-  (let [all-rows     (uism/alias-value uism-env :filtered-rows)
-        compare-rows (report-options uism-env ::compare-rows)
-        normalized?  (some-> all-rows (first) (eql/ident?))
-        sorted-rows  (if compare-rows
-                       (let [sort-params (merge (uism/alias-value uism-env :sort-params) {:state-map state-map})
-                             keyfn       (if normalized? #(get-in state-map %) identity)
-                             comparefn   (fn [a b] (compare-rows sort-params a b))]
-                         (vec (sort-by keyfn comparefn all-rows)))
-                       all-rows)]
-    (uism/assoc-aliased uism-env :sorted-rows sorted-rows)))
+  (p `sort-rows
+    (let [{desired-sort-by :sort-by :as sort-params} (merge (uism/alias-value uism-env :sort-params) {:state-map state-map})
+          all-rows (uism/alias-value uism-env :filtered-rows)]
+      (if desired-sort-by
+        (let [compare-rows (report-options uism-env ::compare-rows)
+              normalized?  (some-> all-rows (first) (eql/ident?))
+              sorted-rows  (if compare-rows
+                             (let [
+                                   keyfn     (if normalized? #(get-in state-map %) identity)
+                                   comparefn (fn [a b] (compare-rows sort-params a b))]
+                               (vec (sort-by keyfn comparefn all-rows)))
+                             all-rows)]
+          (uism/assoc-aliased uism-env :sorted-rows sorted-rows))
+        (uism/assoc-aliased uism-env :sorted-rows all-rows)))))
 
 (declare goto-page*)
 
@@ -253,33 +260,34 @@
 (defn populate-current-page
   "Internal state machine implementation. May be used by extensions to the stock state machine."
   [uism-env]
-  (->
-    (if (report-options uism-env ::paginate?)
-      (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
-            page-size      (or (report-options uism-env ::page-size) 20)
-            available-rows (or (uism/alias-value uism-env :sorted-rows) [])
-            n              (count available-rows)
-            stragglers?    (pos? (rem n page-size))
-            pages          (cond-> (int (/ n page-size))
-                             stragglers? inc)
-            current-page   (cond
-                             (zero? pages) 1
-                             (> current-page pages) pages
-                             :else current-page)
-            page-start     (* (dec current-page) page-size)
-            rows           (cond
-                             (= pages current-page) (subvec available-rows page-start n)
-                             (> n page-size) (subvec available-rows page-start (+ page-start page-size))
-                             :else available-rows)]
-        (if (and (not= 1 current-page) (empty? rows))
-          (goto-page* uism-env 1)
-          (-> uism-env
-            (uism/assoc-aliased :current-page current-page :current-rows rows :page-count pages))))
-      (-> uism-env
-        (uism/assoc-aliased
-          :page-count 1
-          :current-rows (uism/alias-value uism-env :sorted-rows))))
-    (postprocess-page)))
+  (p `populate-current-page
+    (->
+      (if (report-options uism-env ::paginate?)
+        (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
+              page-size      (or (report-options uism-env ::page-size) 20)
+              available-rows (or (uism/alias-value uism-env :sorted-rows) [])
+              n              (count available-rows)
+              stragglers?    (pos? (rem n page-size))
+              pages          (cond-> (int (/ n page-size))
+                               stragglers? inc)
+              current-page   (cond
+                               (zero? pages) 1
+                               (> current-page pages) pages
+                               :else current-page)
+              page-start     (* (dec current-page) page-size)
+              rows           (cond
+                               (= pages current-page) (subvec available-rows page-start n)
+                               (> n page-size) (subvec available-rows page-start (+ page-start page-size))
+                               :else available-rows)]
+          (if (and (not= 1 current-page) (empty? rows))
+            (goto-page* uism-env 1)
+            (-> uism-env
+              (uism/assoc-aliased :current-page current-page :current-rows rows :page-count pages))))
+        (-> uism-env
+          (uism/assoc-aliased
+            :page-count 1
+            :current-rows (uism/alias-value uism-env :sorted-rows))))
+      (postprocess-page))))
 
 (defn goto-page*
   "Internal state machine implementation. May be used by extensions to the stock state machine."
@@ -308,14 +316,15 @@
   "Internal state machine implementation. May be used by extensions to the stock state machine.
    Apply the raw result transform, if it is defined."
   [uism-env]
-  (let [xform (report-options uism-env ::raw-result-xform)]
-    (if xform
-      (let [raw-result (uism/alias-value uism-env :raw-rows)
-            report     (uism/actor-class uism-env :actor/report)
-            new-result (xform report raw-result)]
-        (cond-> uism-env
-          new-result (uism/assoc-aliased :raw-rows new-result)))
-      uism-env)))
+  (p `preprocess-raw-result
+    (let [xform (report-options uism-env ::raw-result-xform)]
+      (if xform
+        (let [raw-result (uism/alias-value uism-env :raw-rows)
+              report     (uism/actor-class uism-env :actor/report)
+              new-result (xform report raw-result)]
+          (cond-> uism-env
+            new-result (uism/assoc-aliased :raw-rows new-result)))
+        uism-env))))
 
 (defn handle-filter-event
   "Internal state machien implementation of handling :event/filter."
@@ -389,27 +398,28 @@
                             (not run-now?) (uism/activate :state/gathering-parameters)))))}
 
     :state/loading
-    (merge global-events
-      {::uism/events
+    {::uism/events
+     (merge global-events
        {:event/loaded {::uism/handler (fn [{::uism/keys [state-map] :as env}]
                                         (let [Report     (uism/actor-class env :actor/report)
                                               {::keys [row-pk report-loaded]} (comp/component-options Report)
                                               table-name (::attr/qualified-key row-pk)]
-                                          (-> env
-                                            (preprocess-raw-result)
-                                            (filter-rows)
-                                            (sort-rows)
-                                            (populate-current-page)
-                                            (uism/store :last-load-time (inst-ms (dt/now)))
-                                            (uism/store :raw-items-in-table (count (keys (get state-map table-name))))
-                                            (uism/activate :state/gathering-parameters)
-                                            (cond-> report-loaded report-loaded))))}
+                                          (profile {}
+                                            (-> env
+                                              (preprocess-raw-result)
+                                              (filter-rows)
+                                              (sort-rows)
+                                              (populate-current-page)
+                                              (uism/store :last-load-time (inst-ms (dt/now)))
+                                              (uism/store :raw-items-in-table (count (keys (get state-map table-name))))
+                                              (uism/activate :state/gathering-parameters)
+                                              (cond-> report-loaded report-loaded)))))}
         :event/failed {::uism/handler (fn [env] (log/error "Report failed to load.")
-                                        (uism/activate env :state/gathering-parameters))}}})
+                                        (uism/activate env :state/gathering-parameters))}})}
 
     :state/gathering-parameters
-    (merge global-events
-      {::uism/events
+    {::uism/events
+     (merge global-events
        {:event/goto-page         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
                                                    (let [{:keys [page]} event-data]
                                                      (goto-page* env page)))}
@@ -422,24 +432,25 @@
                                                      (goto-page* env (dec (max 2 page)))))}
 
         :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data app] :as env}]
-                                                   (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
-                                                     (let [sort-by    (uism/alias-value env :sort-by)
-                                                           sort-path  (route-params-path env ::sort)
-                                                           ascending? (uism/alias-value env :ascending?)
-                                                           ascending? (if (= qualified-key sort-by)
-                                                                        (not ascending?)
-                                                                        true)]
-                                                       (rad-routing/update-route-params! app update-in sort-path merge
-                                                         {:ascending? ascending?
-                                                          :sort-by    qualified-key})
-                                                       (-> env
-                                                         (uism/assoc-aliased
-                                                           :busy? false
-                                                           :sort-by qualified-key
-                                                           :ascending? ascending?)
-                                                         (sort-rows)
-                                                         (populate-current-page)))
-                                                     env))}
+                                                   (profile {}
+                                                     (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
+                                                       (let [sort-by    (uism/alias-value env :sort-by)
+                                                             sort-path  (route-params-path env ::sort)
+                                                             ascending? (uism/alias-value env :ascending?)
+                                                             ascending? (if (= qualified-key sort-by)
+                                                                          (not ascending?)
+                                                                          true)]
+                                                         (rad-routing/update-route-params! app update-in sort-path merge
+                                                           {:ascending? ascending?
+                                                            :sort-by    qualified-key})
+                                                         (-> env
+                                                           (uism/assoc-aliased
+                                                             :busy? false
+                                                             :sort-by qualified-key
+                                                             :ascending? ascending?)
+                                                           (sort-rows)
+                                                           (populate-current-page)))
+                                                       env)))}
 
         :event/select-row        {::uism/handler (fn [{::uism/keys [app event-data] :as env}]
                                                    (let [row               (:row event-data)
@@ -454,11 +465,12 @@
                                                    (uism/assoc-aliased env :busy? true))}
 
         :event/do-filter         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                   (-> env
-                                                     (uism/assoc-aliased :busy? false)
-                                                     (filter-rows)
-                                                     (sort-rows)
-                                                     (populate-current-page)))}
+                                                   (profile {}
+                                                     (-> env
+                                                       (uism/assoc-aliased :busy? false)
+                                                       (filter-rows)
+                                                       (sort-rows)
+                                                       (populate-current-page))))}
 
         :event/filter            {::uism/handler handle-filter-event}
 
@@ -466,7 +478,7 @@
 
         :event/run               {::uism/handler load-report!}
 
-        :event/resume            {::uism/handler handle-resume-report}}})}})
+        :event/resume            {::uism/handler handle-resume-report}})}}})
 
 (defn run-report!
   "Run a report with the current parameters"
@@ -743,11 +755,22 @@
 
 (defn sort-rows!
   "Sort the report by the given attribute. Changes direction if the report is already sorted by that attribute. The implementation
-   of sorting is built-in and uses compare, but you can override how sorting works by defining `::report/sort-rows` on your report."
+   of sorting is built-in and uses compare, but you can override how sorting works by defining `ro/compare-rows` on your report."
   ([this by-attribute]
    (uism/trigger! this (comp/get-ident this) :event/sort {::attr/attribute by-attribute}))
   ([app class-or-reg-key by-attribute]
    (uism/trigger! app (report-ident class-or-reg-key) :event/sort {::attr/attribute by-attribute})))
+
+(defn clear-sort!
+  "Make it so the report is not sorted (skips the sort step on any action that would normally (re)sort
+   the report). This can be used to speed up loading of large results, especially if they were
+   already in an acceptable order from the server.
+
+   NOTE: This does NOT refresh the report. The natural order will appear next time the report needs sorted."
+  ([this]
+   (uism/trigger! this (comp/get-ident this) :event/clear-sort))
+  ([app class-or-reg-key]
+   (uism/trigger! app (report-ident class-or-reg-key) :event/clear-sort)))
 
 (defn filter-rows!
   "Update the filtered rows based on current report parameters."
