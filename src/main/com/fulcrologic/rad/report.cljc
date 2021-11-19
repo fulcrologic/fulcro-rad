@@ -532,7 +532,8 @@
      ro/row-pk
      ro/source-attribute
 
-     If you elide the body, one will be generated for you.
+     If you elide the body, one will be generated for you with the classname `{sym}-Row` where `sym` is the sym you supply
+     for the report itself.
      "
      [sym arglist & args]
      (let [this-sym  (first arglist)
