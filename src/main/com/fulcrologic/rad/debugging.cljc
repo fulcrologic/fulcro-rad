@@ -297,15 +297,28 @@
 
 (defn top-bottom-debugger
   "Use as the only item in the body of a RAD form. Will render the form first, and the debugger under it. Use `debugger`
-   if you want to deal with your own layout."
-  [form-instance props]
-  (div nil
-    (div {:width "100%"}
-      (form/render-layout form-instance props))
-    (div {:style {:width  "100%"
-                  :height "2000px"}}
-      (error-boundary
-        (debugger form-instance)))))
+   if you want to deal with your own layout. REQUIRES SEMANTIC UI, and does not work well within a SUI container class.
+
+   If you supply `render`, a `(fn [] element)`, then it will be used instead of form/render-layout to render the form
+   itself."
+  ([form-instance props]
+   (comp/fragment
+     (div :.ui.basic.segment nil
+       (error-boundary
+         (let [validator (comp/component-options form-instance fo/validator)]
+           (ui-form-info props {:form-instance form-instance
+                                :validator     validator}))))
+     (div {:width "100%"}
+       (form/render-layout form-instance props))))
+  ([form-instance props render]
+   (comp/fragment
+     (div :.ui.basic.segment nil
+       (error-boundary
+         (let [validator (comp/component-options form-instance fo/validator)]
+           (ui-form-info props {:form-instance form-instance
+                                :validator     validator}))))
+     (div {:width "100%"}
+       (render)))))
 
 (defn side-by-side-debugger
   "Use as the only item in the body of a RAD form. Will render the form first, and the debugger under it. Use `debugger`
