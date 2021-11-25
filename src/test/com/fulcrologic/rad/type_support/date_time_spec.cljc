@@ -12,7 +12,6 @@
         :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
                [goog.date.duration :as g-duration]])
     [cljc.java-time.instant :as instant]
-    [com.fulcrologic.rad.type-support.date-time :as datetime]
     [cljc.java-time.zoned-date-time :as zdt])
   #?(:clj (:import java.io.Writer
                    [java.util Date]
@@ -73,7 +72,7 @@
       (dt/html-datetime-string->inst nil) => nil)))
 
 (specification "inst->local-datetime"
-  (let [tm          (datetime/new-date (instant/to-epoch-milli (cljc.java-time.instant/parse "2019-03-05T12:00:00Z")))
+  (let [tm          (dt/new-date (instant/to-epoch-milli (cljc.java-time.instant/parse "2019-03-05T12:00:00Z")))
         expected-LA (cljc.java-time.local-date-time/of 2019 3 5 4 0 0)
         expected-NY (cljc.java-time.local-date-time/of 2019 3 5 7 0 0)]
     (dt/set-timezone! "America/Los_Angeles")
@@ -82,106 +81,133 @@
       (dt/inst->local-datetime tm) => expected-LA
       "Converts UTC inst into properly time-zoned local date times"
       (dt/inst->local-datetime "America/Los_Angeles" tm) => expected-LA
-      (dt/inst->local-datetime "America/New_York" tm) => expected-NY)))
+      (dt/inst->local-datetime "America/New_York" tm) => expected-NY
+      "Defaults to current datetime if value is nil and no default is provided"
+      (ldt/is-before (dt/inst->local-datetime "America/Los_Angeles" nil)
+                     (ldt/now)) => true
+      "Uses default value if one is provided and inst param is nil"
+      (dt/inst->local-datetime "America/Los_Angeles" nil tm) => expected-LA
+      (dt/inst->local-datetime "America/Los_Angeles" nil nil) => nil)))
 
 (specification "set-timezone!"
-  (datetime/set-timezone! "America/New_York")
+  (dt/set-timezone! "America/New_York")
   (assertions
     "allows the root binding to be modified to a new time zone"
-    (str datetime/*current-timezone*) => "America/New_York")
-  (binding [datetime/*current-timezone* "America/Los_Angeles"]
+    (str dt/*current-timezone*) => "America/New_York")
+  (binding [dt/*current-timezone* "America/Los_Angeles"]
     (assertions
       "and can be overridden with binding"
-      (str datetime/*current-timezone*) => "America/Los_Angeles")))
+      (str dt/*current-timezone*) => "America/Los_Angeles")))
 
 (specification "inst->human-readable-date"
   (behavior "formats dates based on the currently-set time zone"
     (let [tm #inst "2020-03-04T06:00:00Z"]
-      (datetime/set-timezone! "UTC")
+      (dt/set-timezone! "UTC")
       (assertions
         "UTC"
-        (datetime/inst->human-readable-date tm) => "Wed, Mar 4, 2020")
-      (datetime/set-timezone! "America/New_York")
+        (dt/inst->human-readable-date tm) => "Wed, Mar 4, 2020")
+      (dt/set-timezone! "America/New_York")
       (assertions
         "NY"
-        (datetime/inst->human-readable-date tm) => "Wed, Mar 4, 2020")
-      (datetime/set-timezone! "America/Los_Angeles")
+        (dt/inst->human-readable-date tm) => "Wed, Mar 4, 2020")
+      (dt/set-timezone! "America/Los_Angeles")
       (assertions
         "LA"
-        (datetime/inst->human-readable-date tm) => "Tue, Mar 3, 2020"))))
+        (dt/inst->human-readable-date tm) => "Tue, Mar 3, 2020"))))
 
 (specification "inst->html-date"
   (behavior "Outputs the correct HTML date for the given instant based on the current time zone"
     (let [tm #inst "2020-03-04T06:00:00Z"]
-      (datetime/set-timezone! "UTC")
+      (dt/set-timezone! "UTC")
       (assertions
         "UTC"
-        (datetime/inst->html-date tm) => "2020-03-04")
-      (datetime/set-timezone! "America/New_York")
+        (dt/inst->html-date tm) => "2020-03-04")
+      (dt/set-timezone! "America/New_York")
       (assertions
         "NY"
-        (datetime/inst->html-date tm) => "2020-03-04")
-      (datetime/set-timezone! "America/Los_Angeles")
+        (dt/inst->html-date tm) => "2020-03-04")
+      (dt/set-timezone! "America/Los_Angeles")
       (assertions
         "LA"
-        (datetime/inst->html-date tm) => "2020-03-03"))))
+        (dt/inst->html-date tm) => "2020-03-03")))
+  (behavior "Uses default value if given inst is nil"
+    (dt/set-timezone! "America/Los_Angeles")
+    (assertions
+      "If no default value is provided, return current date"
+      (dt/inst->html-date nil) => (str (ld/now))
+      "Return default value"
+      (dt/inst->html-date nil #inst "2020-03-04T06:00:00Z") => "2020-03-03"
+      "Returns empty string on nil"
+      (dt/inst->html-date nil nil) => "")))
 
 (specification "html-date->inst"
   (behavior "Outputs the correct instant for an HTML date, properly adjusted to the local time given in the *current-timezone*"
     (let [dt "2020-03-01"
           tm (lt/of 6 0)]
-      (datetime/set-timezone! "UTC")
+      (dt/set-timezone! "UTC")
       (assertions
         "UTC"
-        (datetime/html-date->inst dt tm) => #inst "2020-03-01T06:00:00Z")
+        (dt/html-date->inst dt tm) => #inst "2020-03-01T06:00:00Z")
 
-      (datetime/set-timezone! "America/New_York")
+      (dt/set-timezone! "America/New_York")
       (assertions
         "NY"
-        (datetime/html-date->inst dt tm) => #inst "2020-03-01T11:00:00Z")
+        (dt/html-date->inst dt tm) => #inst "2020-03-01T11:00:00Z")
 
-      (datetime/set-timezone! "America/Los_Angeles")
+      (dt/set-timezone! "America/Los_Angeles")
       (assertions
         "LA"
-        (datetime/html-date->inst dt tm) => #inst "2020-03-01T14:00:00Z")))
+        (dt/html-date->inst dt tm) => #inst "2020-03-01T14:00:00Z")))
   "Empty string and nil HTML input string return nil instant"
   (dt/html-date->inst "" (lt/now)) => nil
   (dt/html-date->inst nil (lt/now)) => nil)
 
 (specification "inst->zoned-date-time"
-  (let [expected (zdt/of (ldt/of (ld/of 2020 3 1) (lt/of 6 0)) (datetime/get-zone-id "America/Los_Angeles"))]
-    (datetime/set-timezone! "America/Los_Angeles")
+  (let [expected (zdt/of (ldt/of (ld/of 2020 3 1) (lt/of 6 0)) (dt/get-zone-id "America/Los_Angeles"))]
+    (dt/set-timezone! "America/Los_Angeles")
     (assertions
-      (= expected (datetime/inst->zoned-date-time #inst "2020-03-01T14:00:00Z")) => true)))
+      "Converts an instant to the correct zoned date time"
+      (= expected (dt/inst->zoned-date-time #inst "2020-03-01T14:00:00Z")) => true
+      "Defaults to current date if value is nil and no default is provided"
+      (zdt/is-before (dt/inst->zoned-date-time "America/Los_Angeles" nil)
+                     (zdt/now)) => true
+      "Uses default value if one is provided and inst param is nil"
+      (dt/inst->zoned-date-time "America/Los_Angeles" nil #inst "2020-03-01T14:00:00Z") => expected
+      (dt/inst->zoned-date-time "America/Los_Angeles" nil nil) => nil)))
 
 (specification "inst->local-date"
   (let [expected (ld/of 2020 2 29)]
-    (datetime/set-timezone! "America/Los_Angeles")
+    (dt/set-timezone! "America/Los_Angeles")
     (assertions
       "Converts an instant to the correct (zoned) local date"
-      (= expected (datetime/inst->local-date #inst "2020-03-01T04:00:00Z")) => true)))
+      (= expected (dt/inst->local-date #inst "2020-03-01T04:00:00Z")) => true
+      "Defaults to current date if value is nil and no default is provided"
+      (dt/inst->local-date "UTC" nil) => (ld/now)
+      "Uses default value if one is provided and inst param is nil"
+      (dt/inst->local-date "America/Los_Angeles" nil #inst "2020-03-01T04:00:00Z") => expected
+      (dt/inst->local-date "America/Los_Angeles" nil nil) => nil)))
 
 (specification "beginning-of-month"
   (let [expected #inst "2020-02-01T08:00:00Z"]
-    (datetime/set-timezone! "America/Los_Angeles")
+    (dt/set-timezone! "America/Los_Angeles")
     (assertions
       "Converts an instant to the correct (zoned) instant at the beginning of the month."
-      (datetime/beginning-of-month #inst "2020-03-01T04:00:00Z") => expected)))
+      (dt/beginning-of-month #inst "2020-03-01T04:00:00Z") => expected)))
 
 (specification "formatting Locale support"
-  (datetime/with-timezone "Asia/Tehran"
+  (dt/with-timezone "Asia/Tehran"
     (r.locale/with-locale "en-US"
       (assertions
         "Formats the date/time in the correct zone and locale"
-        (datetime/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => "04PM Sun Mar 15, 2020"
-        (datetime/tformat "hh:mmaX" #inst "2020-03-15T12:45Z") => "04:15PM+0330"
-        (datetime/tformat "hh:mmaXX" #inst "2020-03-15T12:45Z") => "04:15PM+0330"
-        (datetime/tformat "hh:mmaXXX" #inst "2020-03-15T12:45Z") => "04:15PM+03:30"
-        (datetime/tformat "hh:mmaXXXX" #inst "2020-03-15T12:45Z") => "04:15PM+0330"
-        (datetime/tformat "hh:mmaXXXXX" #inst "2020-03-15T12:45Z") => "04:15PM+03:30")))
-  #_(datetime/with-timezone "America/Bogota"
+        (dt/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => "04PM Sun Mar 15, 2020"
+        (dt/tformat "hh:mmaX" #inst "2020-03-15T12:45Z") => "04:15PM+0330"
+        (dt/tformat "hh:mmaXX" #inst "2020-03-15T12:45Z") => "04:15PM+0330"
+        (dt/tformat "hh:mmaXXX" #inst "2020-03-15T12:45Z") => "04:15PM+03:30"
+        (dt/tformat "hh:mmaXXXX" #inst "2020-03-15T12:45Z") => "04:15PM+0330"
+        (dt/tformat "hh:mmaXXXXX" #inst "2020-03-15T12:45Z") => "04:15PM+03:30")))
+  #_(dt/with-timezone "America/Bogota"
       (r.locale/with-locale "es-CO"
         (assertions
           "Formats the date/time in the correct zone and locale"
-          (datetime/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => #?(:cljs "07a.\u00a0m. dom. mar. 15, 2020"
+          (dt/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => #?(:cljs "07a.\u00a0m. dom. mar. 15, 2020"
                                                                                  :clj  "07a. m. dom. mar. 15, 2020")))))
