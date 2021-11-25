@@ -172,14 +172,19 @@
   (dt/html-date->inst nil (lt/now)) => nil)
 
 (specification "inst->zoned-date-time"
-  (let [expected (zdt/of (ldt/of (ld/of 2020 3 1) (lt/of 6 0)) (dt/get-zone-id "America/Los_Angeles"))]
+  (let [expected    (zdt/of (ldt/of (ld/of 2020 3 1) (lt/of 6 0)) (dt/get-zone-id "America/Los_Angeles"))
+        pretend-now #inst "2020-04-05T12:00Z"
+        zdt-now (zdt/of (ldt/of (ld/of 2020 4 5) (lt/of 5 0)) (dt/get-zone-id "America/Los_Angeles"))]
     (dt/set-timezone! "America/Los_Angeles")
+    (when-mocking
+      (dt/now) => pretend-now
+
+      (assertions
+        "Defaults to current date if value is nil and no default is provided"
+        (dt/inst->zoned-date-time "America/Los_Angeles" nil) => zdt-now))
     (assertions
       "Converts an instant to the correct zoned date time"
       (= expected (dt/inst->zoned-date-time #inst "2020-03-01T14:00:00Z")) => true
-      "Defaults to current date if value is nil and no default is provided"
-      (zdt/is-before (dt/inst->zoned-date-time "America/Los_Angeles" nil)
-        (zdt/now)) => true
       "Uses default value if one is provided and inst param is nil"
       (dt/inst->zoned-date-time "America/Los_Angeles" nil #inst "2020-03-01T14:00:00Z") => expected
       (dt/inst->zoned-date-time "America/Los_Angeles" nil nil) => nil)))
