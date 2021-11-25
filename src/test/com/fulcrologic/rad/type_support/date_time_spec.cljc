@@ -135,14 +135,19 @@
         "LA"
         (dt/inst->html-date tm) => "2020-03-03")))
   (behavior "Uses default value if given inst is nil"
-    (dt/set-timezone! "America/Los_Angeles")
-    (assertions
-      "If no default value is provided, return current date"
-      (dt/inst->html-date nil) => (str (ld/now))
-      "Return default value"
-      (dt/inst->html-date nil #inst "2020-03-04T06:00:00Z") => "2020-03-03"
-      "Returns empty string on nil"
-      (dt/inst->html-date nil nil) => "")))
+    (let [pretend-now #inst "2021-03-03T12:00Z"]
+      (when-mocking
+        (dt/now) => pretend-now
+
+        (assertions
+          "If no default value is provided, return current date"
+          (dt/inst->html-date nil) => "2021-03-03"))
+      (dt/set-timezone! "America/Los_Angeles")
+      (assertions
+        "Return default value"
+        (dt/inst->html-date nil #inst "2020-03-04T06:00:00Z") => "2020-03-03"
+        "Returns empty string on nil"
+        (dt/inst->html-date nil nil) => ""))))
 
 (specification "html-date->inst"
   (behavior "Outputs the correct instant for an HTML date, properly adjusted to the local time given in the *current-timezone*"
