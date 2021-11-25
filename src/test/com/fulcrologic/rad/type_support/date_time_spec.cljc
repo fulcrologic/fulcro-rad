@@ -7,7 +7,7 @@
     [cljc.java-time.local-date-time :as ldt]
     [cljc.java-time.format.date-time-formatter :as dtf]
     [com.fulcrologic.rad.locale :as r.locale]
-    [fulcro-spec.core :refer [assertions specification behavior]]
+    [fulcro-spec.core :refer [assertions specification behavior when-mocking]]
     #?@(:clj  []
         :cljs [[java.time :refer [Duration ZoneId LocalTime LocalDateTime LocalDate DayOfWeek Month ZoneOffset Instant]]
                [goog.date.duration :as g-duration]])
@@ -76,15 +76,19 @@
         expected-LA (cljc.java-time.local-date-time/of 2019 3 5 4 0 0)
         expected-NY (cljc.java-time.local-date-time/of 2019 3 5 7 0 0)]
     (dt/set-timezone! "America/Los_Angeles")
+    (let [pretend-now #inst "2020-01-01T12:00Z"]
+      (when-mocking
+        (dt/now) => pretend-now
+
+        (assertions
+          "Defaults to current datetime if value is nil and no default is provided"
+          (dt/inst->local-datetime "America/Los_Angeles" nil) => (ldt/of 2020 1 1 4 0))))
     (assertions
       "Uses the globally-set time zone by default"
       (dt/inst->local-datetime tm) => expected-LA
       "Converts UTC inst into properly time-zoned local date times"
       (dt/inst->local-datetime "America/Los_Angeles" tm) => expected-LA
       (dt/inst->local-datetime "America/New_York" tm) => expected-NY
-      "Defaults to current datetime if value is nil and no default is provided"
-      (ldt/is-before (dt/inst->local-datetime "America/Los_Angeles" nil)
-                     (ldt/now)) => true
       "Uses default value if one is provided and inst param is nil"
       (dt/inst->local-datetime "America/Los_Angeles" nil tm) => expected-LA
       (dt/inst->local-datetime "America/Los_Angeles" nil nil) => nil)))
@@ -170,19 +174,25 @@
       (= expected (dt/inst->zoned-date-time #inst "2020-03-01T14:00:00Z")) => true
       "Defaults to current date if value is nil and no default is provided"
       (zdt/is-before (dt/inst->zoned-date-time "America/Los_Angeles" nil)
-                     (zdt/now)) => true
+        (zdt/now)) => true
       "Uses default value if one is provided and inst param is nil"
       (dt/inst->zoned-date-time "America/Los_Angeles" nil #inst "2020-03-01T14:00:00Z") => expected
       (dt/inst->zoned-date-time "America/Los_Angeles" nil nil) => nil)))
 
 (specification "inst->local-date"
+  (let [pretend-now #inst "2020-01-01T12:00Z"]
+    (when-mocking
+      (dt/now) => pretend-now
+
+      (assertions
+        "Defaults to current date if value is nil and no default is provided"
+        (dt/inst->local-date "America/Los_Angeles" nil) => (ld/of 2020 1 1))))
   (let [expected (ld/of 2020 2 29)]
     (dt/set-timezone! "America/Los_Angeles")
+
     (assertions
       "Converts an instant to the correct (zoned) local date"
       (= expected (dt/inst->local-date #inst "2020-03-01T04:00:00Z")) => true
-      "Defaults to current date if value is nil and no default is provided"
-      (dt/inst->local-date "UTC" nil) => (ld/now)
       "Uses default value if one is provided and inst param is nil"
       (dt/inst->local-date "America/Los_Angeles" nil #inst "2020-03-01T04:00:00Z") => expected
       (dt/inst->local-date "America/Los_Angeles" nil nil) => nil)))
@@ -210,4 +220,4 @@
         (assertions
           "Formats the date/time in the correct zone and locale"
           (dt/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => #?(:cljs "07a.\u00a0m. dom. mar. 15, 2020"
-                                                                                 :clj  "07a. m. dom. mar. 15, 2020")))))
+                                                                           :clj  "07a. m. dom. mar. 15, 2020")))))
