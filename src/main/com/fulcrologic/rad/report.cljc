@@ -738,7 +738,31 @@
    ```"
   [app type style formatter]
   (let [{::app/keys [runtime-atom]} app]
-    (swap! runtime-atom assoc-in [::type->style->formatter type style] formatter)))
+    (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls ::type->style->formatter type style] formatter)))
+
+(defn install-layout!
+  "Install a report layout renderer for the given style. `render-row` is a `(fn [report-instance])`.
+
+  See other support functions in this ns for help rendering, such as `formatted-column-value`, `form-link`,
+  `select-row!`.
+
+   This should be called before mounting your app.
+   "
+  [app report-style render]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls ::style->layout report-style] render)))
+
+(defn install-row-layout!
+  "Install a row layout renderer for the given style. `render-row` is a `(fn [report-instance row-class row-props])`.
+
+  See other support functions in this ns for help rendering, such as `formatted-column-value`, `form-link`,
+  `select-row!`.
+
+   This should be called before mounting your app.
+   "
+  [app row-style render-row]
+  (let [{::app/keys [runtime-atom]} app]
+    (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls ::row-style->row-layout row-style] render-row)))
 
 (defn current-rows
   "Get a vector of the current rows that should be shown by the renderer (sorted/paginated/filtered). `report-instance`
