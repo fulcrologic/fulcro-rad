@@ -749,26 +749,28 @@
   (when-not (tempid/tempid? new-id)
     (throw (ex-info (str "Default state received " new-id " for a new form ID. It MUST be a Fulcro tempid.")
              {})))
-  (let [{::keys [id attributes default-values field-styles]} (comp/component-options FormClass)
-        {id-key ::attr/qualified-key} id]
-    (reduce
-      (fn [result {::attr/keys [qualified-key type field-style]
-                   ::keys      [default-value] :as attr}]
-        (let [field-style   (?! (or (get field-styles qualified-key) field-style))
-              default-value (?! (get default-values qualified-key default-value))]
-          (cond
-            (and (not field-style) (= :ref type) (attr/to-many? attr))
-            (assoc result qualified-key (default-to-many FormClass attr))
+  (let [{::keys [id attributes default-values initialize-ui-props field-styles]} (comp/component-options FormClass)
+        {id-key ::attr/qualified-key} id
+        entity (reduce
+                 (fn [result {::attr/keys [qualified-key type field-style]
+                              ::keys      [default-value] :as attr}]
+                   (let [field-style   (?! (or (get field-styles qualified-key) field-style))
+                         default-value (?! (get default-values qualified-key default-value))]
+                     (cond
+                       (and (not field-style) (= :ref type) (attr/to-many? attr))
+                       (assoc result qualified-key (default-to-many FormClass attr))
 
-            (and (not field-style) (= :ref type) (not (attr/to-many? attr)))
-            (assoc result qualified-key (default-to-one FormClass attr))
+                       (and (not field-style) (= :ref type) (not (attr/to-many? attr)))
+                       (assoc result qualified-key (default-to-one FormClass attr))
 
-            :otherwise
-            (if-not (nil? default-value)
-              (assoc result qualified-key default-value)
-              result))))
-      {id-key new-id}
-      attributes)))
+                       :otherwise
+                       (if-not (nil? default-value)
+                         (assoc result qualified-key default-value)
+                         result))))
+                 {id-key new-id}
+                 attributes)]
+    ;; The merge is so that `initialize-ui-props` cannot possibly harm keys that are initialized by defaults
+    (merge (?! initialize-ui-props FormClass entity) entity)))
 
 (defn route-target-ready
   "Same as dynamic routing target-ready, but works in UISM via env."
@@ -937,6 +939,21 @@
         derive-fields (uism/apply-action update-tree* derive-fields form-class form-ident)
         (and (not= master-form-class form-class) master-derive-fields) (uism/apply-action update-tree* master-derive-fields master-form-class master-form-ident)))))
 
+(defn handle-user-ui-props
+  "UISM handler for invoking a form's `initialize-ui-props` option."
+  [{::uism/keys [state-map] :as env} FormClass form-ident]
+  (let [{::keys [initialize-ui-props]} (comp/component-options FormClass)]
+    (if initialize-ui-props
+      (let [denorm-props    (fns/ui->props state-map FormClass form-ident)
+            predefined-keys (set (keys denorm-props))
+            ui-props        (?! initialize-ui-props FormClass denorm-props)
+            all-keys        (set (keys ui-props))
+            ;; Ensure that the user's function cannot possible conflict with form state
+            allowed-keys    (set/difference all-keys predefined-keys)
+            ui-entity       (select-keys ui-props allowed-keys)]
+        (uism/apply-action env update-in form-ident merge ui-entity))
+      env)))
+
 (defstatemachine form-machine
   {::uism/actors
    #{:actor/form}
@@ -964,6 +981,7 @@
                  form-ident (uism/actor->ident env :actor/form)]
              (-> env
                (auto-create-to-one)
+               (handle-user-ui-props FormClass form-ident)
                (uism/apply-action fs/add-form-config* FormClass form-ident {:destructive? true})
                (uism/apply-action fs/mark-complete* form-ident)
                (route-target-ready form-ident)

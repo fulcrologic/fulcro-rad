@@ -151,7 +151,8 @@
   :com.fulcrologic.rad.form/action-buttons)
 
 (def query-inclusion
-  "A vector of EQL that will be appended to the component's query."
+  "A vector of EQL that will be appended to the component's query. Usually used to add `:ui/???` props for use with
+   hand-rendered UI. See `initialize-ui-props`."
   :com.fulcrologic.rad.form/query-inclusion)
 
 (def default-value
@@ -290,3 +291,17 @@
 (def debug?
   "Indicate a desire to show debug information about the form. Requires support from the rendering plugin."
   :com.fulcrologic.rad.form/debug?)
+
+(def initialize-ui-props
+  "Form-only option, meant for setting up additinal component state (particularly `:ui/???` props that were added
+   in a query inclusion) when the form is created or loaded.
+
+   Either a map or a `(fn [FormClass props] props)` that, when present, is called when an instance of this
+   form is either loaded or created. NOTE: The resulting merge is SHALLOW, and cannot mess with subforms in *any* way.
+   If you want to affect a subform, then you MUST include this option on that subform (instead of trying to reach deeper in props).
+
+   NOTE: It is possible for this function to be called more than once on a given form, so it should not side-effect.
+
+   See `query-inclusion`.
+   "
+  :com.fulcrologic.rad.form/initialize-ui-props)
