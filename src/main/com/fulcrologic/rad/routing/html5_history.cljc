@@ -7,9 +7,7 @@
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.routing :as routing]
-    [com.fulcrologic.rad.authorization :as auth]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [base64-encode base64-decode]]
     [com.fulcrologic.rad.routing.history :as history :refer [RouteHistory]]
     [clojure.string :as str]
@@ -19,7 +17,7 @@
   #?(:clj (:import (java.net URLDecoder URLEncoder)
                    (java.nio.charset StandardCharsets))))
 
-(defn decode-uri-component
+(>defn decode-uri-component
   "Decode the given string as a transit and URI encoded CLJ(s) value."
   [v]
   [(? string?) => (? string?)]
@@ -66,40 +64,22 @@
       (map (fn [[k v]]
              (str (encode-uri-component (name k)) "=" (encode-uri-component (str v)))) string-key-values))))
 
-(defn url->route
-  "Convert the current browser URL into a route path and parameter map. Returns:
-
-   ```
-   {:route [\"path\" \"segment\"]
-    :params {:param value}}
-   ```
-
-   You can save this value and later use it with `apply-route!`.
-  "
-  []
-  #?(:cljs
-     (let [path   (.. js/document -location -pathname)
-           route  (vec (drop 1 (str/split path #"/")))
-           params (or (some-> (.. js/document -location -search) (query-params)) {})]
-       {:route  route
-        :params params})))
-
-(defrecord HTML5History [listeners generator current-uid prior-route]
+(defrecord HTML5History [hash-based? listeners generator current-uid prior-route]
   RouteHistory
   (-push-route! [this route params]
     #?(:cljs
-       (let [url (str "/"
-                   (str/join "/" (map str route))
-                   (query-string params))]
+       (let [url (str (if hash-based? "#/" "/")
+                      (str/join "/" (map str route))
+                      (query-string params))]
          (log/spy :debug ["Pushing route" route params])
          (reset! current-uid (swap! generator inc))
          (reset! prior-route {:route route :params params})
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
-       (let [url (str "/"
-                   (str/join "/" (map str route))
-                   (query-string params))]
+       (let [url (str (if hash-based? "#/" "/")
+                      (str/join "/" (map str route))
+                      (query-string params))]
          (log/spy :debug ["Replacing route" route params])
          (reset! prior-route {:route route :params params})
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
@@ -119,7 +99,9 @@
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
   (-current-route [_]
     #?(:cljs
-       (let [path   (.. js/document -location -pathname)
+       (let [path   (if hash-based?
+                      (.. js/document -location -hash)
+                      (.. js/document -location -pathname))
              params (or (some-> (.. js/document -location -search) (query-params)) {})
              route  (vec (drop 1 (str/split path #"/")))]
          {:route  route
@@ -127,24 +109,25 @@
 
 (defn html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API."
-  []
-  #?(:cljs
-     (try
-       (let [history            (HTML5History. (atom {}) (atom 1) (atom 1) (atom nil))
-             pop-state-listener (fn [evt]
-                                  (let [current-uid (-> history (:current-uid) deref)
-                                        event-uid   (gobj/getValueByKeys evt "state" "uid")
-                                        forward?    (< event-uid current-uid)
-                                        {:keys [route params]} (url->route)
-                                        listeners   (some-> history :listeners deref vals)]
-                                    (log/debug "Got pop state event." evt)
-                                    (doseq [f listeners]
-                                      (f route (assoc params ::history/direction (if forward? :forward :back))))
-                                    (reset! (:prior-route history) (history/-current-route history))))]
-         (.addEventListener js/window "popstate" pop-state-listener)
-         history)
-       (catch :default e
-         (log/error e "Unable to create HTML5 history.")))))
+  ([] (html5-history false))
+  ([hash-based?]
+   #?(:cljs
+      (try
+        (let [history (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil))
+              pop-state-listener (fn [evt]
+                                   (let [current-uid (-> history (:current-uid) deref)
+                                         event-uid   (gobj/getValueByKeys evt "state" "uid")
+                                         forward?    (< event-uid current-uid)
+                                         {:keys [route params]} (history/-current-route history)
+                                         listeners   (some-> history :listeners deref vals)]
+                                     (log/debug "Got pop state event." evt)
+                                     (doseq [f listeners]
+                                       (f route (assoc params ::history/direction (if forward? :forward :back))))
+                                     (reset! (:prior-route history) (history/-current-route history))))]
+          (.addEventListener js/window "popstate" pop-state-listener)
+          history)
+        (catch :default e
+          (log/error e "Unable to create HTML5 history."))))))
 
 (defn apply-route!
   "Apply the given route and params to the URL and routing system. `saved-route` is in the format of
@@ -173,7 +156,7 @@
    WARNING: This should not be called until the HTML5 history is installed in your app."
   [app default-page default-params]
   (let [this      (history/active-history app)
-        url-route (url->route)]
+        url-route (history/-current-route this)]
     (if (and this (seq (:route url-route)))
       (when-not (apply-route! app url-route)
         (routing/route-to! app default-page default-params))
