@@ -4,7 +4,7 @@
    and will merge the current URL's query parameters with returned route params."
   (:require
     #?(:cljs [goog.object :as gobj])
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
+    [com.fulcrologic.guardrails.core :refer [>defn >defn- => ?]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.routing :as routing]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
@@ -64,7 +64,7 @@
       (map (fn [[k v]]
              (str (encode-uri-component (name k)) "=" (encode-uri-component (str v)))) string-key-values))))
 
-(>defn route-url
+(>defn- route->url
   "Construct URL from route and params"
   [route params hash-based?]
   [coll? map? boolean? => string?]
@@ -72,18 +72,42 @@
     (str (query-string params) "#/" (str/join "/" (map str route)))
     (str "/" (str/join "/" (map str route)) (query-string params))))
 
+(defn url->route
+  "Convert the current browser URL into a route path and parameter map. Returns:
+
+   ```
+   {:route [\"path\" \"segment\"]
+    :params {:param value}}
+   ```
+
+   You can save this value and later use it with `apply-route!`.
+
+   Parameter hash-based? specifies whether to expect hash based routing. If no
+   parameter is provided the mode is autodetected from presence of hash segment in URL.
+  "
+  ([] (url->route (some? (seq (.. js/document -location -hash)))))
+  ([hash-based?]
+   #?(:cljs
+      (let [path   (if hash-based?
+                     (str/replace (.. js/document -location -hash) #"^[#]" "")
+                     (.. js/document -location -pathname))
+            route  (vec (drop 1 (str/split path #"/")))
+            params (or (some-> (.. js/document -location -search) (query-params)) {})]
+        {:route  route
+         :params params}))))
+
 (defrecord HTML5History [hash-based? listeners generator current-uid prior-route]
   RouteHistory
   (-push-route! [this route params]
     #?(:cljs
-       (let [url (route-url route params hash-based?)]
+       (let [url (route->url route params hash-based?)]
          (log/spy :debug ["Pushing route" route params])
          (reset! current-uid (swap! generator inc))
          (reset! prior-route {:route route :params params})
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
-       (let [url (route-url route params hash-based?)]
+       (let [url (route->url route params hash-based?)]
          (log/spy :debug ["Replacing route" route params])
          (reset! prior-route {:route route :params params})
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
@@ -101,15 +125,7 @@
          (.back js/history))))
   (-add-route-listener! [_ listener-key f] (swap! listeners assoc listener-key f))
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
-  (-current-route [_]
-    #?(:cljs
-       (let [path   (if hash-based?
-                      (str/replace (.. js/document -location -hash) #"^[#]" "")
-                      (.. js/document -location -pathname))
-             params (or (some-> (.. js/document -location -search) (query-params)) {})
-             route  (vec (drop 1 (str/split path #"/")))]
-         {:route  route
-          :params params}))))
+  (-current-route [_] (url->route hash-based?)))
 
 (defn html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API."
