@@ -84,9 +84,9 @@
       <version>1.0.1</version>
     </dependency>
     <dependency>
-      <groupId>danlentz</groupId>
-      <artifactId>clj-uuid</artifactId>
-      <version>0.1.9</version>
+      <groupId>com.fulcrologic</groupId>
+      <artifactId>colossal-squuid</artifactId>
+      <version>0.1.1</version>
     </dependency>
     <dependency>
       <groupId>com.taoensso</groupId>
