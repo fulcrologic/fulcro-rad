@@ -61,10 +61,6 @@
       <id>clojars</id>
       <url>https://repo.clojars.org/</url>
     </repository>
-    <repository>
-      <id>fulcrologic</id>
-      <url>https://mvn.fulcrologic.com</url>
-    </repository>
   </repositories>
   <dependencies>
     <dependency>
@@ -86,6 +82,11 @@
       <groupId>edn-query-language</groupId>
       <artifactId>eql</artifactId>
       <version>1.0.1</version>
+    </dependency>
+    <dependency>
+      <groupId>danlentz</groupId>
+      <artifactId>clj-uuid</artifactId>
+      <version>0.1.9</version>
     </dependency>
     <dependency>
       <groupId>com.taoensso</groupId>
