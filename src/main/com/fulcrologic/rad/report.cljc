@@ -16,6 +16,7 @@
         [[clojure.pprint :refer [pprint]]
          [cljs.analyzer :as ana]])
     [clojure.spec.alpha :as s]
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.data-fetch :as df]
@@ -36,7 +37,8 @@
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
-    [taoensso.tufte :refer [profile p]]))
+    [taoensso.tufte :refer [profile p]]
+    [clojure.string :as str]))
 
 (defn report-ident
   "Returns the ident of a RAD report. The parameter can be a react instance, a class, or the registry key(word)
@@ -686,6 +688,10 @@
                :date            (fn [_ value] (dt/tformat "MMM d, yyyy" value))
                :month-day       (fn [_ value] (dt/tformat "MMM d" value))
                :time            (fn [_ value] (dt/tformat "h:mma" value))}
+     :keyword {:default (fn [_ value _ column-attribute]
+                          (if-let [labels (::attr/enumerated-labels column-attribute)]
+                            (labels value)
+                            (some-> value (name) str/capitalize)))}
      :enum    {:default (fn [_ value _ column-attribute]
                           (if-let [labels (::attr/enumerated-labels column-attribute)]
                             (labels value) (str value)))}
@@ -694,7 +700,7 @@
                :currency   (fn [_ value] (math/numeric->str (math/round value 2)))
                :percentage (fn [_ value] (math/numeric->percent-str value))
                :USD        (fn [_ value] (math/numeric->currency-str value))}
-     :boolean {:default (fn [_ value] (if value "true" "false"))}}
+     :boolean {:default (fn [_ value] (if value (tr "true") (tr "false")))}}
     [type style]))
 
 (defn formatted-column-value
