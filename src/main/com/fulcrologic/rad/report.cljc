@@ -175,20 +175,22 @@
       {}
       controls)))
 
-
 (defn load-report! [env]
   (let [Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
-        {::keys [BodyItem source-attribute]} (comp/component-options Report)
+        {::keys [BodyItem source-attribute load-options]} (comp/component-options Report)
+        load-options   (?! load-options env)
         current-params (current-control-parameters env)
         path           (conj report-ident :ui/loaded-data)]
     (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
     (-> env
-      (uism/load source-attribute BodyItem {:params            current-params
-                                            ::uism/ok-event    :event/loaded
-                                            ::uism/error-event :event/failed
-                                            :marker            report-ident
-                                            :target            path})
+      (uism/load source-attribute BodyItem (merge
+                                             {:params            current-params
+                                              ::uism/ok-event    :event/loaded
+                                              ::uism/error-event :event/failed
+                                              :marker            report-ident
+                                              :target            path}
+                                             load-options))
       (uism/activate :state/loading))))
 
 (defn filter-rows

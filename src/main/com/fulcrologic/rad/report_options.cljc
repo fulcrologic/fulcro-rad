@@ -168,7 +168,7 @@
    * `:action`: OPTIONAL. A side-effecting `(fn [report-instance])`.
    * `:label` : REQUIRED. A string or `(fn [report-instance row-props] string-or-element?)`.
    * `:visible?` : OPTIONAL. Defaults to true. A boolean or `(fn [report-class-or-instance] boolean?)`.
-      Indicates that the control should not be displayed (likely because it is an input you only intend to 
+      Indicates that the control should not be displayed (likely because it is an input you only intend to
       set via routing params). You must also omit it from `control-layout`.
 
    Rendering plugins can expand this list of options as desired.
@@ -212,7 +212,7 @@
    will also include the PK (if possible) of the source of the columns in question.  You can use `row-query-inclusion`
    and custom server-side resolvers to make any imaginable data available on a row, which can be useful in things
    like `column-formatters` and `row-actions`.
-  
+
    BEWARE: If you provide your own `ro/BodyItem` then this is ignored. Modify the body item's query instead.
    "
   :com.fulcrologic.rad.report/row-query-inclusion)
@@ -402,22 +402,22 @@
   :com.fulcrologic.rad.report/BodyItem)
 
 (def query-inclusions
-  "A vector of things to add to the top-level report's query. 
-   
+  "A vector of things to add to the top-level report's query.
+
    Example:
-  
+
    Imagine you need the ID of the current user for an action:
-  
+
    ```
    ro/query-inclusions [:user/current-user-id]
    ```
-  
+
   You can then access it in the report's body:
-  
+
   ```
   (:user/current-user-id props)
   ```
-  
+
   Notice that the report will _not load_ this data for you, you must
   ensure their presence in the client DB yourself."
   :com.fulcrologic.rad.report/query-inclusions)
@@ -503,3 +503,17 @@
 
    `control-values` will be a map that contains the values of all of the controls that have one."
   :com.fulcrologic.rad.report/skip-filtering?)
+
+(def load-options
+  "A map (or `(fn [uism-env] map?)`) whose value will be merged with the options sent to the `uism/load` that
+   the default state machine uses to pull in the report data.
+
+   An example of where you might want to use this is when a row contains sub-elements that could be large
+   (data points, history, comments, etc.) that you wish to let the user expand and load on demand. In this
+   case you could add the `:without` option to prevent pre-loading those elements, and then manually code
+   the row rendering and use `load-field` to fill in the missing details on demand.
+
+   WARNING: These options allow you to OVERRIDE those that are normally sent. You should carefully review the
+   report machine's source code before using this option.
+   "
+  :com.fulcrologic.rad.report/load-options)
