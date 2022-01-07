@@ -1340,7 +1340,7 @@ act as standalone forms, but will not be running their own state machine unless 
 this means that forms can have both a sibling and parent-child relationship in your application's UI graph.
 
 All forms are typically added to a top-level router so that each kind of entity can be worked with in isolation. However,
-some forms may also make sense to use a subforms within the context of others. An example might be an `AddressForm`. While
+some forms may also make sense to use as subforms within the context of others. An example might be an `AddressForm`. While
 it might make sense to allow someone to edit an address in isolation, the address itself probably belongs to some other
 entity that may wish to allow editing of that sub-entity in its context.
 
