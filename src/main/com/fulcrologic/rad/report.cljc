@@ -866,3 +866,90 @@
                              ::attr/keys [qualified-key] :as attr}]
   (let [rpt-column-class (comp/component-options report-instance-or-class ::column-classes qualified-key)]
     (or rpt-column-class column-class)))
+
+(defn genrow
+  "Generates a row class for reports. Mainly meant for internal use, but might be useful in custom report generation code.
+
+  registry-key - The unique key to register the generated class under
+  options - The top report options"
+  [registry-key options]
+  (let [{::keys [columns row-pk form-links initLocalState
+                 row-query-inclusion denormalize? row-actions]} options
+        normalize?      (not denormalize?)
+        row-query       (let [id-attrs (keep #(comp/component-options % ::form/id) (vals form-links))]
+                          (vec
+                            (into (set row-query-inclusion)
+                              (map (fn [attr] (or
+                                                (::column-EQL attr)
+                                                (::attr/qualified-key attr))) (conj (set (concat id-attrs columns)) row-pk)))))
+        row-constructor (comp/react-constructor initLocalState)
+        row-key         (::attr/qualified-key row-pk)
+        row-ident       (fn [this props] [row-key (get props row-key)])
+        row-actions     (or row-actions [])
+        row-render      (fn [this]
+                          (comp/wrapped-render this
+                            (fn []
+                              (let [props (comp/props this)]
+                                (render-row (:report-instance (comp/get-computed this)) row-constructor props)))))
+        body-options    (cond-> {:query        (fn [this] row-query)
+                                 :render       row-render
+                                 ::row-actions row-actions
+                                 ::columns     columns}
+                          normalize? (assoc :ident row-ident)
+                          form-links (assoc ::form-links form-links))]
+    (comp/configure-component! row-constructor registry-key body-options)))
+
+(defn report
+  "Create a RAD report component. `options` is the map of report/Fulcro options. The `registry-key` is the globally
+   unique name (as a keyword) that this component should be known by, and `render` is a `(fn [this props])` (optional)
+   for rendering the body, which defaults to the built-in `render-layout`.
+
+   WARNING: The macro version ensures that there is a constant react type to refer to. Using this function MAY cause
+   hot code reload behaviors that rely on react-type to misbehave due to the mismatch (closure over old version)."
+  ([registry-key options]
+   (report registry-key options (fn [this _] (render-layout this))))
+  ([registry-key options render]
+   (assert (vector? (options ::columns)))
+   (assert (attr/attribute? (options ::row-pk)))
+   (assert (keyword? (options ::source-attribute)))
+   (let [generated-row-key (keyword (namespace registry-key) (str (name registry-key) "-Row"))
+         {::control/keys [controls]
+          ::keys         [BodyItem query-inclusions route]} options
+         constructor       (comp/react-constructor (:initLocalState options))
+         get-class         (fn [] constructor)
+         ItemClass         (or BodyItem (genrow generated-row-key options))
+         query             (fn [_]
+                             (into [::id
+                                    :ui/parameters
+                                    :ui/cache
+                                    :ui/busy?
+                                    :ui/page-count
+                                    :ui/current-page
+                                    [::picker-options/options-cache '_]
+                                    {:ui/controls (comp/get-query Control)}
+                                    {:ui/current-rows (comp/get-query ItemClass)}
+                                    [df/marker-table '_]]
+                               query-inclusions))
+         render            (fn [this] (comp/wrapped-render this (fn []
+                                                                  (let [props (comp/props this)]
+                                                                    (render this props)))))
+         options           (merge
+                             {::compare-rows default-compare-rows
+                              :will-enter    (fn [app route-params] (report-will-enter app route-params (get-class)))}
+                             options
+                             {:route-segment (if (vector? route) route [route])
+                              :render        render
+                              ::BodyItem     ItemClass
+                              :query         query
+                              :initial-state (fn [params]
+                                               (cond-> {:ui/parameters   {}
+                                                        :ui/cache        {}
+                                                        :ui/controls     (mapv #(select-keys % #{::control/id})
+                                                                           (remove :local? (control/control-map->controls controls)))
+                                                        :ui/busy?        false
+                                                        :ui/current-page 1
+                                                        :ui/page-count   1
+                                                        :ui/current-rows []}
+                                                 (contains? params ::id) (assoc ::id (::id params))))
+                              :ident         (fn [this props] [::id (or (::id props) registry-key)])})]
+     (comp/configure-component! constructor registry-key options))))

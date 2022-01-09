@@ -26,3 +26,4 @@ docs/assets
 docs/.asciidoctor
 .guardrails-pro
 assets
+lsp

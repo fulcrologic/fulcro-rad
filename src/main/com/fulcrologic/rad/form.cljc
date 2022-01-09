@@ -27,8 +27,7 @@
     [taoensso.tufte :refer [p profile]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
-    #?@(:clj  [[cljs.analyzer :as ana]]
-        :cljs [[goog.object :as gobj]])
+    #?@(:clj [[cljs.analyzer :as ana]])
     [com.fulcrologic.rad.options-util :as opts :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.rad.form-options :as fo]
@@ -490,7 +489,9 @@
    (defn defsc-form*
      [env args]
      (let [{:keys [sym doc arglist options body]} (s/conform ::defsc-form-args args)
-           options      (opts/macro-optimize-options env options #{::subforms ::validation-messages ::field-styles} {})
+           options      (if (map? options)
+                          (opts/macro-optimize-options env options #{::subforms ::validation-messages ::field-styles} {})
+                          options)
            nspc         (if (comp/cljs? env) (-> env :ns :name str) (name (ns-name *ns*)))
            fqkw         (keyword (str nspc) (name sym))
            body         (form-body arglist body)
@@ -506,12 +507,7 @@
             (declare ~sym)
             (let [options# ~options-expr]
               (defonce ~(vary-meta sym assoc :doc doc :jsdoc ["@constructor"])
-                (fn [props#]
-                  (cljs.core/this-as this#
-                    (if-let [init-state# (get options# :initLocalState)]
-                      (set! (.-state this#) (cljs.core/js-obj "fulcro$state" (init-state# this# (goog.object/get props# "fulcro$value"))))
-                      (set! (.-state this#) (cljs.core/js-obj "fulcro$state" {})))
-                    nil)))
+                (comp/react-constructor (:initLocalState options#)))
               (com.fulcrologic.fulcro.components/configure-component! ~sym ~fqkw options#)))
          `(do
             (declare ~sym)
@@ -1674,3 +1670,25 @@
                                   :com.fulcrologic.rad.form/element->style->layout
                                   :ref-container
                                   style] render)))
+
+(defn form
+  "Create a RAD form component. `options` is the map of form/Fulcro options. The `registry-key` is the globally
+   unique name (as a keyword) that this component should be known by, and `render` is a `(fn [this props])` (optional)
+   for rendering the body, which defaults to the built-in `render-layout`.
+
+   WARNING: The macro version ensures that there is a constant react type to refer to. Using this function MAY cause
+   hot code reload behaviors that rely on react-type to misbehave due to the mismatch (closure over old version)."
+  ([registry-key options]
+   (form registry-key options (fn [this props] (render-layout this props))))
+  ([registry-key options render]
+   (let [render          (fn [this]
+                           (comp/wrapped-render this
+                             (fn []
+                               (let [props (comp/props this)]
+                                 (render this props)))))
+         component-class (volatile! nil)
+         get-class       (fn [] @component-class)
+         options         (assoc (convert-options get-class {:registry-key registry-key} options) :render render)
+         constructor     (comp/react-constructor (get options :initLocalState))
+         result          (com.fulcrologic.fulcro.components/configure-component! constructor registry-key options)]
+     (vreset! component-class result))))
