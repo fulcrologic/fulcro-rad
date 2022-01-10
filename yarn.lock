@@ -2,14 +2,14 @@
 # yarn lockfile v1
 
 
-"@js-joda/core@^4.2.1":
-  version "4.3.1"
-  resolved "https://registry.npmjs.org/@js-joda/core/-/core-4.3.1.tgz"
-  integrity sha512-oeaetlodcqVsiZDxnEcqsbs+sXBkASxua0mXs5OXuPQXz3/wdPTMlxwfQ4z2HKcOik3S9voW3QJkp/KLWDhvRQ==
+"@js-joda/core@^3.2.0":
+  version "3.2.0"
+  resolved "https://registry.yarnpkg.com/@js-joda/core/-/core-3.2.0.tgz#3e61e21b7b2b8a6be746df1335cf91d70db2a273"
+  integrity sha512-PMqgJ0sw5B7FKb2d5bWYIoxjri+QlW/Pys7+Rw82jSH0QN3rB05jZ/VrrsUdh1w4+i2kw9JOejXGq/KhDOX7Kg==
 
 "@js-joda/timezone@^2.8.0":
   version "2.11.1"
-  resolved "https://registry.npmjs.org/@js-joda/timezone/-/timezone-2.11.1.tgz"
+  resolved "https://registry.yarnpkg.com/@js-joda/timezone/-/timezone-2.11.1.tgz#2a47b6aef20917f97b49c94165badc77c1583744"
   integrity sha512-lhO6la94pvUIOLF6DrIBg1YszsGEI9eIbznhROHooiFxGmLG6QumMTWYfR9gPwQGR/A1RPwUVLSkW8z16vLuWw==
 
 "@types/component-emitter@^1.2.10":
