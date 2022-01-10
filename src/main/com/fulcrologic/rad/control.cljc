@@ -24,7 +24,7 @@
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.mutations :refer [defmutation]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
-    [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.fulcro.raw.application :as raw.app]
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce child-classes]]
     [com.fulcrologic.rad :as rad]
@@ -47,7 +47,7 @@
    (render-control owner control-key (get (comp/component-options owner ::controls) control-key)))
   ([owner control-key control]
    (when (not= control-key :_)
-     (let [{::app/keys [runtime-atom]} (comp/any->app owner)
+     (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app owner)
            input-type   (get control :type)
            input-style  (get control :style :default)
            style->input (some-> runtime-atom deref ::rad/controls ::type->style->control (get input-type))
@@ -103,7 +103,7 @@
     (if local?
       (get-in (comp/props instance) [:ui/parameters control-key])
       (-> instance
-        (app/current-state)
+        (raw.app/current-state)
         (get-in [::id control-key ::value])))))
 
 (defn component-controls

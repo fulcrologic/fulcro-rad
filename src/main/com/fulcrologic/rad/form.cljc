@@ -6,7 +6,7 @@
     [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
-    [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.fulcro.raw.application :as raw.app]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
@@ -73,13 +73,13 @@
            :disabled? (fn [this]
                         (let [props           (comp/props this)
                               read-only-form? (?! (comp/component-options this ::read-only?) this)
-                              remote-busy?    (seq (::app/active-remotes props))
+                              remote-busy?    (seq (:com.fulcrologic.fulcro.application/active-remotes props))
                               dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                           (or (not dirty?) remote-busy?)))
            :label     (fn [_] (tr "Save"))
            :class     (fn [this]
                         (let [props        (comp/props this)
-                              remote-busy? (seq (::app/active-remotes props))]
+                              remote-busy? (seq (:com.fulcrologic.fulcro.application/active-remotes props))]
                           (when remote-busy? "ui tiny primary button loading")))
            :action    (fn [this] (save! {::master-form this}))}})
 
@@ -136,7 +136,7 @@
    ```
   "
   [{::keys [form-instance] :as form-env} element]
-  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
+  (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
         style-path             [::layout-styles element]
         layout-style           (or (some-> form-instance comp/component-options (get-in style-path)) :default)
         element->style->layout (some-> runtime-atom deref ::rad/controls ::element->style->layout)
@@ -174,7 +174,7 @@
       (fn [env attr _] (render-field env attr))
       (let [{::keys [ui layout-styles]} (get subforms qualified-key)
             {target-styles ::layout-styles} (comp/component-options ui)
-            {::app/keys [runtime-atom]} (comp/any->app form-instance)
+            {:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
             element      :ref-container
             layout-style (or
                            (get layout-styles element)
@@ -192,7 +192,7 @@
   using ::form/field-style on the attribute itself."
   [{::keys [form-instance master-form]} {::attr/keys [type qualified-key style]
                                          ::keys      [field-style] :as attr}]
-  (let [{::app/keys [runtime-atom]} (comp/any->app form-instance)
+  (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (?! (or
                           (some-> master-form comp/component-options ::field-styles qualified-key)
                           (some-> form-instance comp/component-options ::field-styles qualified-key)
@@ -323,7 +323,7 @@
                              [id-key
                               :ui/confirmation-message
                               [::picker-options/options-cache '_]
-                              [::app/active-remotes '_]
+                              [:com.fulcrologic.fulcro.application/active-remotes '_]
                               [::uism/asm-id '_]
                               fs/form-config-join]
                              (map ::attr/qualified-key)
@@ -391,7 +391,7 @@
   "Checks to see if the UISM is still running (indicating an exit via routing) and cleans up the machine."
   [this]
   (let [master-form (or (comp/get-computed this ::master-form) this)
-        state-map   (app/current-state this)
+        state-map   (raw.app/current-state this)
         form-ident  (comp/get-ident master-form)
         machine     (get-in state-map [::uism/asm-id form-ident])]
     (when machine
@@ -403,7 +403,7 @@
   (let [id            (comp/get-ident this)
         form-props    (comp/props this)
         read-only?    (?! (comp/component-options this ::read-only?) this)
-        current-state (app/current-state this)
+        current-state (raw.app/current-state this)
         abandoned?    (get-in current-state [::uism/asm-id id ::uism/local-storage :abandoned?] false)
         dirty?        (and (not abandoned?) (fs/dirty? form-props))]
     (or read-only? (not dirty?))))
@@ -827,7 +827,7 @@
   [{::uism/keys [fulcro-app] :as uism-env}]
   (let [Form           (uism/actor-class uism-env :actor/form)
         form-ident     (uism/actor->ident uism-env :actor/form)
-        state-map      (app/current-state fulcro-app)
+        state-map      (raw.app/current-state fulcro-app)
         cancel-route   (?! (some-> Form comp/component-options ::cancel-route) fulcro-app (fns/ui->props state-map Form form-ident))
         {:keys [on-cancel]} (uism/retrieve uism-env :options)
         error!         (fn [msg] (log/error "The cancel-route option of" (comp/component-name Form) (str "(" cancel-route ")") msg))
@@ -1638,7 +1638,7 @@
    See `field-context` for obtaining the data to render, and `input-changed!` and `input-blur!` for
    communcating model changes."
   [app type style render]
-  (let [{::app/keys [runtime-atom]} app]
+  (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} app]
     (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls
                                   :com.fulcrologic.rad.form/type->style->control
                                   type
@@ -1647,7 +1647,7 @@
 (defn install-form-container-renderer!
   "Install a renderer for a given `style` of form container."
   [app style render]
-  (let [{::app/keys [runtime-atom]} app]
+  (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} app]
     (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls
                                   :com.fulcrologic.rad.form/element->style->layout
                                   :form-container
@@ -1656,7 +1656,7 @@
 (defn install-form-body-renderer!
   "Install a renderer for a given `style` of form body."
   [app style render]
-  (let [{::app/keys [runtime-atom]} app]
+  (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} app]
     (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls
                                   :com.fulcrologic.rad.form/element->style->layout
                                   :form-body-container
@@ -1665,7 +1665,7 @@
 (defn install-form-ref-renderer!
   "Install a renderer for a given `style` of subform reference container."
   [app style render]
-  (let [{::app/keys [runtime-atom]} app]
+  (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} app]
     (swap! runtime-atom assoc-in [:com.fulcrologic.rad/controls
                                   :com.fulcrologic.rad.form/element->style->layout
                                   :ref-container
