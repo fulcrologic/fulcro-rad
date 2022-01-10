@@ -6,7 +6,7 @@ desktop applications with a rich (and potentially federated) data model quickly.
 == Usage
 
 image:https://img.shields.io/clojars/v/com.fulcrologic/fulcro-rad.svg[link=https://clojars.org/com.fulcrologic/fulcro-rad]
-image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/master"]
+image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop"]
 
 WARNING: POSSIBLE BREAKING CHANGE after 1.0.28. The most recent version requires that you upgrade js-joda in package.json. RAD no
 longer requires js-joda locales, which will reduce the build size if you don't need date parsing, but the date-time namespace
