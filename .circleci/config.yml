@@ -9,7 +9,7 @@ jobs:
           key: cljs-{{ checksum "deps.edn" }}-{{ checksum "package.json" }}
       - run: yarn
       - run: npx shadow-cljs -v compile ci-tests
-      - run: npx karma start --single-run
+        # - run: npx karma start --single-run
       - save_cache:
                 paths:
                   - node_modules
