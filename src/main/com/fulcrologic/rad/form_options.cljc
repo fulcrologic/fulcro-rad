@@ -305,3 +305,14 @@
    See `query-inclusion`.
    "
   :com.fulcrologic.rad.form/initialize-ui-props)
+
+(def save-mutation
+  "A *symbol* that represents the server-side mutation that will be invoked on a save. Defaults to
+   `com.fulcrologic.rad.form/save-form`. Used in cases where you want to bypass the default RAD form save handler
+   and middleware in order to do something non-standard with the data from the form."
+  :com.fulcrologic.rad.form/save-mutation)
+
+(def save-params
+  "A map of data OR a `(fn [form-rendering-env] map?)`. This data will be included in the form parameters sent
+   to the save mutation on the remote. These will be merged with the default parameters such as `::form/delta`."
+  :com.fulcrologic.rad.form/save-params)

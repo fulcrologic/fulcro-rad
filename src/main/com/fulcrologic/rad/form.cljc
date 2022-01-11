@@ -1119,13 +1119,15 @@
         {::uism/handler (fn [{::uism/keys [state-map event-data] :as env}]
                           (let [form-class          (uism/actor-class env :actor/form)
                                 form-ident          (uism/actor->ident env :actor/form)
-                                master-pk           (-> form-class comp/component-options (get-in [::id ::attr/qualified-key]))
+                                {::keys [id save-mutation]} (comp/component-options form-class)
+                                master-pk           (::attr/qualified-key id)
                                 proposed-form-props (fs/completed-form-props state-map form-class form-ident)]
                             (if (valid? form-class proposed-form-props)
-                              (let [data-to-save (calc-diff env)
-                                    params       (merge event-data data-to-save)]
+                              (let [data-to-save  (calc-diff env)
+                                    params        (merge event-data data-to-save)
+                                    save-mutation (or save-mutation `save-form)]
                                 (-> env
-                                  (uism/trigger-remote-mutation :actor/form `save-form
+                                  (uism/trigger-remote-mutation :actor/form save-mutation
                                     (merge params
                                       {::uism/error-event :event/save-failed
                                        ::master-pk        master-pk
@@ -1146,9 +1148,15 @@
         {::uism/handler leave-form}})}}})
 
 (defn save!
-  "Trigger a save on the given form rendering env."
-  [{this ::master-form :as form-rendering-env}]
-  (uism/trigger! this (comp/get-ident this) :event/save {}))
+  "Trigger a save on the given form rendering env. `addl-save-params` is a map of data that can
+   optionally be included in the form's save, which will be available to the server-side mutation
+   (and therefore save middleware). Defaults to whatever the form's `fo/save-params` has."
+  ([{this ::master-form :as form-rendering-env}]
+   (let [save-params (comp/component-options this ::save-params)
+         params      (or (?! save-params form-rendering-env) {})]
+     (save! form-rendering-env params)))
+  ([{this ::master-form :as form-rendering-env} addl-save-params]
+   (uism/trigger! this (comp/get-ident this) :event/save addl-save-params)))
 
 (defn undo-all!
   "Trigger an undo of all changes on the given form rendering env."
