@@ -14,22 +14,45 @@
 
    Turns a string that has repeating characters into groups of those repeating letters. This function is memoized, so
    it is best to ONLY use it on date/time format patterns, of which there will likely be few."
-  (memoize
-    (fn [format-str]
-      (let [{:keys [tokens letters]} (let [letters (seq format-str)]
-                                       (reduce
-                                         (fn [{:keys [letters prior-letter] :as acc} letter]
-                                           (if (= prior-letter letter)
-                                             (update acc :letters conj letter)
-                                             (-> acc
-                                               (update :tokens conj (str/join letters))
-                                               (assoc :prior-letter letter)
-                                               (assoc :letters [letter]))))
-                                         {:tokens       []
-                                          :letters      [(first letters)]
-                                          :prior-letter (first letters)}
-                                         (rest letters)))]
-        (conj tokens (str/join letters))))))
+  (fn [format-str]
+    (let [add-token (fn [{:keys [literal? letters] :as acc}]
+                      (if (seq letters)
+                        (update acc :tokens conj (cond->> (str/join letters)
+                                                   literal? (array-map :literal)))
+                        acc))
+          acc       (let [letters (seq format-str)]
+                      (reduce
+                        (fn [{:keys [literal? prior-letter] :as acc} letter]
+                          (cond
+                            (and (= \' letter) (= \' prior-letter)) (-> acc
+                                                                      (assoc :literal? false
+                                                                             :letters []
+                                                                             :prior-letter "")
+                                                                      (update :tokens conj {:literal \'}))
+                            (and literal? (= \' letter)) (-> acc
+                                                           (add-token)
+                                                           (assoc :literal? false :letters [] :prior-letter ""))
+                            (= \' letter) (-> acc
+                                            (add-token)
+                                            (assoc :literal? true :letters [] :prior-letter \'))
+
+                            literal? (-> acc
+                                       (assoc :prior-letter letter)
+                                       (update :letters conj letter))
+
+                            (= prior-letter letter) (update acc :letters conj letter)
+                            :else (-> acc
+                                    (add-token)
+                                    (assoc :prior-letter letter)
+                                    (assoc :letters [letter]))))
+                        {:tokens       []
+                         :literal?     false
+                         :letters      []
+                         :prior-letter nil}
+                        letters))]
+      (-> acc
+        (add-token)
+        :tokens))))
 
 (defn- std-formatter [{:keys [zero-pad?] :as options}]
   (let [zero-pad (fn [s] (if (= 1 (count s))
@@ -58,8 +81,7 @@
         sign            (if (neg? totalSeconds) "-" "+")
         hours           (str (if (< absHours 10) "0" "") absHours)
         mins            (str (if (< absMinutes 10) "0" "") absMinutes)
-        secs            (str (if (< absSeconds 10) "0" "") absSeconds)
-        ]
+        secs            (str (if (< absSeconds 10) "0" "") absSeconds)]
     (if (zero? totalSeconds)
       "Z"
       (case size
@@ -142,9 +164,11 @@
   [format-str locale-name zone-name]
   (let [tokens     (tokenize format-str)
         generator  (fn [token]
-                     (let [f (get format-map token)]
-                       (if f
-                         (f locale-name zone-name)
-                         (constantly token))))
+                     (if (map? token)
+                       (constantly (:literal token))
+                       (let [f (get format-map token)]
+                         (if f
+                           (f locale-name zone-name)
+                           (constantly token)))))
         generators (mapv generator tokens)]
     (fn [inst] (str/join (map (fn [gen] (gen inst)) generators)))))

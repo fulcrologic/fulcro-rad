@@ -220,6 +220,7 @@
       (assertions
         "Formats the date/time in the correct zone and locale"
         (dt/tformat "hha E MMM d, yyyy" #inst "2020-03-15T12:45Z") => "04PM Sun Mar 15, 2020"
+        (dt/tformat "yyyy-MM-dd'T'HH:mm" #inst "2020-03-15T12:45Z") => "2020-03-15T16:15"
         (dt/tformat "hh:mmaX" #inst "2020-03-15T12:45Z") => "04:15PM+0330"
         (dt/tformat "hh:mmaXX" #inst "2020-03-15T12:45Z") => "04:15PM+0330"
         (dt/tformat "hh:mmaXXX" #inst "2020-03-15T12:45Z") => "04:15PM+03:30"
