@@ -271,6 +271,12 @@
    as read-only values in the form"
   :com.fulcrologic.rad.form/read-only-fields)
 
+(def read-only?
+  "Used to indicate whether *everything* in the form should be treated as read-only.
+   This option is a boolean or a `(fn [form-instance] boolean?)`.
+   If true, `read-only-fields` will be ignored."
+  :com.fulcrologic.rad.form/read-only?)
+
 (def can-delete?
   "Used in `subforms` maps to control when a child can be deleted.
    This option is a boolean or a `(fn [parent-form-instance row-props] boolean?)`.
