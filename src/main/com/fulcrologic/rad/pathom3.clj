@@ -85,7 +85,7 @@
               (mutate env ast)
               (catch Throwable e
                 (log/errorf e "Mutation %s failed." (:key ast))
-                ;; TASK: Need a bit more work on returning errors that are handled globally.
+                ;; FIXME: Need a bit more work on returning errors that are handled globally.
                 ;; Probably should just propagate exceptions out, so the client sees a server error
                 ;; Pathom 2 compatible message so UI can detect the problem
                 {:com.wsscode.pathom.core/errors [{:message (ex-message e)
