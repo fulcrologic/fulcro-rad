@@ -12,6 +12,7 @@
   "
   #?(:cljs (:require-macros [com.fulcrologic.rad.type-support.date-time]))
   (:require
+    #?(:cljs [com.fulcrologic.rad.type-support.js-joda-base])
     [clojure.string :as str]
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.locale :as locale]
