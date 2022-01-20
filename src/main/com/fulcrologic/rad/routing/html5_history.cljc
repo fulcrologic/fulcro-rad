@@ -85,7 +85,8 @@
    Parameter hash-based? specifies whether to expect hash based routing. If no
    parameter is provided the mode is autodetected from presence of hash segment in URL.
   "
-  ([] (url->route (some? (seq (.. js/document -location -hash)))))
+  ([] (url->route #?(:clj  false
+                     :cljs (some? (seq (.. js/document -location -hash))))))
   ([hash-based?]
    #?(:cljs
       (let [path   (if hash-based?
@@ -133,7 +134,7 @@
   ([hash-based?]
    #?(:cljs
       (try
-        (let [history (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil))
+        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil))
               pop-state-listener (fn [evt]
                                    (let [current-uid (-> history (:current-uid) deref)
                                          event-uid   (gobj/getValueByKeys evt "state" "uid")
