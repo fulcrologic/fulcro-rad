@@ -592,15 +592,19 @@
 
       This mutation's ok-action will also update the data in the local state."
      [{:keys [root-ident entity delta]}]
-     (ok-action [{:keys [state]}]
+     (ok-action [{:keys [state tempid->realid]}]
        (if delta
-         (doseq [[ident changes] delta
+         (doseq [[ident changes] (tempid/resolve-tempids delta tempid->realid)
                  :let [data-to-merge (reduce-kv
                                        (fn [m k v] (assoc m k (:after v)))
                                        {}
                                        changes)]]
            (swap! state update-in ident merge data-to-merge))
-         (swap! state update-in root-ident merge entity)))
+         (swap! state
+                update-in
+                (tempid/resolve-tempids root-ident tempid->realid)
+                merge
+                (tempid/resolve-tempids entity tempid->realid))))
      (remote [env]
        (let [delta (or delta
                      {root-ident (reduce-kv
