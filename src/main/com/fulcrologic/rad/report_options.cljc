@@ -517,3 +517,13 @@
    report machine's source code before using this option.
    "
   :com.fulcrologic.rad.report/load-options)
+
+(def column-info
+  "ATTRIBUTE OPTION.  A string or `(fn [report-instance] string-or-element?)`.
+
+  Specify additional info *about* the column, which can be rendered, for example, as a hover or info button."
+  :com.fulcrologic.rad.report/column-info)
+
+(def column-infos
+  "A map from *qualified keyword* to information about the column, which can be a simple string or a `(fn [report-instance] string?)`"
+  :com.fulcrologic.rad.report/column-infos)
