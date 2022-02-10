@@ -4,7 +4,7 @@
   <groupId>com.fulcrologic</groupId>
   <artifactId>fulcro-rad</artifactId>
   <packaging>jar</packaging>
-  <version>1.1.7-SNAPSHOT</version>
+  <version>1.1.6-1</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.8</maven.compiler.source>
@@ -61,12 +61,16 @@
       <id>clojars</id>
       <url>https://repo.clojars.org/</url>
     </repository>
+    <repository>
+      <id>fulcrologic</id>
+      <url>https://mvn.fulcrologic.com</url>
+    </repository>
   </repositories>
   <dependencies>
     <dependency>
       <groupId>org.clojure</groupId>
       <artifactId>clojure</artifactId>
-      <version>1.10.1</version>
+      <version>1.10.3</version>
     </dependency>
     <dependency>
       <groupId>commons-codec</groupId>
@@ -76,17 +80,12 @@
     <dependency>
       <groupId>com.fulcrologic</groupId>
       <artifactId>guardrails</artifactId>
-      <version>1.1.7</version>
+      <version>1.1.10</version>
     </dependency>
     <dependency>
       <groupId>edn-query-language</groupId>
       <artifactId>eql</artifactId>
       <version>1.0.1</version>
-    </dependency>
-    <dependency>
-      <groupId>com.fulcrologic</groupId>
-      <artifactId>colossal-squuid</artifactId>
-      <version>0.1.1</version>
     </dependency>
     <dependency>
       <groupId>com.taoensso</groupId>
@@ -106,17 +105,22 @@
     <dependency>
       <groupId>org.clojure</groupId>
       <artifactId>clojurescript</artifactId>
-      <version>1.10.866</version>
+      <version>1.10.914</version>
+    </dependency>
+    <dependency>
+      <groupId>com.yetanalytics</groupId>
+      <artifactId>colossal-squuid</artifactId>
+      <version>0.1.3</version>
     </dependency>
     <dependency>
       <groupId>com.fulcrologic</groupId>
       <artifactId>fulcro</artifactId>
-      <version>3.5.6</version>
+      <version>3.5.10</version>
     </dependency>
     <dependency>
       <groupId>cljc.java-time</groupId>
       <artifactId>cljc.java-time</artifactId>
-      <version>0.1.17</version>
+      <version>0.1.18</version>
     </dependency>
     <dependency>
       <groupId>com.taoensso</groupId>
