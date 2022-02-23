@@ -949,13 +949,14 @@
   (let [{::keys [initialize-ui-props]} (comp/component-options FormClass)]
     (if initialize-ui-props
       (let [denorm-props    (fns/ui->props state-map FormClass form-ident)
+            primary-key     (comp/component-options FormClass ::id)
             predefined-keys (set (keys denorm-props))
             ui-props        (?! initialize-ui-props FormClass denorm-props)
             all-keys        (set (keys ui-props))
             ;; Ensure that the user's function cannot possible conflict with form state
-            allowed-keys    (set/difference all-keys predefined-keys)
+            allowed-keys    (conj (set/difference all-keys predefined-keys) primary-key)
             ui-entity       (select-keys ui-props allowed-keys)]
-        (uism/apply-action env update-in form-ident merge ui-entity))
+        (uism/apply-action env merge/merge-component FormClass ui-entity))
       env)))
 
 (defstatemachine form-machine
