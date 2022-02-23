@@ -947,11 +947,14 @@
   "Return denormalized `initialize-ui-props` for form and its subforms"
   [state-map FormClass denorm-props]
   (let [{::keys [id initialize-ui-props subforms]} (comp/component-options FormClass)
+        primary-key      (::attr/qualified-key id)
         predefined-keys (set (keys denorm-props))
         ui-props        (?! initialize-ui-props FormClass denorm-props)
         all-keys        (set (keys ui-props))
-        allowed-keys    (conj (set/difference all-keys predefined-keys) id)
-        ui-entity       (select-keys ui-props allowed-keys)]
+        allowed-keys    (set/difference all-keys predefined-keys)
+        ui-entity       (assoc (select-keys ui-props allowed-keys)
+                               primary-key (get denorm-props primary-key))]
+
     (reduce-kv
       (fn [ui-entity subform-key subform-def]
         (if-not (contains? denorm-props subform-key)
