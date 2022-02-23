@@ -943,21 +943,35 @@
         derive-fields (uism/apply-action update-tree* derive-fields form-class form-ident)
         (and (not= master-form-class form-class) master-derive-fields) (uism/apply-action update-tree* master-derive-fields master-form-class master-form-ident)))))
 
+(defn get-form-initial-ui-props
+  "Return denormalized `initialize-ui-props` for form and its subforms"
+  [state-map FormClass denorm-props]
+  (let [{::keys [id initialize-ui-props subforms]} (comp/component-options FormClass)
+        predefined-keys (set (keys denorm-props))
+        ui-props        (?! initialize-ui-props FormClass denorm-props)
+        all-keys        (set (keys ui-props))
+        allowed-keys    (conj (set/difference all-keys predefined-keys) id)
+        ui-entity       (select-keys ui-props allowed-keys)]
+    (reduce-kv
+      (fn [ui-entity subform-key subform-def]
+        (if-not (contains? denorm-props subform-key)
+          ui-entity
+          (let [SubFormClass (::ui subform-def)
+                subform-props (get denorm-props subform-key)]
+            (assoc ui-entity subform-key
+              (if (map? subform-props)
+                (get-form-initial-ui-props state-map SubFormClass subform-props)
+                (mapv #(get-form-initial-ui-props state-map SubFormClass %)
+                      subform-props))))))
+      ui-entity
+      subforms)))
+
 (defn handle-user-ui-props
   "UISM handler for invoking a form's `initialize-ui-props` option."
   [{::uism/keys [state-map] :as env} FormClass form-ident]
-  (let [{::keys [initialize-ui-props]} (comp/component-options FormClass)]
-    (if initialize-ui-props
-      (let [denorm-props    (fns/ui->props state-map FormClass form-ident)
-            primary-key     (comp/component-options FormClass ::id)
-            predefined-keys (set (keys denorm-props))
-            ui-props        (?! initialize-ui-props FormClass denorm-props)
-            all-keys        (set (keys ui-props))
-            ;; Ensure that the user's function cannot possible conflict with form state
-            allowed-keys    (conj (set/difference all-keys predefined-keys) primary-key)
-            ui-entity       (select-keys ui-props allowed-keys)]
-        (uism/apply-action env merge/merge-component FormClass ui-entity))
-      env)))
+  (let [denorm-props (fns/ui->props state-map FormClass form-ident)
+        ui-entity    (get-form-initial-ui-props state-map FormClass denorm-props)]
+    (uism/apply-action env merge/merge-component FormClass ui-entity)))
 
 (defstatemachine form-machine
   {::uism/actors
