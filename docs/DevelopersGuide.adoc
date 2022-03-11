@@ -1393,7 +1393,7 @@ The rules the built-in RAD form state machine uses:
 
 The attributes options for setting defaults when things are created are:
 
-`::attr/default-value`:: Can be placed on an attribute to indicate a default value for this attribute.
+`::form/default-value`:: Can be placed on an attribute to indicate a default value for this attribute.
 
 `::form/default-values`:: A map from attribute name (as a keyword) to a default value. Subform data can be placed in this
 tree.
