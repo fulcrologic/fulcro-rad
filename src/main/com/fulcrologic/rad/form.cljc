@@ -17,7 +17,7 @@
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.control :as control]
-    [com.fulcrologic.rad.errors :refer [required!]]
+    [com.fulcrologic.rad.errors :refer [required! warn-once!]]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.application :as rapp]
@@ -204,7 +204,7 @@
         control     (or
                       (get-in control-map [type field-style])
                       (do
-                        (log/warn "Renderer not found: " type field-style)
+                        (warn-once! "Renderer not found: " type field-style)
                         (get-in control-map [type :default])))]
     (if control
       control
@@ -474,9 +474,9 @@
         query                      (cond-> (form-options->form-query base-options)
                                      (seq inclusions) (into inclusions))]
     (when (and #?(:cljs goog.DEBUG :clj true) (not (string? route-prefix)))
-      (log/info "NOTE: " location " does not have a route prefix and will only be usable as a sub-form."))
+      (warn-once! "NOTE: " location " does not have a route prefix and will only be usable as a sub-form."))
     (when (and #?(:cljs goog.DEBUG :clj true) will-enter (not route-prefix))
-      (log/info "NOTE: There's a :will-enter option in form/defsc-form" location "that will be ignored because ::report/route-prefix is not specified"))
+      (warn-once! "NOTE: There's a :will-enter option in form/defsc-form" location "that will be ignored because ::report/route-prefix is not specified"))
     (assoc base-options :query (fn [_] query))))
 
 #?(:clj
@@ -1447,7 +1447,7 @@
           (when (not (empty? required-attributes))
             (doseq [k required-attributes]
               (when (nil? (get props k))
-                (log/info "Form is not valid because required attribute is missing:" k))))))
+                (log/error "Form is not valid because required attribute is missing:" k))))))
      (and
        all-required-present?
        (or

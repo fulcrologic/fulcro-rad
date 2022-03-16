@@ -571,19 +571,20 @@
           normalize?        (not denormalize?)
           ItemClass         (or BodyItem generated-row-sym)
           subquery          `(comp/get-query ~ItemClass)
+          nspc              (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
+          fqkw              (keyword (str nspc) (name sym))
           query             (into [::id
                                    :ui/parameters
                                    :ui/cache
                                    :ui/busy?
                                    :ui/page-count
                                    :ui/current-page
+                                   [::uism/asm-id [::id fqkw]]
                                    [::picker-options/options-cache (quote '_)]
                                    {:ui/controls `(comp/get-query Control)}
                                    {:ui/current-rows subquery}
                                    [df/marker-table '(quote _)]]
                               query-inclusions)
-          nspc              (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
-          fqkw              (keyword (str nspc) (name sym))
           options           (merge
                               {::compare-rows `default-compare-rows
                                :will-enter    `(fn [app# route-params#] (report-will-enter app# route-params# ~sym))}

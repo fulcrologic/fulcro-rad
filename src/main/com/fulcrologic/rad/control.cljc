@@ -26,8 +26,10 @@
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.raw.application :as raw.app]
     [com.fulcrologic.rad.routing :as rad-routing]
+    [com.fulcrologic.rad.errors :refer [warn-once!]]
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce child-classes]]
     [com.fulcrologic.rad :as rad]
+    [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 (defsc Control
@@ -57,7 +59,7 @@
                  :control     control
                  :control-key control-key})
          (when (and (not= input-type :none) #?(:cljs goog.DEBUG :clj true))
-           (log/warn "NOTE: No renderer is installed to support control " control-key "with type/style" input-type input-style)
+           (warn-once! "NOTE: No renderer is installed to support control " control-key "with type/style" input-type input-style)
            nil))))))
 
 (def run!
@@ -158,16 +160,16 @@
           input-layout        (or inputs (vector (into [] input-keys)))]
       (when #?(:cljs js/goog.DEBUG :clj true)
         (let [expected-layout-keys (->> controls
-                                        (filter #(-> (val %)
-                                                     (get :visible? true)
-                                                     (?! class-or-instance)))
-                                        (map key)
-                                        set)
+                                     (filter #(-> (val %)
+                                                (get :visible? true)
+                                                (?! class-or-instance)))
+                                     (map key)
+                                     set)
               actual-layout-keys   (disj
                                      (into (set button-layout) (filter keyword?) (flatten input-layout))
                                      :_)]
           (when (and (seq expected-layout-keys) (not= expected-layout-keys actual-layout-keys))
-            (log/warn "The control layout does not include all controls: "
+            (warn-once! "The control layout does not include all controls: "
               expected-layout-keys "vs." actual-layout-keys))))
       {:action-layout button-layout
        :input-layout  input-layout})))
