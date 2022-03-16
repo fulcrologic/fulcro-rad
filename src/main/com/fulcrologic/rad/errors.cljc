@@ -1,7 +1,7 @@
 (ns com.fulcrologic.rad.errors
   "Support for consistent error reporting across all RAD projects/plugins. These errors report during development, but
   become no-ops in release builds that have zero overhead."
-  #?(:cljs (:require-macros [com.fulcrologic.rad.errors :refer [warn!]]))
+  #?(:cljs (:require-macros [com.fulcrologic.rad.errors]))
   (:require
     [clojure.spec.alpha :as s]
     [taoensso.encore :as enc]
