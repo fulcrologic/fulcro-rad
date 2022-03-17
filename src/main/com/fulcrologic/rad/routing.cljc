@@ -28,6 +28,9 @@
   route history is installed, then it will be notified of the change. This function is also integrated into the RAD
   authorization system.
 
+  The `RouteTarget` should be a _leaf_ target. Fulcro will correctly route through all the parent routers - just
+  make sure that `route-params` includes all the params that are needed.
+
   You may include `::rad-routing/replace-route? true` in route-params as a hint to the history that you'd prefer to
   replace the top history element instead of pushing a new one."
   [app-or-component RouteTarget route-params]
