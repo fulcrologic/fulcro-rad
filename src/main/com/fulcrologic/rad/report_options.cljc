@@ -318,7 +318,8 @@
   :com.fulcrologic.rad.report/paginate?)
 
 (def page-size
-  "The number of results per page, if your rendering plugin supports pagination and it is turned on."
+  "The number of results per page, if your rendering plugin supports pagination and it is turned on. Can also be a
+   `(fn [uism-env] page-size)`"
   :com.fulcrologic.rad.report/page-size)
 
 (def column-heading

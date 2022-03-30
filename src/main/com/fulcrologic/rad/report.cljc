@@ -268,7 +268,7 @@
     (->
       (if (report-options uism-env ::paginate?)
         (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
-              page-size      (or (report-options uism-env ::page-size) 20)
+              page-size      (or (?! (report-options uism-env ::page-size) uism-env) 20)
               available-rows (or (uism/alias-value uism-env :sorted-rows) [])
               n              (count available-rows)
               stragglers?    (pos? (rem n page-size))
