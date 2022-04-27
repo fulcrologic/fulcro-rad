@@ -1,4 +1,5 @@
 (ns com.fulcrologic.rad.type-support.integer
+  (:refer-clojure :exclude [parse-long])
   (:require
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
     [cognitect.transit :as ct]))
