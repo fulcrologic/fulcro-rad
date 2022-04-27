@@ -1,5 +1,6 @@
 (ns com.fulcrologic.rad.form
   #?(:cljs (:require-macros [com.fulcrologic.rad.form]))
+  (:refer-clojure :exclude [parse-long])
   (:require
     [clojure.spec.alpha :as s]
     [clojure.set :as set]
