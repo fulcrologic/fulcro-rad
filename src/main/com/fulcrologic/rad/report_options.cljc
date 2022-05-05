@@ -528,3 +528,7 @@
 (def column-infos
   "A map from *qualified keyword* to information about the column, which can be a simple string or a `(fn [report-instance] string?)`"
   :com.fulcrologic.rad.report/column-infos)
+
+(def before-load
+  "A UISM handler (fn [env] env') that will be run before loading the report's data."
+  :com.fulcrologic.rad.report/before-load)

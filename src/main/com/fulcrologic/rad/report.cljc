@@ -180,12 +180,14 @@
 (defn load-report! [env]
   (let [Report         (uism/actor-class env :actor/report)
         report-ident   (uism/actor->ident env :actor/report)
-        {::keys [BodyItem source-attribute load-options]} (comp/component-options Report)
+        {::keys [BodyItem source-attribute load-options before-load]} (comp/component-options Report)
         load-options   (?! load-options env)
         current-params (current-control-parameters env)
         path           (conj report-ident :ui/loaded-data)]
     (log/debug "Loading report" source-attribute (comp/component-name Report) (comp/component-name BodyItem))
     (-> env
+      (cond->
+        before-load (before-load))
       (uism/load source-attribute BodyItem (merge
                                              {:params            current-params
                                               ::uism/ok-event    :event/loaded
