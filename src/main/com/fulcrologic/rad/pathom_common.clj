@@ -4,7 +4,6 @@
     [clojure.pprint :refer [pprint]]
     [clojure.walk :as walk]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.wsscode.common.async-clj :refer [let-chan]]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]))
 
