@@ -60,7 +60,6 @@
                      (let [buffer (.. evt -target -result)
                            hash   (crypt/byteArrayToHex
                                     (digest (new Sha256) (new js/Uint8Array buffer)))]
-                       (js/console.log buffer)
                        (async/go
                          (async/>! c hash))))]
        (when (instance? js/Blob blob)
