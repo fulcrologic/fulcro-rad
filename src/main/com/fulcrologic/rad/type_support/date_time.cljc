@@ -27,6 +27,7 @@
     [cljc.java-time.duration :as duration]
     [cljc.java-time.zone-id :as zone-id]
     [cljc.java-time.format.date-time-formatter :as dtf]
+    [taoensso.encore :as enc]
     [taoensso.timbre :as log]
     [cljc.java-time.month :refer [january february march april may june july august september october november december]]
     #?@(:clj  []
@@ -49,7 +50,7 @@
 (>def ::minute (s/int-in 0 60))
 (>def ::instant (s/with-gen #(instance? Instant %) #(s/gen #{(instant/now)})))
 (>def ::inst-or-instant (s/or :inst inst?
-                              :instant ::instant))
+                          :instant ::instant))
 (>def ::local-time (s/with-gen #(instance? LocalTime %) #(s/gen #{(lt/of 11 23 0)})))
 (>def ::zoned-date-time (s/with-gen #(instance? ZonedDateTime %) #(s/gen #{(zdt/of-instant (instant/now) (zone-id/of "America/Los_Angeles"))})))
 (>def ::local-date-time (s/with-gen #(instance? LocalDateTime %) #(s/gen #{(ldt/of 2010 1 22 11 23 0)})))
@@ -254,10 +255,10 @@
    [(? ::zone-name) (? string?) => (? inst?)]
    (try
      (when-not (str/blank? date-time-string)
-       (let [z (get-zone-id zone-name)
-             dt (ldt/parse date-time-string)
+       (let [z   (get-zone-id zone-name)
+             dt  (ldt/parse date-time-string)
              zdt (ldt/at-zone dt z)
-             i (zdt/to-instant zdt)]
+             i   (zdt/to-instant zdt)]
          (new-date (instant/to-epoch-milli i))))
      (catch #?(:cljs :default :clj Exception) e
        nil))))
@@ -311,19 +312,31 @@
 #?(:clj
    (let [get-format (memoize (fn [format locale]
                                (formatter format locale)))]
-     (defn tformat [format inst]
-       (try
-         (let [zdt       (inst->zoned-date-time inst)
-               formatter (get-format format (locale/current-locale))]
-           (zdt/format zdt formatter))
-         (catch #?(:clj Exception :cljs :default) e
-           (log/error e)
-           nil))))
+     (defn tformat
+       "Turn an inst into a formatted timestamp. `format` uses the java DateTimeFormatter specifiers. If `inst` is nil, then
+        this function returns an empty string."
+       [format inst]
+       (if (inst? inst)
+         (try
+           (let [zdt       (inst->zoned-date-time inst)
+                 formatter (get-format format (locale/current-locale))]
+             (zdt/format zdt formatter))
+           (catch #?(:clj Exception :cljs :default) e
+             (log/error e)
+             nil))
+         "")))
    :cljs
-   (defn tformat [f inst] ((jdf/new-formatter f
-                             (or (locale/current-locale) "en-US")
-                             (or *current-zone-name* "America/Los_Angeles"))
-                           inst)))
+   (let [get-format (memoize (fn [format locale zone] (jdf/new-formatter format locale zone)))]
+     (defn tformat
+       "Turn an inst into a formatted timestamp. `format` uses the java DateTimeFormatter specifiers. If `inst` is nil, then
+        this function returns an empty string."
+       [f inst]
+       (if (inst? inst)
+         (let [locale (or (locale/current-locale) "en-US")
+               zone   (or *current-zone-name* "America/Los_Angeles")
+               format (get-format f locale zone)]
+           (format inst))
+         ""))))
 
 (defn inst->human-readable-date
   "Converts a UTC Instant into the correctly-offset and human-readable (e.g. America/Los_Angeles) date string.
