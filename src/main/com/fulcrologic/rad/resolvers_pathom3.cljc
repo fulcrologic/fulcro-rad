@@ -1,10 +1,34 @@
 (ns com.fulcrologic.rad.resolvers-pathom3
+  "Support for allowing Pathom 3 resolvers to be declared on attributes via ::pco/input ::pco/output and ::pco/resolve.
+  This is useful because it allows custom resolution of an attribute that then has all of the RAD abilities that attributes have.
+
+  Further, all keys in `::pco/*` participates in the generation of the resolvers. The full Pathom3 `defresolver` API is available.
+
+  fulcro-rad has no explicit dependency on pathom3, and should not have.
+  It is assumed that you have it on your classpath if you require this ns.
+
+  ```
+  (defattr server-time :server/time :inst
+    {::pco/output [:server/time]
+     ::pco/resolver (fn [_ _] (java.util.Date.))
+     ::form/label \"Current Server Time\"
+     ::form/field-style :some-custom-style
+     ...})
+  ```
+
+  To register the resolvers in your index:
+
+  ```
+  (let [all-attribute-resolvers (resolvers/generate-resolvers all-attributes)
+        base-env (pci/register all-attribute-resolvers)]
+    ... now wrap base-env, see at least com.fulcrologic.rad.attributes/wrap-env)
+  ```
+
+  You may also, of course, define resolvers using `pco/defresolver` and other pathom3 functions, but you must register those
+  separately. `pci/register` takes multiple args."
   (:require
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.resolvers-common :as resolvers-common]
-    ; Pathom3 is not a dependency of fulcro-rad, and should not be
-    ; It is assumed that you have it on your classpath if you
-    ; require this ns
     [com.wsscode.pathom3.connect.operation :as pco]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
