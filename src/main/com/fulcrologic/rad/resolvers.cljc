@@ -18,7 +18,7 @@
   (:require
     [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.rad.resolvers-common :as resolvers-common]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
@@ -36,10 +36,6 @@
   or nil."
   [attr]
   (enc/when-let [resolver        (:com.wsscode.pathom.connect/resolve attr)
-                 secure-resolver (fn [env input]
-                                   (->>
-                                     (resolver env input)
-                                     (auth/redact env)))
                  k               (::attr/qualified-key attr)
                  output          [k]]
     (log/info "Building attribute resolver for" (::attr/qualified-key attr))
@@ -48,7 +44,7 @@
                 {:com.wsscode.pathom.connect/output output}
                 (just-pc-keys attr)
                 {:com.wsscode.pathom.connect/sym     (symbol (str k "-resolver"))
-                 :com.wsscode.pathom.connect/resolve secure-resolver})
+                 :com.wsscode.pathom.connect/resolve (resolvers-common/secure-resolver resolver)})
         transform transform))))
 
 (defn generate-resolvers
