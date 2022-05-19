@@ -286,7 +286,10 @@
 (def can-add?
   "Used in `subforms` maps to control when a child of that type can be added across its relation.
    This option is a boolean or a `(fn [form-instance attribute] boolean?)` that is used to determine if the
-   given child (reachable through `attribute` (a ref attribute)) can be added as a child to `form-instance`."
+   given child (reachable through `attribute` (a ref attribute)) can be added as a child to `form-instance`.
+
+   NOTE: You can return the truthy value `:prepend` from this function to ask the form to put new children at the top
+   of the list."
   :com.fulcrologic.rad.form/can-add?)
 
 (def machine

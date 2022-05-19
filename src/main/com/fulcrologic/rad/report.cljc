@@ -339,18 +339,17 @@
   (uism/trigger! app (uism/asm-id env) :event/do-filter)
   (uism/assoc-aliased env :busy? true))
 
-(defn handle-resume-report
-  "Internal state machine implementation. Called on :event/resumt to do the steps to resume an already running report
-   that has just been re-mounted."
-  [{::uism/keys [state-map] :as env}]
-  (let [env                 (initialize-parameters env)
-        Report              (uism/actor-class env :actor/report)
+(defn report-cache-expired?
+  "Helper for state machines. Returns true if the report data looks like it has expired according to configured
+   caching parameters."
+  [{::uism/keys [state-map] :as uism-env}]
+  (let [Report              (uism/actor-class uism-env :actor/report)
         {::keys [load-cache-seconds
                  load-cache-expired?
                  row-pk]} (comp/component-options Report)
         now-ms              (inst-ms (dt/now))
-        last-load-time      (uism/retrieve env :last-load-time)
-        last-table-count    (uism/retrieve env :raw-items-in-table)
+        last-load-time      (uism/retrieve uism-env :last-load-time)
+        last-table-count    (uism/retrieve uism-env :raw-items-in-table)
         cache-expiration-ms (* 1000 (or load-cache-seconds 0))
         table-name          (::attr/qualified-key row-pk)
         current-table-count (count (keys (get state-map table-name)))
@@ -358,11 +357,17 @@
                               (nil? last-load-time)
                               (not= current-table-count last-table-count)
                               (< last-load-time (- now-ms cache-expiration-ms)))
-        user-cache-expired? (?! load-cache-expired? env cache-looks-stale?)
-        cache-expired?      (if (boolean user-cache-expired?)
-                              user-cache-expired?
-                              cache-looks-stale?)]
-    (if cache-expired?
+        user-cache-expired? (?! load-cache-expired? uism-env cache-looks-stale?)]
+    (if (boolean user-cache-expired?)
+      user-cache-expired?
+      cache-looks-stale?)))
+
+(defn handle-resume-report
+  "Internal state machine implementation. Called on :event/resumt to do the steps to resume an already running report
+   that has just been re-mounted."
+  [env]
+  (let [env (initialize-parameters env)]
+    (if (report-cache-expired? env)
       (load-report! env)
       (handle-filter-event env))))
 
@@ -726,7 +731,7 @@
                                                                     (get column-styles qualified-key)
                                                                     style
                                                                     :default)
-                                             installed-formatters (some-> runtime-atom deref ::type->style->formatter)
+                                             installed-formatters (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->formatter)
                                              formatter            (get-in installed-formatters [type style])]
                                          (or
                                            formatter

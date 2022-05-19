@@ -27,6 +27,20 @@
   `ao/style` on a column to override something like style."
   :com.fulcrologic.rad.report/columns)
 
+(def column-alignment
+  "ATTRIBUTE OPTION: A keyword or `(fn [report col-attr] )`.
+
+  Indicates the preferred alignment for the content of the attribute
+   when shown in a data column. This is a HINT to the renderer.
+
+   Typical supported values are: `:right`, `:left`, and `:center`.
+
+   See also `column-class` for an option that more directly targets general HTML layout.
+
+   WARNING: Using this and `column-class` at the same time may cause conflicts in an HTML renderer.
+   "
+  :com.fulcrologic.rad.report/column-alignment)
+
 (def column-class
   "ATTRIBUTE OPTION. The name of a CSS class (a string) to add to the `classes` of
   the HTML element that represents a column (f.ex. a `<td>` when rendering the report as a table).
