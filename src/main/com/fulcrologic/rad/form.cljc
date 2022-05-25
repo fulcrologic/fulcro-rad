@@ -452,8 +452,8 @@
                                       ::control/controls standard-controls
                                       :route-denied      (fn [this relative-root proposed-route]
                                                            #?(:cljs
-                                                              (when-let [confirm (or (comp/component-options (get-class) ::confirm) js/confirm)]
-                                                                (when (confirm "You will lose unsaved changes. Are you sure?")
+                                                              (when-let [confirm-fn (or (comp/component-options (get-class) ::confirm) js/confirm)]
+                                                                (when (confirm-fn "You will lose unsaved changes. Are you sure?")
                                                                   (dr/retry-route! this relative-root proposed-route)))))}
                                      options
                                      (cond->
