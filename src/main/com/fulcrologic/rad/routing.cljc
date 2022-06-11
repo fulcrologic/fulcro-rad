@@ -39,10 +39,10 @@
       (when-not (every? string? path)
         (log/warn "Insufficient route parameters passed. Resulting route is probably invalid."
           (comp/component-name RouteTarget) route-params))
-      (if (::replace-route? route-params)
-        (history/replace-route! app-or-component path route-params)
-        (history/push-route! app-or-component path route-params))
-      (dr/change-route! app-or-component path route-params))
+      (when (not= :denied (dr/change-route! app-or-component path route-params))
+        (if (::replace-route? route-params)
+          (history/replace-route! app-or-component path route-params)
+          (history/push-route! app-or-component path route-params))))
     (log/error "Cannot find path for" (comp/component-name RouteTarget))))
 
 (defn back!

@@ -97,18 +97,27 @@
         {:route  route
          :params params}))))
 
-(defrecord HTML5History [hash-based? listeners generator current-uid prior-route]
+(defn- notify-listeners! [history route params direction]
+  (let [listeners (some-> history :listeners deref vals)]
+    (doseq [f listeners]
+      (f route (assoc params ::history/direction direction)))))
+
+(defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events?]
   RouteHistory
   (-push-route! [this route params]
     #?(:cljs
        (let [url (route->url route params hash-based?)]
          (log/spy :debug ["Pushing route" route params])
+         (when all-events?
+           (notify-listeners! this route params :push))
          (reset! current-uid (swap! generator inc))
          (reset! prior-route {:route route :params params})
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
        (let [url (route->url route params hash-based?)]
+         (when all-events?
+           (notify-listeners! this route params :replace))
          (log/spy :debug ["Replacing route" route params])
          (reset! prior-route {:route route :params params})
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
@@ -129,12 +138,16 @@
   (-current-route [_] (url->route hash-based?)))
 
 (defn html5-history
-  "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API."
+  "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
+
+   `hash-based?` - Use hash-based URIs instead of paths
+   `all-events?` - Call the route listeners on all routing operations (not just pop state events)."
   ([] (html5-history false))
-  ([hash-based?]
+  ([hash-based?] (html5-history hash-based? false))
+  ([hash-based? all-events?]
    #?(:cljs
       (try
-        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil))
+        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events?)
               pop-state-listener (fn [evt]
                                    (let [current-uid (-> history (:current-uid) deref)
                                          event-uid   (gobj/getValueByKeys evt "state" "uid")
