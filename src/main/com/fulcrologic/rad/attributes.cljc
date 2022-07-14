@@ -42,6 +42,8 @@
   (let [v (-> m
             (assoc ::type type)
             (assoc ::qualified-key kw))]
+    (when (and (not= :ref type) (contains? m ::target))
+      (log/warn "NON-Reference attribute" kw "was given an ao/target. This could cause errors in code that generates code from the attribute."))
     (when (and (= :ref type) (not (contains? m ::target)))
       (log/warn "Reference attribute" kw "does not list a target ID. Resolver generation will not be accurate."))
     #?(:clj  (registered-map (or (-> m meta :registration-key) kw) v)
