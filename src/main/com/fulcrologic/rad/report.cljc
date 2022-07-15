@@ -139,13 +139,13 @@
     (as-> env $
       (uism/apply-action $ assoc-in path (deep-merge initial-parameters {::sort (get-in history-params sort-path {})}))
       (reduce-kv
-        (fn [new-env control-key {:keys [local? default-value]}]
+        (fn [new-env control-key {:keys [local? retain? default-value]}]
           (let [param-path         (route-params-path env control-key)
                 event-value        (enc/nnil (get-in params param-path) (get params control-key))
                 control-value-path (if local?
                                      (conj report-ident :ui/parameters control-key)
                                      [::control/id control-key ::control/value])
-                state-value        (get-in original-state-map control-value-path)
+                state-value        (when-not (false? retain?) (get-in original-state-map control-value-path))
                 url-value          (get-in history-params param-path)
                 explicit-value     (enc/nnil event-value url-value)
                 default-value      (?! default-value app)

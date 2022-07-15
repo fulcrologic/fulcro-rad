@@ -184,6 +184,12 @@
    * `:visible?` : OPTIONAL. Defaults to true. A boolean or `(fn [report-class-or-instance] boolean?)`.
       Indicates that the control should not be displayed (likely because it is an input you only intend to
       set via routing params). You must also omit it from `control-layout`.
+   * `:local?` : OPTIONAL. Defaults to false. Indicates that you want the control's value to be private/local to the report
+   * `:retain?` : OPTIONAL. Defaults to true. Indicate that you want the in-state value to be retained in cases where the
+   report re-appears (is routed to) without an explicit value for this parameter. This means that if neither the URL or routing event
+   has a value for the control, then any in-state value for it will be preferred over the default value; otherwise,
+   the default-value (or nil) will be used.
+
 
    Rendering plugins can expand this list of options as desired.
 
