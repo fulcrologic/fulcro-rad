@@ -140,28 +140,24 @@
       (uism/apply-action $ assoc-in path (deep-merge initial-parameters {::sort (get-in history-params sort-path {})}))
       (reduce-kv
         (fn [new-env control-key {:keys [local? default-value]}]
-          (let [param-path     (route-params-path env control-key)
-                state-map      (::uism/state-map new-env)
-                event-value    (enc/nnil (get-in params param-path) (get params control-key))
-                url-value      (get-in history-params param-path)
-                explicit-value (enc/nnil event-value url-value)
-                default-value  (?! default-value app)
-                v              (enc/nnil explicit-value default-value)]
-            (cond
-              ;; only the report knows about it, or it came from the route/history
-              local? (let [control-path   (conj report-ident :ui/parameters control-key)
-                           existing-value (get-in original-state-map control-path)
-                           v              (enc/nnil existing-value v)]
-                       (if (nil? v)
-                         new-env
-                         (uism/apply-action new-env assoc-in control-path v)))
-              (nil? v) new-env
-              ;; Came in on explicit params...force it to the new value
-              explicit-value (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v)
-              ;; A container is controlling this report, and it is a global control. Leave it alone
-              (and externally-controlled? (get-in state-map [::control/id control-key ::control/value])) new-env
-              ;; It's a global control on a standalone report, or it is missing a value.
-              :else (uism/apply-action new-env assoc-in [::control/id control-key ::control/value] v))))
+          (let [param-path         (route-params-path env control-key)
+                event-value        (enc/nnil (get-in params param-path) (get params control-key))
+                control-value-path (if local?
+                                     (conj report-ident :ui/parameters control-key)
+                                     [::control/id control-key ::control/value])
+                state-value        (get-in original-state-map control-value-path)
+                url-value          (get-in history-params param-path)
+                explicit-value     (enc/nnil event-value url-value)
+                default-value      (?! default-value app)
+                v                  (enc/nnil explicit-value state-value default-value)
+                skip-assignment?   (or
+                                     ;; A container is controlling this report, and it is a global control.
+                                     (and (not local?) externally-controlled?)
+                                     ;; There's nothing to assign
+                                     (nil? v))]
+            (if skip-assignment?
+              new-env
+              (uism/apply-action new-env assoc-in control-value-path v))))
         $
         controls))))
 
