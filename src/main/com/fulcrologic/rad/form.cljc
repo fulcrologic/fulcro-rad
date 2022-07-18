@@ -361,6 +361,7 @@
     ** `:on-saved fulcro-txn` A transaction to run when the form is successfully saved. Exactly what you'd pass to `transact!`.
     ** `:on-cancel fulcro-txn` A transaction to run when the edit is cancelled.
     ** `:on-save-failed fulcro-txn` A transaction to run when the server refuses to save the data.
+    ** `:embedded? boolean` Disable history for embedded forms.
 
   The state machine definition used by this method can be overridden by setting `::form/machine` in component options
   to a different Fulcro uism state machine definition. Machines do *not* run in subforms, only in the master, which
@@ -834,7 +835,8 @@
         form-ident     (uism/actor->ident uism-env :actor/form)
         state-map      (raw.app/current-state fulcro-app)
         cancel-route   (?! (some-> Form comp/component-options ::cancel-route) fulcro-app (fns/ui->props state-map Form form-ident))
-        {:keys [on-cancel]} (uism/retrieve uism-env :options)
+        {:keys [on-cancel embedded?]} (uism/retrieve uism-env :options)
+        use-history (and (not embedded?) (history/history-support? fulcro-app))
         error!         (fn [msg] (log/error "The cancel-route option of" (comp/component-name Form) (str "(" cancel-route ")") msg))
         routing-action (fn []
                          (cond
@@ -847,11 +849,11 @@
                                                            :back)))
                            (= :none cancel-route) nil
                            (= :back cancel-route) (if (history/history-support? fulcro-app)
-                                                    (history/back! fulcro-app)
+                                                    (if-not embedded? (history/back! fulcro-app))
                                                     (error! "Back not supported. No history installed."))
                            (and (seq cancel-route) (every? string? cancel-route)) (dr/change-route! fulcro-app cancel-route)
                            (comp/component-class? cancel-route) (rad-routing/route-to! fulcro-app cancel-route {})
-                           (history/history-support? fulcro-app) (history/back! fulcro-app)))]
+                           use-history (history/back! fulcro-app)))]
     (sched/defer routing-action 100)
     (-> uism-env
       (cond->
@@ -1016,8 +1018,9 @@
         :event/saved
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
                           (let [form-ident (uism/actor->ident env :actor/form)
-                                {:keys [on-saved]} (uism/retrieve env :options)]
-                            (when (history/history-support? fulcro-app)
+                                {:keys [on-saved embedded?]} (uism/retrieve env :options)
+                                use-history (and (not embedded?) (history/history-support? fulcro-app))]
+                            (when use-history
                               (let [{:keys [route params]} (history/current-route fulcro-app)
                                     new-route (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
                                 (history/replace-route! fulcro-app new-route params)))
