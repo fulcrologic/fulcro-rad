@@ -86,12 +86,14 @@
    parameter is provided the mode is autodetected from presence of hash segment in URL.
   "
   ([] (url->route #?(:clj  false
-                     :cljs (some? (seq (.. js/document -location -hash))))))
-  ([hash-based?]
+                     :cljs (some? (seq (.. js/document -location -hash)))) nil))
+  ([hash-based? prefix]
    #?(:cljs
       (let [path   (if hash-based?
                      (str/replace (.. js/document -location -hash) #"^[#]" "")
                      (.. js/document -location -pathname))
+            pcnt   (count prefix)
+            path   (subs path pcnt)
             route  (vec (drop 1 (str/split path #"/")))
             params (or (some-> (.. js/document -location -search) (query-params)) {})]
         {:route  route
@@ -102,11 +104,11 @@
     (doseq [f listeners]
       (f route (assoc params ::history/direction direction)))))
 
-(defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events?]
+(defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events? prefix]
   RouteHistory
   (-push-route! [this route params]
     #?(:cljs
-       (let [url (route->url route params hash-based?)]
+       (let [url (str prefix (route->url route params hash-based?))]
          (log/spy :debug ["Pushing route" route params])
          (when all-events?
            (notify-listeners! this route params :push))
@@ -115,7 +117,7 @@
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
-       (let [url (route->url route params hash-based?)]
+       (let [url (str prefix (route->url route params hash-based?))]
          (when all-events?
            (notify-listeners! this route params :replace))
          (log/spy :debug ["Replacing route" route params])
@@ -135,7 +137,7 @@
          (.back js/history))))
   (-add-route-listener! [_ listener-key f] (swap! listeners assoc listener-key f))
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
-  (-current-route [_] (url->route hash-based?)))
+  (-current-route [_] (url->route hash-based? prefix)))
 
 (defn html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
@@ -143,11 +145,12 @@
    `hash-based?` - Use hash-based URIs instead of paths
    `all-events?` - Call the route listeners on all routing operations (not just pop state events)."
   ([] (html5-history false))
-  ([hash-based?] (html5-history hash-based? false))
-  ([hash-based? all-events?]
+  ([hash-based?] (html5-history hash-based? false nil))
+  ([hash-based? all-events?] (html5-history hash-based? false nil))
+  ([hash-based? all-events? prefix]
    #?(:cljs
       (try
-        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events?)
+        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix)
               pop-state-listener (fn [evt]
                                    (let [current-uid (-> history (:current-uid) deref)
                                          event-uid   (gobj/getValueByKeys evt "state" "uid")
