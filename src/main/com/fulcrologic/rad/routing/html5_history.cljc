@@ -139,15 +139,13 @@
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
   (-current-route [_] (url->route hash-based? prefix)))
 
-(defn html5-history
+(defn new-html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
 
    `hash-based?` - Use hash-based URIs instead of paths
-   `all-events?` - Call the route listeners on all routing operations (not just pop state events)."
-  ([] (html5-history false))
-  ([hash-based?] (html5-history hash-based? false nil))
-  ([hash-based? all-events?] (html5-history hash-based? false nil))
-  ([hash-based? all-events? prefix]
+   `all-events?` - Call the route listeners on all routing operations (not just pop state events).
+   `prefix`      - Prepend prefix to all routes, in cases we are not running on root url (context-root)"
+  [{:keys [hash-based? all-events? prefix] :or {all-events? false, hash-based? false, prefix nil}}]
    #?(:cljs
       (try
         (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix)
@@ -164,7 +162,18 @@
           (.addEventListener js/window "popstate" pop-state-listener)
           history)
         (catch :default e
-          (log/error e "Unable to create HTML5 history."))))))
+          (log/error e "Unable to create HTML5 history.")))))
+
+(defn html5-history
+  "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
+
+   `hash-based?` - Use hash-based URIs instead of paths
+   `all-events?` - Call the route listeners on all routing operations (not just pop state events).
+   
+  You should prefer using the new-html5-history, since it supports more options"
+  ([] (new-html5-history {}))
+  ([hash-based?] (new-html5-history {:hash-based? hash-based?}))
+  ([hash-based? all-events?] (new-html5-history {:hash-based? hash-based? :all-events? all-events?})))
 
 (defn apply-route!
   "Apply the given route and params to the URL and routing system. `saved-route` is in the format of
