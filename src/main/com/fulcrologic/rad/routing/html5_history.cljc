@@ -87,8 +87,7 @@
   "
   ([] (url->route #?(:clj  false
                      :cljs (some? (seq (.. js/document -location -hash)))) nil))
-  ([hash-based?] (url->route #?(:clj  false
-                     :cljs (some? (seq (.. js/document -location -hash)))) nil))
+  ([hash-based?] (url->route hash-based? nil))
   ([hash-based? prefix]
    #?(:cljs
       (let [path   (if hash-based?
