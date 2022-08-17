@@ -87,13 +87,18 @@
   "
   ([] (url->route #?(:clj  false
                      :cljs (some? (seq (.. js/document -location -hash)))) nil))
+  ([hash-based?] (url->route #?(:clj  false
+                     :cljs (some? (seq (.. js/document -location -hash)))) nil))
   ([hash-based? prefix]
    #?(:cljs
       (let [path   (if hash-based?
                      (str/replace (.. js/document -location -hash) #"^[#]" "")
                      (.. js/document -location -pathname))
             pcnt   (count prefix)
-            path   (subs path pcnt)
+            prefixed? (> pcnt 0)
+            path   (if (and prefixed? (str/starts-with? path prefix)) 
+                     (subs path pcnt) 
+                     path)
             route  (vec (drop 1 (str/split path #"/")))
             params (or (some-> (.. js/document -location -search) (query-params)) {})]
         {:route  route
@@ -146,23 +151,28 @@
    `all-events?` - Call the route listeners on all routing operations (not just pop state events).
    `prefix`      - Prepend prefix to all routes, in cases we are not running on root url (context-root)"
   [{:keys [hash-based? all-events? prefix] :or {all-events? false, hash-based? false, prefix nil}}]
-   #?(:cljs
-      (try
-        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix)
-              pop-state-listener (fn [evt]
-                                   (let [current-uid (-> history (:current-uid) deref)
-                                         event-uid   (gobj/getValueByKeys evt "state" "uid")
-                                         forward?    (< event-uid current-uid)
-                                         {:keys [route params]} (history/-current-route history)
-                                         listeners   (some-> history :listeners deref vals)]
-                                     (log/debug "Got pop state event." evt)
-                                     (doseq [f listeners]
-                                       (f route (assoc params ::history/direction (if forward? :forward :back))))
-                                     (reset! (:prior-route history) (history/-current-route history))))]
-          (.addEventListener js/window "popstate" pop-state-listener)
-          history)
-        (catch :default e
-          (log/error e "Unable to create HTML5 history.")))))
+  (assert (or (not prefix)
+              (and (str/starts-with? prefix "/")
+                   (not (str/ends-with? prefix "/"))
+                   (not (str/index-of prefix "//"))
+                   (not (str/index-of prefix "..")))))
+  #?(:cljs
+     (try
+       (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix)
+             pop-state-listener (fn [evt]
+                                  (let [current-uid (-> history (:current-uid) deref)
+                                        event-uid   (gobj/getValueByKeys evt "state" "uid")
+                                        forward?    (< event-uid current-uid)
+                                        {:keys [route params]} (history/-current-route history)
+                                        listeners   (some-> history :listeners deref vals)]
+                                    (log/debug "Got pop state event." evt)
+                                    (doseq [f listeners]
+                                      (f route (assoc params ::history/direction (if forward? :forward :back))))
+                                    (reset! (:prior-route history) (history/-current-route history))))]
+         (.addEventListener js/window "popstate" pop-state-listener)
+         history)
+       (catch :default e
+         (log/error e "Unable to create HTML5 history.")))))
 
 (defn html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
