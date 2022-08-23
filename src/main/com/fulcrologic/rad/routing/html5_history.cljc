@@ -86,12 +86,18 @@
    parameter is provided the mode is autodetected from presence of hash segment in URL.
   "
   ([] (url->route #?(:clj  false
-                     :cljs (some? (seq (.. js/document -location -hash))))))
-  ([hash-based?]
+                     :cljs (some? (seq (.. js/document -location -hash)))) nil))
+  ([hash-based?] (url->route hash-based? nil))
+  ([hash-based? prefix]
    #?(:cljs
       (let [path   (if hash-based?
                      (str/replace (.. js/document -location -hash) #"^[#]" "")
                      (.. js/document -location -pathname))
+            pcnt   (count prefix)
+            prefixed? (> pcnt 0)
+            path   (if (and prefixed? (str/starts-with? path prefix)) 
+                     (subs path pcnt) 
+                     path)
             route  (vec (drop 1 (str/split path #"/")))
             params (or (some-> (.. js/document -location -search) (query-params)) {})]
         {:route  route
@@ -102,11 +108,11 @@
     (doseq [f listeners]
       (f route (assoc params ::history/direction direction)))))
 
-(defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events?]
+(defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events? prefix]
   RouteHistory
   (-push-route! [this route params]
     #?(:cljs
-       (let [url (route->url route params hash-based?)]
+       (let [url (str prefix (route->url route params hash-based?))]
          (log/spy :debug ["Pushing route" route params])
          (when all-events?
            (notify-listeners! this route params :push))
@@ -115,7 +121,7 @@
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
-       (let [url (route->url route params hash-based?)]
+       (let [url (str prefix (route->url route params hash-based?))]
          (when all-events?
            (notify-listeners! this route params :replace))
          (log/spy :debug ["Replacing route" route params])
@@ -135,33 +141,47 @@
          (.back js/history))))
   (-add-route-listener! [_ listener-key f] (swap! listeners assoc listener-key f))
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
-  (-current-route [_] (url->route hash-based?)))
+  (-current-route [_] (url->route hash-based? prefix)))
+
+(defn new-html5-history
+  "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
+
+   `hash-based?` - Use hash-based URIs instead of paths
+   `all-events?` - Call the route listeners on all routing operations (not just pop state events).
+   `prefix`      - Prepend prefix to all routes, in cases we are not running on root url (context-root)"
+  [{:keys [hash-based? all-events? prefix] :or {all-events? false, hash-based? false, prefix nil}}]
+  (assert (or (not prefix)
+              (and (str/starts-with? prefix "/")
+                   (not (str/ends-with? prefix "/"))))
+          "Prefix must start with a slash, and not end with one.")
+  #?(:cljs
+     (try
+       (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix)
+             pop-state-listener (fn [evt]
+                                  (let [current-uid (-> history (:current-uid) deref)
+                                        event-uid   (gobj/getValueByKeys evt "state" "uid")
+                                        forward?    (< event-uid current-uid)
+                                        {:keys [route params]} (history/-current-route history)
+                                        listeners   (some-> history :listeners deref vals)]
+                                    (log/debug "Got pop state event." evt)
+                                    (doseq [f listeners]
+                                      (f route (assoc params ::history/direction (if forward? :forward :back))))
+                                    (reset! (:prior-route history) (history/-current-route history))))]
+         (.addEventListener js/window "popstate" pop-state-listener)
+         history)
+       (catch :default e
+         (log/error e "Unable to create HTML5 history.")))))
 
 (defn html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
 
    `hash-based?` - Use hash-based URIs instead of paths
-   `all-events?` - Call the route listeners on all routing operations (not just pop state events)."
-  ([] (html5-history false))
-  ([hash-based?] (html5-history hash-based? false))
-  ([hash-based? all-events?]
-   #?(:cljs
-      (try
-        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events?)
-              pop-state-listener (fn [evt]
-                                   (let [current-uid (-> history (:current-uid) deref)
-                                         event-uid   (gobj/getValueByKeys evt "state" "uid")
-                                         forward?    (< event-uid current-uid)
-                                         {:keys [route params]} (history/-current-route history)
-                                         listeners   (some-> history :listeners deref vals)]
-                                     (log/debug "Got pop state event." evt)
-                                     (doseq [f listeners]
-                                       (f route (assoc params ::history/direction (if forward? :forward :back))))
-                                     (reset! (:prior-route history) (history/-current-route history))))]
-          (.addEventListener js/window "popstate" pop-state-listener)
-          history)
-        (catch :default e
-          (log/error e "Unable to create HTML5 history."))))))
+   `all-events?` - Call the route listeners on all routing operations (not just pop state events).
+   
+  You should prefer using the new-html5-history, since it supports more options"
+  ([] (new-html5-history {}))
+  ([hash-based?] (new-html5-history {:hash-based? hash-based?}))
+  ([hash-based? all-events?] (new-html5-history {:hash-based? hash-based? :all-events? all-events?})))
 
 (defn apply-route!
   "Apply the given route and params to the URL and routing system. `saved-route` is in the format of
