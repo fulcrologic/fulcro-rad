@@ -109,7 +109,9 @@
   (apply comp/component-options (uism/actor-class uism-env :actor/report) k-or-ks))
 
 (defn route-params-path
-  "Internal state machine helper. May be used by extensions to the stock state machine."
+  "Path within the EDN stored on the URL (route params) where the given control key should be stored. When more than
+   one report is one the screen these would collide, so when it is a global control it can be stored just by key, but
+   when it is local it must be stored by report ID + key. This helper can be used by extensions to the stock state machine."
   [env control-key]
   (let [report-ident (uism/actor->ident env :actor/report)
         {:keys [local?] :as control} (comp/component-options (uism/actor-class env :actor/report) ::control/controls control-key)
@@ -130,12 +132,12 @@
         {history-params :params} (history/current-route app)
         sort-path          (route-params-path env ::sort)
         selected-row       (get-in history-params (route-params-path env ::selected-row))
-        current-page       (get-in history-params (route-params-path env ::current-page))
+        current-page       (get-in history-params (route-params-path env ::current-page) 1)
         controls           (report-options env :com.fulcrologic.rad.control/controls)
         original-state-map (::uism/state-map env)
-        initial-parameters (cond-> {::sort (initial-sort-params env)}
-                             selected-row (assoc ::selected-row selected-row)
-                             current-page (assoc ::current-page current-page))]
+        initial-parameters (cond-> {::sort         (initial-sort-params env)
+                                    ::current-page current-page}
+                             selected-row (assoc ::selected-row selected-row))]
     (as-> env $
       (uism/apply-action $ assoc-in path (deep-merge initial-parameters {::sort (get-in history-params sort-path {})}))
       (reduce-kv
