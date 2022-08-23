@@ -153,7 +153,7 @@
   (assert (or (not prefix)
               (and (str/starts-with? prefix "/")
                    (not (str/ends-with? prefix "/"))))
-          "“Prefix must start with a slash, and not end with one.")
+          "Prefix must start with a slash, and not end with one.")
   #?(:cljs
      (try
        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix)
