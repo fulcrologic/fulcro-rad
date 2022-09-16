@@ -603,10 +603,10 @@
                                        changes)]]
            (swap! state update-in ident merge data-to-merge))
          (swap! state
-                update-in
-                (tempid/resolve-tempids root-ident tempid->realid)
-                merge
-                (tempid/resolve-tempids entity tempid->realid))))
+           update-in
+           (tempid/resolve-tempids root-ident tempid->realid)
+           merge
+           (tempid/resolve-tempids entity tempid->realid))))
      (remote [env]
        (let [delta (or delta
                      {root-ident (reduce-kv
@@ -838,7 +838,7 @@
         state-map      (raw.app/current-state fulcro-app)
         cancel-route   (?! (some-> Form comp/component-options ::cancel-route) fulcro-app (fns/ui->props state-map Form form-ident))
         {:keys [on-cancel embedded?]} (uism/retrieve uism-env :options)
-        use-history (and (not embedded?) (history/history-support? fulcro-app))
+        use-history    (and (not embedded?) (history/history-support? fulcro-app))
         error!         (fn [msg] (log/error "The cancel-route option of" (comp/component-name Form) (str "(" cancel-route ")") msg))
         routing-action (fn []
                          (cond
@@ -962,6 +962,15 @@
         (uism/apply-action env update-in form-ident merge ui-entity))
       env)))
 
+(defn- protected-on-change
+  [env on-change form-ident qualified-key old-value value]
+  (let [new-env (on-change env form-ident qualified-key old-value value)]
+    (if (or (nil? new-env) (contains? new-env ::uism/state-map))
+      new-env
+      (do
+        (log/error "Invalid on-change handler! It MUST return an updated env!")
+        env))))
+
 (defstatemachine form-machine
   {::uism/actors
    #{:actor/form}
@@ -1020,7 +1029,7 @@
                               on-save-failed (uism/transact on-save-failed))))}
         :event/saved
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (let [form-ident (uism/actor->ident env :actor/form)
+                          (let [form-ident  (uism/actor->ident env :actor/form)
                                 {:keys [on-saved embedded?]} (uism/retrieve env :options)
                                 use-history (and (not embedded?) (history/history-support? fulcro-app))]
                             (when use-history
@@ -1045,28 +1054,21 @@
            (p :event/attribute-changed
              (let [{:keys       [old-value form-key value form-ident]
                     ::attr/keys [cardinality type qualified-key]} event-data
-                   form-class          (some-> form-key (comp/registry-key->class))
+                   form-class     (some-> form-key (comp/registry-key->class))
                    {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
-                   many?               (= :many cardinality)
-                   ref?                (= :ref type)
-                   missing?            (nil? value)
-                   value               (cond
-                                         (and ref? many? (nil? value)) []
-                                         (and many? (nil? value)) #{}
-                                         (and ref? many?) (filterv #(not (nil? (second %))) value)
-                                         ref? (if (nil? (second value)) nil value)
-                                         :else value)
-                   protected-on-change (fn [env]
-                                         (let [new-env (on-change env form-ident qualified-key old-value value)]
-                                           (if (or (nil? new-env) (contains? new-env ::uism/state-map))
-                                             new-env
-                                             (do
-                                               (log/error "Invalid on-change handler! It MUST return an updated env!")
-                                               env))))
-                   path                (when (and form-ident qualified-key)
-                                         (conj form-ident qualified-key))
+                   many?          (= :many cardinality)
+                   ref?           (= :ref type)
+                   missing?       (nil? value)
+                   value          (cond
+                                    (and ref? many? (nil? value)) []
+                                    (and many? (nil? value)) #{}
+                                    (and ref? many?) (filterv #(not (nil? (second %))) value)
+                                    ref? (if (nil? (second value)) nil value)
+                                    :else value)
+                   path           (when (and form-ident qualified-key)
+                                    (conj form-ident qualified-key))
                    ;; TODO: Decide when to properly set the field to marked
-                   mark-complete?      true]
+                   mark-complete? true]
                (when #?(:clj true :cljs goog.DEBUG)
                  (when-not path
                    (log/error "Unable to record attribute change. Path cannot be calculated."))
@@ -1079,18 +1081,21 @@
                    mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
                    (and path (nil? value)) (uism/apply-action update-in form-ident dissoc qualified-key)
                    (and path (not (nil? value))) (uism/apply-action assoc-in path value)
-                   on-change (protected-on-change))
+                   on-change (protected-on-change on-change form-ident qualified-key old-value value))
                  (apply-derived-calculations)))))}
 
         :event/blur
         {::uism/handler (fn [env] env)}
 
         :event/add-row
-        {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+        {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
                           (let [{::keys [order parent-relation parent child-class]} event-data
+                                {{:keys [on-change]} ::triggers} (some-> parent (comp/component-options))
+                                parent-ident         (comp/get-ident parent)
                                 relation-attr        (form-key->attribute parent parent-relation)
                                 many?                (attr/to-many? relation-attr)
-                                target-path          (conj (comp/get-ident parent) parent-relation)
+                                target-path          (conj parent-ident parent-relation)
+                                old-value            (get-in state-map target-path)
                                 new-child            (default-state child-class (tempid/tempid))
                                 child-ident          (comp/get-ident child-class new-child)
                                 optional-keys        (optional-fields child-class)
@@ -1099,7 +1104,12 @@
                                                          (fn [s k]
                                                            (fs/mark-complete* s child-ident k))
                                                          state-map
-                                                         (concat optional-keys (keys new-child))))]
+                                                         (concat optional-keys (keys new-child))))
+                                apply-on-change      (fn [env]
+                                                       (if on-change
+                                                         (let [new-value (get-in (::uism/state-map env) target-path)]
+                                                           (protected-on-change env on-change parent-ident parent-relation old-value new-value))
+                                                         env))]
                             (-> env
                               (uism/apply-action
                                 (fn [s]
@@ -1109,21 +1119,30 @@
                                                                                    :replace) target-path)
                                     (fs/add-form-config* child-class child-ident)
                                     (mark-fields-complete))))
+                              (apply-on-change)
                               (apply-derived-calculations))))}
 
         :event/delete-row
-        {::uism/handler (fn [{::uism/keys [event-data] :as env}]
+        {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
                           (let [{::keys [form-instance child-ident parent parent-relation]} event-data
-                                relation-attr (form-key->attribute parent parent-relation)
-                                many?         (attr/to-many? relation-attr)
-                                child-ident   (or child-ident (and form-instance (comp/get-ident form-instance)))
-                                parent-ident  (comp/get-ident parent)
-                                path          (conj parent-ident parent-relation)]
-                            (when path
+                                {{:keys [on-change]} ::triggers} (some-> parent (comp/component-options))
+                                relation-attr   (form-key->attribute parent parent-relation)
+                                many?           (attr/to-many? relation-attr)
+                                child-ident     (or child-ident (and form-instance (comp/get-ident form-instance)))
+                                parent-ident    (comp/get-ident parent)
+                                target-path     (conj parent-ident parent-relation)
+                                old-value       (get-in state-map target-path)
+                                apply-on-change (fn [env]
+                                                  (if on-change
+                                                    (let [new-value (get-in (::uism/state-map env) target-path)]
+                                                      (protected-on-change env on-change parent-ident parent-relation old-value new-value))
+                                                    env))]
+                            (when target-path
                               (-> env
                                 (cond->
-                                  many? (uism/apply-action fns/remove-ident child-ident path)
+                                  many? (uism/apply-action fns/remove-ident child-ident target-path)
                                   (not many?) (uism/apply-action update-in parent-ident dissoc parent-relation))
+                                (apply-on-change)
                                 (apply-derived-calculations)))))}
 
         :event/save
