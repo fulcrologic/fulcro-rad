@@ -392,23 +392,27 @@
 (defn form-will-leave
   "Checks to see if the UISM is still running (indicating an exit via routing) and cleans up the machine."
   [this]
-  (let [master-form (or (comp/get-computed this ::master-form) this)
-        state-map   (raw.app/current-state this)
-        form-ident  (comp/get-ident master-form)
-        machine     (get-in state-map [::uism/asm-id form-ident])]
+  (let [master-form     (or (comp/get-computed this ::master-form) this)
+        state-map       (raw.app/current-state this)
+        form-ident      (comp/get-ident master-form)
+        silent-abandon? (?! (comp/component-options this ::silent-abandon?) this)
+        machine         (get-in state-map [::uism/asm-id form-ident])]
     (when machine
+      (when silent-abandon?
+        (uism/trigger! master-form form-ident :event/reset {}))
       (uism/trigger! master-form form-ident :event/exit {}))
     true))
 
 (defn form-allow-route-change [this]
   "Used as a form route target's :allow-route-change?"
-  (let [id            (comp/get-ident this)
-        form-props    (comp/props this)
-        read-only?    (?! (comp/component-options this ::read-only?) this)
-        current-state (raw.app/current-state this)
-        abandoned?    (get-in current-state [::uism/asm-id id ::uism/local-storage :abandoned?] false)
-        dirty?        (and (not abandoned?) (fs/dirty? form-props))]
-    (or read-only? (not dirty?))))
+  (let [id              (comp/get-ident this)
+        form-props      (comp/props this)
+        read-only?      (?! (comp/component-options this ::read-only?) this)
+        silent-abandon? (?! (comp/component-options this ::silent-abandon?) this)
+        current-state   (raw.app/current-state this)
+        abandoned?      (get-in current-state [::uism/asm-id id ::uism/local-storage :abandoned?] false)
+        dirty?          (and (not abandoned?) (fs/dirty? form-props))]
+    (or silent-abandon? read-only? (not dirty?))))
 
 (defn form-pre-merge
   "Generate a pre-merge for a component that has the given for attribute map. Returns a proper
@@ -707,6 +711,17 @@
   behavior as default-to-many, though the default values must be a map instead of a vector.
 
   Default value can be a no-arg function, but the argument list may change in future versions.
+
+  The final result that will appear in the app state will be:
+
+  ```
+      (merge
+        (default-state SubClass new-id)
+        (when (map? default-value) default-value) ; local form's default value
+        {id-key new-id})
+  ```
+
+  where `SubClass` is the UI class of the subform for the relation.
   "
   [FormClass attribute]
   (let [{::keys [subforms default-values]} (comp/component-options FormClass)
@@ -714,24 +729,19 @@
         default-value (?! (get default-values qualified-key default-value))
         SubClass      (get-in subforms [qualified-key ::ui])
         new-id        (tempid/tempid)
-        id-key        (comp/component-options SubClass ::id ::attr/qualified-key)]
+        id-key        (some-> SubClass (comp/component-options ::id ::attr/qualified-key))]
     (when-not SubClass
       (log/error "Subforms for class" (comp/component-name FormClass)
         "must include a ::form/ui entry for" qualified-key))
     (when-not (keyword? id-key)
       (log/error "Subform class" (comp/component-name SubClass)
         "must include a ::form/id that is an attr/attribute"))
-    (cond
-      id-key
+    (if id-key
       (merge
         (default-state SubClass new-id)
         (when (map? default-value) default-value)
         {id-key new-id})
-
-      :otherwise
-      (do
-        (log/error "Subform not declared (or is missing ::form/id) for" qualified-key "on" (comp/component-name FormClass))
-        {}))))
+      {})))
 
 (defn default-state
   "Generate a potentially recursive tree of data that represents the tree of initial

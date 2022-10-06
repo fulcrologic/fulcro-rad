@@ -325,3 +325,9 @@
   "A map of data OR a `(fn [form-rendering-env] map?)`. This data will be included in the form parameters sent
    to the save mutation on the remote. These will be merged with the default parameters such as `::form/delta`."
   :com.fulcrologic.rad.form/save-params)
+
+(def silent-abandon?
+  "Form-only option. A boolean or `(fn [master-form-instance] boolean?)`. This is checked when navigation attempts
+   to move away from the form. If it returns true, then any unsaved changes will be abandoned (reset in Fulcro state to
+   their original values) and the navigation will be allowed."
+  :com.fulcrologic.rad.form/silent-abandon?)
