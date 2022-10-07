@@ -389,6 +389,12 @@
       (log/error (comp/component-name form-class) "Invalid UUID string " id "used in route for new entity. The form may misbehave."))
     (dr/route-deferred form-ident (fn [] (start-form! app coerced-id form-class route-params)))))
 
+(defn abandon-form!
+  "Stop the state machine for the given form without warning. Does not reset the form or give any warnings: just exits the state machine.
+   You should only use this when you are embedding the form in something, and you are controlling the form directly. Usually,
+   you will combine this with `undo-all!` and some kind of UI routing change."
+  [app-ish form-ident] (uism/trigger! app-ish form-ident :event/exit {}))
+
 (defn form-will-leave
   "Checks to see if the UISM is still running (indicating an exit via routing) and cleans up the machine."
   [this]
@@ -399,7 +405,7 @@
         machine         (get-in state-map [::uism/asm-id form-ident])]
     (when machine
       (when silent-abandon?
-        (uism/trigger! master-form form-ident :event/reset {}))
+        (abandon-form! this form-ident))
       (uism/trigger! master-form form-ident :event/exit {}))
     true))
 
@@ -965,11 +971,27 @@
       (let [denorm-props    (fns/ui->props state-map FormClass form-ident)
             predefined-keys (set (keys denorm-props))
             ui-props        (?! initialize-ui-props FormClass denorm-props)
+            query           (comp/get-query FormClass state-map)
+            k->component    (into {}
+                              (keep (fn [{:keys [key component] :as node}]
+                                      (when component {key component})))
+                              (:children (eql/query->ast query)))
             all-keys        (set (keys ui-props))
             ;; Ensure that the user's function cannot possible conflict with form state
             allowed-keys    (set/difference all-keys predefined-keys)
-            ui-entity       (select-keys ui-props allowed-keys)]
-        (uism/apply-action env update-in form-ident merge ui-entity))
+            populate-data   (fn [sm]
+                              (reduce
+                                (fn [s k]
+                                  (let [raw-value      (log/spy :info (get ui-props k))
+                                        c              (log/spy :info (k->component k))
+                                        value-to-place (if c
+                                                         (comp/get-ident c raw-value)
+                                                         raw-value)]
+                                    (cond-> (assoc-in s (conj form-ident k) value-to-place)
+                                      c (merge/merge-component c raw-value))))
+                                sm
+                                allowed-keys))]
+        (uism/apply-action env populate-data))
       env)))
 
 (defn- protected-on-change
