@@ -982,8 +982,8 @@
             populate-data   (fn [sm]
                               (reduce
                                 (fn [s k]
-                                  (let [raw-value      (log/spy :info (get ui-props k))
-                                        c              (log/spy :info (k->component k))
+                                  (let [raw-value      (get ui-props k)
+                                        c              (k->component k)
                                         value-to-place (if c
                                                          (comp/get-ident c raw-value)
                                                          raw-value)]
