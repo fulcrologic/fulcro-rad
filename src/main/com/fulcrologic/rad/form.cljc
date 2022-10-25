@@ -982,11 +982,12 @@
             populate-data   (fn [sm]
                               (reduce
                                 (fn [s k]
-                                  (let [raw-value      (get ui-props k)
-                                        c              (k->component k)
-                                        value-to-place (if c
-                                                         (comp/get-ident c raw-value)
-                                                         raw-value)]
+                                  (let [raw-value       (get ui-props k)
+                                        c               (k->component k)
+                                        component-ident (when c (comp/get-ident c raw-value))
+                                        value-to-place  (if (and c (vector? component-ident) (some? (second component-ident)))
+                                                          component-ident
+                                                          raw-value)]
                                     (cond-> (assoc-in s (conj form-ident k) value-to-place)
                                       c (merge/merge-component c raw-value))))
                                 sm
