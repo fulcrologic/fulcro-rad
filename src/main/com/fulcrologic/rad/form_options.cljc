@@ -152,7 +152,15 @@
 
 (def query-inclusion
   "A vector of EQL that will be appended to the component's query. Usually used to add `:ui/???` props for use with
-   hand-rendered UI. See `initialize-ui-props`."
+   hand-rendered UI. See `initialize-ui-props`.
+
+   NOTES:
+   * The query elements will be included in the server query to LOAD existing items; however, NO I/O is done on these
+     during create, since new items do not come from the server! If you always need to load something in your
+     query inclusion (e.g. options needed to render the form) you will need to augment the form state machine with
+     `fo/machine`.
+   * If you use joins in the query inclusion, they will not support dynamic queries.
+   "
   :com.fulcrologic.rad.form/query-inclusion)
 
 (def default-value

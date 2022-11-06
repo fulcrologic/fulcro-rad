@@ -169,7 +169,7 @@
                                      (into (set button-layout) (filter keyword?) (flatten input-layout))
                                      :_)]
           (when (and (seq expected-layout-keys) (not= expected-layout-keys actual-layout-keys))
-            (warn-once! "The control layout does not include all controls: "
+            (log/debug "The control layout does not include all controls: "
               expected-layout-keys "vs." actual-layout-keys))))
       {:action-layout button-layout
        :input-layout  input-layout})))

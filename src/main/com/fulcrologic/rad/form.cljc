@@ -333,13 +333,12 @@
                              (mapcat (fn [{::attr/keys [qualified-key]}]
                                        (if-let [subform (get-in subforms [qualified-key ::ui])]
                                          [{qualified-key (comp/get-query subform)}]
-                                         (let [style          (get field-styles qualified-key)
-                                               k->attr        (into {} (map (fn [{::attr/keys [qualified-key] :as attr}] [qualified-key attr])) attributes)
+                                         (let [k->attr        (into {} (map (fn [{::attr/keys [qualified-key] :as attr}] [qualified-key attr])) attributes)
                                                target-id-key  (::attr/target (k->attr qualified-key))
                                                fake-component (sc qualified-key {:query (fn [_] [target-id-key])
                                                                                  :ident (fn [_ props] [target-id-key (get props target-id-key)])})]
-                                           (when-not (and style target-id-key)
-                                             (log/warn "Reference attribute" qualified-key "in form has no subform information and no field style/target id key."))
+                                           (when-not target-id-key
+                                             (log/warn "Reference attribute" qualified-key "in form has no subform ::form/ui, and no ::attr/target."))
                                            [{qualified-key (comp/get-query fake-component)}]))))
                              refs)]
     full-query))
@@ -455,7 +454,6 @@
         form-field?                (fn [{::attr/keys [identity? computed-value]}] (and
                                                                                     (not computed-value)
                                                                                     (not identity?)))
-        attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
         attribute-map              (attr/attribute-map attributes)
         pre-merge                  (form-pre-merge options attribute-map)
         base-options               (merge
@@ -482,14 +480,14 @@
                                                             :will-enter          (or will-enter
                                                                                    (fn [app route-params]
                                                                                      (form-will-enter app route-params (get-class))))})))
-        inclusions                 (set/union attribute-query-inclusions (set query-inclusion))
-        query                      (cond-> (form-options->form-query base-options)
-                                     (seq inclusions) (into inclusions))]
+        attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
+        inclusions                 (set/union attribute-query-inclusions (set query-inclusion))]
     (when (and #?(:cljs goog.DEBUG :clj true) (not (string? route-prefix)))
       (warn-once! "NOTE: " location " does not have a route prefix and will only be usable as a sub-form."))
     (when (and #?(:cljs goog.DEBUG :clj true) will-enter (not route-prefix))
       (warn-once! "NOTE: There's a :will-enter option in form/defsc-form" location "that will be ignored because ::report/route-prefix is not specified"))
-    (assoc base-options :query (fn [_] query))))
+    (assoc base-options :query (fn [_] (cond-> (form-options->form-query base-options)
+                                         (seq inclusions) (into inclusions))))))
 
 #?(:clj
    (defn form-body [argslist body]
@@ -504,23 +502,39 @@
            options      (if (map? options)
                           (opts/macro-optimize-options env options #{::subforms ::validation-messages ::field-styles} {})
                           options)
+           hooks?       (and (comp/cljs? env) (:use-hooks? options))
            nspc         (if (comp/cljs? env) (-> env :ns :name str) (name (ns-name *ns*)))
            fqkw         (keyword (str nspc) (name sym))
            body         (form-body arglist body)
            [thissym propsym computedsym extra-args] arglist
            location     (str nspc "." sym)
-           render-form  (#'comp/build-render sym thissym propsym computedsym extra-args body)
+           render-form  (if hooks?
+                          (#'comp/build-hooks-render sym thissym propsym computedsym extra-args body)
+                          (#'comp/build-render sym thissym propsym computedsym extra-args body))
            options-expr `(let [get-class# (fn [] ~sym)]
-                           (assoc (convert-options get-class# ~location ~options) :render ~render-form))]
+                           (assoc (convert-options get-class# ~location ~options) :render ~render-form
+                             :componentName ~(keyword sym)))]
        (when (some #(= '_ %) arglist)
          (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
-       (if (comp/cljs? env)
+       (cond
+         hooks?
+         `(let [options# ~options-expr]
+            (defonce ~sym
+              (fn [js-props#]
+                (let [render# (:render (comp/component-options ~sym))
+                      [this# props#] (comp/use-fulcro js-props# ~sym)]
+                  (render# this# props#))))
+            (comp/add-hook-options! ~sym options#))
+
+         (comp/cljs? env)
          `(do
             (declare ~sym)
             (let [options# ~options-expr]
               (defonce ~(vary-meta sym assoc :doc doc :jsdoc ["@constructor"])
                 (comp/react-constructor (:initLocalState options#)))
               (com.fulcrologic.fulcro.components/configure-component! ~sym ~fqkw options#)))
+
+         :else
          `(do
             (declare ~sym)
             (let [options# ~options-expr]
@@ -528,7 +542,24 @@
                 (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~fqkw options#))))))))
 
 #?(:clj
-   (defmacro defsc-form [& args]
+   (defmacro defsc-form
+     "Create a UISM-managed RAD form. The interactions are tunable by redefining the state machine using the
+      `fo/machine` option, and the rendering can either be generated (if you specify no body and have a UI
+      plguin), or can be hand-coded as the body. See `render-layout` and `render-field`.
+
+      This macro supports most of the same options as the normal `defsc` macro (you can use component lifecycle, hooks,
+      etc), BUT it generates the query/ident/initial state for you.
+
+      If you do specify a `fo/route-prefix` then it also generate dynamic routing configuration, of which
+      you may ONLY override :route-denied to supply a more appropriate
+      UI interaction for notifying the user there are unsaved changes, but all other dynamic routing options
+      will be defined by the macro. If you do not specify a route-prefix then you MAY supply dynamic routing options, but
+      you should understand how they are meant to interact by reading the state machine definition (see form-machine
+      source code in this namesapce).
+
+      In general if you want to augment the form I/O then you should override `fo/machine` and integrate your logic into there.
+      "
+     [& args]
      (try
        (defsc-form* &env args)
        (catch Exception e
