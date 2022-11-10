@@ -415,16 +415,15 @@
                                         (let [Report     (uism/actor-class env :actor/report)
                                               {::keys [row-pk report-loaded]} (comp/component-options Report)
                                               table-name (::attr/qualified-key row-pk)]
-                                          (profile {}
-                                            (-> env
-                                              (preprocess-raw-result)
-                                              (filter-rows)
-                                              (sort-rows)
-                                              (populate-current-page)
-                                              (uism/store :last-load-time (inst-ms (dt/now)))
-                                              (uism/store :raw-items-in-table (count (keys (get state-map table-name))))
-                                              (uism/activate :state/gathering-parameters)
-                                              (cond-> report-loaded report-loaded)))))}
+                                          (-> env
+                                            (preprocess-raw-result)
+                                            (filter-rows)
+                                            (sort-rows)
+                                            (populate-current-page)
+                                            (uism/store :last-load-time (inst-ms (dt/now)))
+                                            (uism/store :raw-items-in-table (count (keys (get state-map table-name))))
+                                            (uism/activate :state/gathering-parameters)
+                                            (cond-> report-loaded report-loaded))))}
         :event/failed {::uism/handler (fn [env] (log/error "Report failed to load.")
                                         (uism/activate env :state/gathering-parameters))}})}
 
@@ -443,25 +442,24 @@
                                                      (goto-page* env (dec (max 2 page)))))}
 
         :event/do-sort           {::uism/handler (fn [{::uism/keys [event-data app] :as env}]
-                                                   (profile {}
-                                                     (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
-                                                       (let [sort-by    (uism/alias-value env :sort-by)
-                                                             sort-path  (route-params-path env ::sort)
-                                                             ascending? (uism/alias-value env :ascending?)
-                                                             ascending? (if (= qualified-key sort-by)
-                                                                          (not ascending?)
-                                                                          true)]
-                                                         (rad-routing/update-route-params! app update-in sort-path merge
-                                                           {:ascending? ascending?
-                                                            :sort-by    qualified-key})
-                                                         (-> env
-                                                           (uism/assoc-aliased
-                                                             :busy? false
-                                                             :sort-by qualified-key
-                                                             :ascending? ascending?)
-                                                           (sort-rows)
-                                                           (populate-current-page)))
-                                                       env)))}
+                                                   (if-let [{::attr/keys [qualified-key]} (get event-data ::attr/attribute)]
+                                                     (let [sort-by    (uism/alias-value env :sort-by)
+                                                           sort-path  (route-params-path env ::sort)
+                                                           ascending? (uism/alias-value env :ascending?)
+                                                           ascending? (if (= qualified-key sort-by)
+                                                                        (not ascending?)
+                                                                        true)]
+                                                       (rad-routing/update-route-params! app update-in sort-path merge
+                                                         {:ascending? ascending?
+                                                          :sort-by    qualified-key})
+                                                       (-> env
+                                                         (uism/assoc-aliased
+                                                           :busy? false
+                                                           :sort-by qualified-key
+                                                           :ascending? ascending?)
+                                                         (sort-rows)
+                                                         (populate-current-page)))
+                                                     env))}
 
         :event/select-row        {::uism/handler (fn [{::uism/keys [app event-data] :as env}]
                                                    (let [row               (:row event-data)
@@ -476,12 +474,11 @@
                                                    (uism/assoc-aliased env :busy? true))}
 
         :event/do-filter         {::uism/handler (fn [{::uism/keys [event-data] :as env}]
-                                                   (profile {}
-                                                     (-> env
-                                                       (uism/assoc-aliased :busy? false)
-                                                       (filter-rows)
-                                                       (sort-rows)
-                                                       (populate-current-page))))}
+                                                   (-> env
+                                                     (uism/assoc-aliased :busy? false)
+                                                     (filter-rows)
+                                                     (sort-rows)
+                                                     (populate-current-page)))}
 
         :event/filter            {::uism/handler handle-filter-event}
 
