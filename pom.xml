@@ -62,8 +62,12 @@
       <url>https://repo.clojars.org/</url>
     </repository>
     <repository>
-      <id>fulcrologic</id>
-      <url>https://mvn.fulcrologic.com</url>
+      <id>cognitect-dev-tools</id>
+      <url>https://dev-tools.cognitect.com/maven/releases/</url>
+    </repository>
+    <repository>
+      <id>my.datomic.com</id>
+      <url>https://my.datomic.com/repo</url>
     </repository>
   </repositories>
   <dependencies>
@@ -96,11 +100,6 @@
       <groupId>com.fulcrologic</groupId>
       <artifactId>fulcro-i18n</artifactId>
       <version>0.0.5-alpha</version>
-    </dependency>
-    <dependency>
-      <groupId>com.taoensso</groupId>
-      <artifactId>tufte</artifactId>
-      <version>2.1.0</version>
     </dependency>
     <dependency>
       <groupId>org.clojure</groupId>

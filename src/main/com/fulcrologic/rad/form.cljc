@@ -25,7 +25,6 @@
     [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
     [com.fulcrologic.rad.type-support.integer :as int]
     [edn-query-language.core :as eql]
-    [taoensso.tufte :refer [p profile]]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]
     #?@(:clj [[cljs.analyzer :as ana]])
@@ -966,13 +965,12 @@
   "Run the given `(xform ui-props)` against the current ui props of `component-class`'s instance at `component-ident`
   in `state-map`. Returns an updated state map with the transformed ui-props re-normalized and merged back into app state."
   [state-map xform component-class component-ident]
-  (p ::update-tree*
-    (if (and xform component-class component-ident)
-      (let [ui-props      (fns/ui->props state-map component-class component-ident)
-            new-ui-props  (xform ui-props)
-            new-state-map (merge/merge-component state-map component-class new-ui-props)]
-        new-state-map)
-      state-map)))
+  (if (and xform component-class component-ident)
+    (let [ui-props      (fns/ui->props state-map component-class component-ident)
+          new-ui-props  (xform ui-props)
+          new-state-map (merge/merge-component state-map component-class new-ui-props)]
+      new-state-map)
+    state-map))
 
 (defn apply-derived-calculations
   "Apply derived calcuations to the form using the UISM env of the master form. Derived calculations are configured on
@@ -983,16 +981,15 @@
 
    The `:derive-fields` functions should be pure functions."
   [{::uism/keys [event-data] :as env}]
-  (p ::apply-derived-calculations
-    (let [{:keys [form-key form-ident]} event-data
-          form-class        (some-> form-key (comp/registry-key->class))
-          master-form-class (uism/actor-class env :actor/form)
-          master-form-ident (uism/actor->ident env :actor/form)
-          {{master-derive-fields :derive-fields} ::triggers} (comp/component-options master-form-class)
-          {{:keys [derive-fields]} ::triggers} (some-> form-class (comp/component-options))]
-      (cond-> env
-        derive-fields (uism/apply-action update-tree* derive-fields form-class form-ident)
-        (and (not= master-form-class form-class) master-derive-fields) (uism/apply-action update-tree* master-derive-fields master-form-class master-form-ident)))))
+  (let [{:keys [form-key form-ident]} event-data
+        form-class        (some-> form-key (comp/registry-key->class))
+        master-form-class (uism/actor-class env :actor/form)
+        master-form-ident (uism/actor->ident env :actor/form)
+        {{master-derive-fields :derive-fields} ::triggers} (comp/component-options master-form-class)
+        {{:keys [derive-fields]} ::triggers} (some-> form-class (comp/component-options))]
+    (cond-> env
+      derive-fields (uism/apply-action update-tree* derive-fields form-class form-ident)
+      (and (not= master-form-class form-class) master-derive-fields) (uism/apply-action update-tree* master-derive-fields master-form-class master-form-ident))))
 
 (defn handle-user-ui-props
   "UISM handler for invoking a form's `initialize-ui-props` option."
@@ -1115,38 +1112,37 @@
            ;; NOTE: value at this layer is ALWAYS typed to the attribute.
            ;; The rendering layer is responsible for converting the value to/from
            ;; the representation needed by the UI component (e.g. string)
-           (p :event/attribute-changed
-             (let [{:keys       [old-value form-key value form-ident]
-                    ::attr/keys [cardinality type qualified-key]} event-data
-                   form-class     (some-> form-key (comp/registry-key->class))
-                   {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
-                   many?          (= :many cardinality)
-                   ref?           (= :ref type)
-                   missing?       (nil? value)
-                   value          (cond
-                                    (and ref? many? (nil? value)) []
-                                    (and many? (nil? value)) #{}
-                                    (and ref? many?) (filterv #(not (nil? (second %))) value)
-                                    ref? (if (nil? (second value)) nil value)
-                                    :else value)
-                   path           (when (and form-ident qualified-key)
-                                    (conj form-ident qualified-key))
-                   ;; TODO: Decide when to properly set the field to marked
-                   mark-complete? true]
-               (when #?(:clj true :cljs goog.DEBUG)
-                 (when-not path
-                   (log/error "Unable to record attribute change. Path cannot be calculated."))
-                 (when (and ref? many? (not (every? eql/ident? value)))
-                   (log/error "Setting a ref-many attribute to incorrect type. Value should be a vector of idents:" qualified-key value))
-                 (when (and ref? (not many?) (not missing?) (not (eql/ident? value)))
-                   (log/error "Setting a ref-one attribute to incorrect type. Value should an ident:" qualified-key value)))
-               (-> env
-                 (cond->
-                   mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
-                   (and path (nil? value)) (uism/apply-action update-in form-ident dissoc qualified-key)
-                   (and path (not (nil? value))) (uism/apply-action assoc-in path value)
-                   on-change (protected-on-change on-change form-ident qualified-key old-value value))
-                 (apply-derived-calculations)))))}
+           (let [{:keys       [old-value form-key value form-ident]
+                  ::attr/keys [cardinality type qualified-key]} event-data
+                 form-class     (some-> form-key (comp/registry-key->class))
+                 {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
+                 many?          (= :many cardinality)
+                 ref?           (= :ref type)
+                 missing?       (nil? value)
+                 value          (cond
+                                  (and ref? many? (nil? value)) []
+                                  (and many? (nil? value)) #{}
+                                  (and ref? many?) (filterv #(not (nil? (second %))) value)
+                                  ref? (if (nil? (second value)) nil value)
+                                  :else value)
+                 path           (when (and form-ident qualified-key)
+                                  (conj form-ident qualified-key))
+                 ;; TODO: Decide when to properly set the field to marked
+                 mark-complete? true]
+             (when #?(:clj true :cljs goog.DEBUG)
+               (when-not path
+                 (log/error "Unable to record attribute change. Path cannot be calculated."))
+               (when (and ref? many? (not (every? eql/ident? value)))
+                 (log/error "Setting a ref-many attribute to incorrect type. Value should be a vector of idents:" qualified-key value))
+               (when (and ref? (not many?) (not missing?) (not (eql/ident? value)))
+                 (log/error "Setting a ref-one attribute to incorrect type. Value should an ident:" qualified-key value)))
+             (-> env
+               (cond->
+                 mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
+                 (and path (nil? value)) (uism/apply-action update-in form-ident dissoc qualified-key)
+                 (and path (not (nil? value))) (uism/apply-action assoc-in path value)
+                 on-change (protected-on-change on-change form-ident qualified-key old-value value))
+               (apply-derived-calculations))))}
 
         :event/blur
         {::uism/handler (fn [env] env)}

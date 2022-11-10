@@ -16,6 +16,7 @@
         [[clojure.pprint :refer [pprint]]
          [cljs.analyzer :as ana]])
     [clojure.spec.alpha :as s]
+    [clojure.string :as str]
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
@@ -36,9 +37,7 @@
     [com.fulcrologic.rad.picker-options :as picker-options]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
-    [taoensso.timbre :as log]
-    [taoensso.tufte :refer [profile p]]
-    [clojure.string :as str]))
+    [taoensso.timbre :as log]))
 
 (defn report-ident
   "Returns the ident of a RAD report. The parameter can be a react instance, a class, or the registry key(word)
@@ -206,40 +205,38 @@
   "Generates filtered rows, which is an intermediate cached value (not displayed). This function is used in the
    internal state machine, and may be useful when extending the pre-defined machine."
   [{::uism/keys [state-map] :as uism-env}]
-  (p `filter-rows
-    (let [all-rows   (uism/alias-value uism-env :raw-rows)
-          parameters (current-control-parameters uism-env)
-          {::keys [row-visible? skip-filtering?]} (report-options uism-env)]
-      (if (and row-visible? (not (true? (?! skip-filtering? parameters))))
-        (let [normalized?   (some-> all-rows (first) (eql/ident?))
-              report        (uism/actor-class uism-env :actor/report)
-              BodyItem      (comp/component-options report ro/BodyItem)
-              filtered-rows (filterv
-                              (fn [row]
-                                (let [row (if normalized? (fstate/ui->props state-map BodyItem row) row)]
-                                  (row-visible? parameters row)))
-                              all-rows)]
-          (uism/assoc-aliased uism-env :filtered-rows filtered-rows))
-        (uism/assoc-aliased uism-env :filtered-rows all-rows)))))
+  (let [all-rows   (uism/alias-value uism-env :raw-rows)
+        parameters (current-control-parameters uism-env)
+        {::keys [row-visible? skip-filtering?]} (report-options uism-env)]
+    (if (and row-visible? (not (true? (?! skip-filtering? parameters))))
+      (let [normalized?   (some-> all-rows (first) (eql/ident?))
+            report        (uism/actor-class uism-env :actor/report)
+            BodyItem      (comp/component-options report ro/BodyItem)
+            filtered-rows (filterv
+                            (fn [row]
+                              (let [row (if normalized? (fstate/ui->props state-map BodyItem row) row)]
+                                (row-visible? parameters row)))
+                            all-rows)]
+        (uism/assoc-aliased uism-env :filtered-rows filtered-rows))
+      (uism/assoc-aliased uism-env :filtered-rows all-rows))))
 
 (defn sort-rows
   "Sorts the filtered rows. Input is the cached intermediate filtered rows, output is cached sorted rows (not visible). This function is used in the
    internal state machine, and may be useful when extending the pre-defined machine."
   [{::uism/keys [state-map] :as uism-env}]
-  (p `sort-rows
-    (let [{desired-sort-by :sort-by :as sort-params} (merge (uism/alias-value uism-env :sort-params) {:state-map state-map})
-          all-rows (uism/alias-value uism-env :filtered-rows)]
-      (if desired-sort-by
-        (let [compare-rows (report-options uism-env ::compare-rows)
-              normalized?  (some-> all-rows (first) (eql/ident?))
-              sorted-rows  (if compare-rows
-                             (let [
-                                   keyfn     (if normalized? #(get-in state-map %) identity)
-                                   comparefn (fn [a b] (compare-rows sort-params a b))]
-                               (vec (sort-by keyfn comparefn all-rows)))
-                             all-rows)]
-          (uism/assoc-aliased uism-env :sorted-rows sorted-rows))
-        (uism/assoc-aliased uism-env :sorted-rows all-rows)))))
+  (let [{desired-sort-by :sort-by :as sort-params} (merge (uism/alias-value uism-env :sort-params) {:state-map state-map})
+        all-rows (uism/alias-value uism-env :filtered-rows)]
+    (if desired-sort-by
+      (let [compare-rows (report-options uism-env ::compare-rows)
+            normalized?  (some-> all-rows (first) (eql/ident?))
+            sorted-rows  (if compare-rows
+                           (let [
+                                 keyfn     (if normalized? #(get-in state-map %) identity)
+                                 comparefn (fn [a b] (compare-rows sort-params a b))]
+                             (vec (sort-by keyfn comparefn all-rows)))
+                           all-rows)]
+        (uism/assoc-aliased uism-env :sorted-rows sorted-rows))
+      (uism/assoc-aliased uism-env :sorted-rows all-rows))))
 
 (declare goto-page*)
 
@@ -271,34 +268,33 @@
 (defn populate-current-page
   "Internal state machine implementation. May be used by extensions to the stock state machine."
   [uism-env]
-  (p `populate-current-page
-    (->
-      (if (report-options uism-env ::paginate?)
-        (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
-              page-size      (or (?! (report-options uism-env ::page-size) uism-env) 20)
-              available-rows (or (uism/alias-value uism-env :sorted-rows) [])
-              n              (count available-rows)
-              stragglers?    (pos? (rem n page-size))
-              pages          (cond-> (int (/ n page-size))
-                               stragglers? inc)
-              current-page   (cond
-                               (zero? pages) 1
-                               (> current-page pages) pages
-                               :else current-page)
-              page-start     (* (dec current-page) page-size)
-              rows           (cond
-                               (= pages current-page) (subvec available-rows page-start n)
-                               (> n page-size) (subvec available-rows page-start (+ page-start page-size))
-                               :else available-rows)]
-          (if (and (not= 1 current-page) (empty? rows))
-            (goto-page* uism-env 1)
-            (-> uism-env
-              (uism/assoc-aliased :current-page current-page :current-rows rows :page-count pages))))
-        (-> uism-env
-          (uism/assoc-aliased
-            :page-count 1
-            :current-rows (uism/alias-value uism-env :sorted-rows))))
-      (postprocess-page))))
+  (->
+    (if (report-options uism-env ::paginate?)
+      (let [current-page   (max 1 (uism/alias-value uism-env :current-page))
+            page-size      (or (?! (report-options uism-env ::page-size) uism-env) 20)
+            available-rows (or (uism/alias-value uism-env :sorted-rows) [])
+            n              (count available-rows)
+            stragglers?    (pos? (rem n page-size))
+            pages          (cond-> (int (/ n page-size))
+                             stragglers? inc)
+            current-page   (cond
+                             (zero? pages) 1
+                             (> current-page pages) pages
+                             :else current-page)
+            page-start     (* (dec current-page) page-size)
+            rows           (cond
+                             (= pages current-page) (subvec available-rows page-start n)
+                             (> n page-size) (subvec available-rows page-start (+ page-start page-size))
+                             :else available-rows)]
+        (if (and (not= 1 current-page) (empty? rows))
+          (goto-page* uism-env 1)
+          (-> uism-env
+            (uism/assoc-aliased :current-page current-page :current-rows rows :page-count pages))))
+      (-> uism-env
+        (uism/assoc-aliased
+          :page-count 1
+          :current-rows (uism/alias-value uism-env :sorted-rows))))
+    (postprocess-page)))
 
 (defn goto-page*
   "Internal state machine implementation. May be used by extensions to the stock state machine."
@@ -327,15 +323,14 @@
   "Internal state machine implementation. May be used by extensions to the stock state machine.
    Apply the raw result transform, if it is defined."
   [uism-env]
-  (p `preprocess-raw-result
-    (let [xform (report-options uism-env ::raw-result-xform)]
-      (if xform
-        (let [raw-result (uism/alias-value uism-env :raw-rows)
-              report     (uism/actor-class uism-env :actor/report)
-              new-result (xform report raw-result)]
-          (cond-> uism-env
-            new-result (uism/assoc-aliased :raw-rows new-result)))
-        uism-env))))
+  (let [xform (report-options uism-env ::raw-result-xform)]
+    (if xform
+      (let [raw-result (uism/alias-value uism-env :raw-rows)
+            report     (uism/actor-class uism-env :actor/report)
+            new-result (xform report raw-result)]
+        (cond-> uism-env
+          new-result (uism/assoc-aliased :raw-rows new-result)))
+      uism-env)))
 
 (defn handle-filter-event
   "Internal state machien implementation of handling :event/filter."

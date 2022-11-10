@@ -12,8 +12,7 @@
            cljc.java-time/cljc.java-time    {:mvn/version "0.1.18"}
            org.clojure/clojure              {:mvn/version "1.10.3" :scope "provided"}
            org.clojure/clojurescript        {:mvn/version "1.10.914" :scope "provided"}
-           org.clojure/core.async           {:mvn/version "1.3.618"}
-           com.taoensso/tufte               {:mvn/version "2.1.0"}}
+           org.clojure/core.async           {:mvn/version "1.3.618"}}
 
  :aliases {:tests     {:extra-paths ["src/test"]
                        :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.11"}}}
