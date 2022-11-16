@@ -1093,7 +1093,6 @@
        global-events
        {:event/save-failed
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (tap> env)
                           (let [{:keys [on-save-failed]} (uism/retrieve env :options)
                                 errors     (some-> env ::uism/event-data ::uism/mutation-result :body (get `save-form) ::errors)
                                 form-ident (uism/actor->ident env :actor/form)
