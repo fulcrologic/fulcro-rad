@@ -322,6 +322,7 @@
         query-with-scalars (into
                              [id-key
                               :ui/confirmation-message
+                              ::errors
                               [::picker-options/options-cache '_]
                               [:com.fulcrologic.fulcro.application/active-remotes '_]
                               [::uism/asm-id '_]
@@ -857,13 +858,13 @@
     #{}
     m))
 
-(defn- start-create [uism-env start-params]
+(defn- start-create [{::uism/keys [state-map] :as uism-env} start-params]
   (let [form-overrides   (:initial-state start-params)
         FormClass        (uism/actor-class uism-env :actor/form)
         {:keys [on-cancel embedded?]} (uism/retrieve uism-env :options)
-        has-route-prefix (boolean (get (comp/component-options FormClass) ::route-prefix))
-        routeable?       (and has-route-prefix (not embedded?))
         form-ident       (uism/actor->ident uism-env :actor/form)
+        routeable?       (boolean (get (comp/component-options FormClass) ::route-prefix))
+        route-pending?   (and routeable? (some? (dr/router-for-pending-target state-map form-ident)))
         id               (second form-ident)
         initial-state    (merge (default-state FormClass id) form-overrides)
         entity-to-merge  (fs/add-form-config FormClass initial-state)
@@ -873,7 +874,7 @@
       (uism/apply-action merge/merge-component FormClass entity-to-merge)
       (uism/apply-action mark-fields-complete* {:entity-ident form-ident
                                                 :target-keys  (set/union initialized-keys optional-keys)})
-      (cond-> routeable? (route-target-ready form-ident))
+      (cond-> route-pending? (route-target-ready form-ident))
       (uism/activate :state/editing))))
 
 (defn leave-form
@@ -922,6 +923,11 @@
 
 (def global-events
   {:event/exit          {::uism/handler (fn [env] (uism/exit env))}
+   :event/reload        {::uism/handler (fn [env]
+                                          (let [[_ id] (uism/actor->ident env :actor/form)]
+                                            (if (tempid/tempid? id)
+                                              (log/error "Cannot load a new thing!")
+                                              (start-edit env (::uism/event-data env)))))}
    :event/mark-complete {::uism/handler (fn [env]
                                           (let [form-ident (uism/actor->ident env :actor/form)]
                                             (uism/apply-action env fs/mark-complete* form-ident)))}
@@ -1037,7 +1043,8 @@
    #{:actor/form}
 
    ::uism/aliases
-   {:confirmation-message [:actor/form :ui/confirmation-message]}
+   {:confirmation-message [:actor/form :ui/confirmation-message]
+    :server-errors        [:actor/form ::errors]}
 
    ::uism/states
    {:initial
@@ -1053,17 +1060,18 @@
      (merge global-events
        {:event/loaded
         {::uism/handler
-         (fn [env]
+         (fn [{::uism/keys [state-map] :as env}]
            (log/debug "Loaded. Marking the form complete.")
-           (let [FormClass  (uism/actor-class env :actor/form)
-                 form-ident (uism/actor->ident env :actor/form)
-                 {:keys [embedded?]} (uism/retrieve env :options)]
+           (let [FormClass      (uism/actor-class env :actor/form)
+                 form-ident     (uism/actor->ident env :actor/form)
+                 routeable?     (boolean (get (comp/component-options FormClass) ::route-prefix))
+                 route-pending? (and routeable? (some? (dr/router-for-pending-target state-map form-ident)))]
              (-> env
                (auto-create-to-one)
                (handle-user-ui-props FormClass form-ident)
                (uism/apply-action fs/add-form-config* FormClass form-ident {:destructive? true})
                (uism/apply-action fs/mark-complete* form-ident)
-               (cond-> (not embedded?) (route-target-ready form-ident))
+               (cond-> route-pending? (route-target-ready form-ident))
                (uism/activate :state/editing))))}
         :event/failed
         {::uism/handler
@@ -1085,12 +1093,21 @@
        global-events
        {:event/save-failed
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (let [{:keys [on-save-failed]} (uism/retrieve env :options)]
+                          (tap> env)
+                          (let [{:keys [on-save-failed]} (uism/retrieve env :options)
+                                errors     (some-> env ::uism/event-data ::uism/mutation-result :body (get `save-form) ::errors)
+                                form-ident (uism/actor->ident env :actor/form)
+                                Form       (uism/actor-class env :actor/form)
+                                {{:keys [save-failed]} ::triggers} (some-> Form (comp/component-options))]
                             (cond-> (uism/activate env :state/editing)
+                              (seq errors) (uism/assoc-aliased :server-errors errors)
+                              save-failed (save-failed form-ident)
                               on-save-failed (uism/transact on-save-failed))))}
         :event/saved
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
                           (let [form-ident  (uism/actor->ident env :actor/form)
+                                Form        (uism/actor-class env :actor/form)
+                                {{:keys [saved]} ::triggers} (some-> Form (comp/component-options))
                                 {:keys [on-saved embedded?]} (uism/retrieve env :options)
                                 use-history (and (not embedded?) (history/history-support? fulcro-app))]
                             (when use-history
@@ -1098,7 +1115,9 @@
                                     new-route (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
                                 (history/replace-route! fulcro-app new-route params)))
                             (-> env
-                              (cond-> on-saved (uism/transact on-saved))
+                              (cond->
+                                saved (saved form-ident)
+                                on-saved (uism/transact on-saved))
                               (uism/apply-action fs/entity->pristine* form-ident)
                               (uism/activate :state/editing))))}})}
 
@@ -1232,7 +1251,9 @@
         :event/reset
         {::uism/handler (fn [env]
                           (let [form-ident (uism/actor->ident env :actor/form)]
-                            (uism/apply-action env fs/pristine->entity* form-ident)))}
+                            (-> env
+                              (uism/assoc-aliased :server-errors nil)
+                              (uism/apply-action fs/pristine->entity* form-ident))))}
 
         :event/cancel
         {::uism/handler leave-form}})}}})
@@ -1790,3 +1811,8 @@
          constructor     (comp/react-constructor (get options :initLocalState))
          result          (com.fulcrologic.fulcro.components/configure-component! constructor registry-key options)]
      (vreset! component-class result))))
+
+(defn undo-via-load!
+  "Undo all changes to the current form by reloading it from the server."
+  [{::keys [master-form] :as rendering-env}]
+  (uism/trigger! master-form (comp/get-ident master-form) :event/reload))

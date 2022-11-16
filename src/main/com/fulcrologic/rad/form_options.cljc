@@ -220,6 +220,9 @@
   triggering very complex behavior. Typically you'll do something like
   `(uism/apply-action uism-env assoc-in (conj form-ident :line-item/quantity) 1)` to update the form state. See UISM
   documentation for more details.
+
+  * `:saved` - A (fn [uism-env ident]). Called after a successful save. Must return a UISM env.
+  * `:save-failed` - A (fn [uism-env ident]). Called after a failed save. Must return a UISM env.
   "
   :com.fulcrologic.rad.form/triggers)
 
