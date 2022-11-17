@@ -223,6 +223,7 @@
 
   * `:saved` - A (fn [uism-env ident]). Called after a successful save. Must return a UISM env.
   * `:save-failed` - A (fn [uism-env ident]). Called after a failed save. Must return a UISM env.
+  * `:started` - A `(fn [uism-env ident])`. Called as a form starts (state machine started, but load may still be in progress).
   "
   :com.fulcrologic.rad.form/triggers)
 

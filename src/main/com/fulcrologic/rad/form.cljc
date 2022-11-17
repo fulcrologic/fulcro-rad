@@ -1050,10 +1050,14 @@
    {:initial
     {::uism/handler (fn [env]
                       (let [{::uism/keys [event-data]} env
-                            {::keys [create?]} event-data]
+                            {::keys [create?]} event-data
+                            Form       (uism/actor-class env :actor/form)
+                            form-ident (uism/actor->ident env :actor/form)
+                            {{:keys [started]} ::triggers} (some-> Form (comp/component-options))]
                         (cond-> (uism/store env :options event-data)
                           create? (start-create event-data)
-                          (not create?) (start-edit event-data))))}
+                          (not create?) (start-edit event-data)
+                          (fn? started) (started form-ident))))}
 
     :state/loading
     {::uism/events
