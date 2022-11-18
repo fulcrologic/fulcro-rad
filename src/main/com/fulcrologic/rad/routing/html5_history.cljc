@@ -90,16 +90,16 @@
   ([hash-based?] (url->route hash-based? nil))
   ([hash-based? prefix]
    #?(:cljs
-      (let [path   (if hash-based?
-                     (str/replace (.. js/document -location -hash) #"^[#]" "")
-                     (.. js/document -location -pathname))
-            pcnt   (count prefix)
+      (let [path      (if hash-based?
+                        (str/replace (.. js/document -location -hash) #"^[#]" "")
+                        (.. js/document -location -pathname))
+            pcnt      (count prefix)
             prefixed? (> pcnt 0)
-            path   (if (and prefixed? (str/starts-with? path prefix)) 
-                     (subs path pcnt) 
-                     path)
-            route  (vec (drop 1 (str/split path #"/")))
-            params (or (some-> (.. js/document -location -search) (query-params)) {})]
+            path      (if (and prefixed? (str/starts-with? path prefix))
+                        (subs path pcnt)
+                        path)
+            route     (vec (drop 1 (str/split path #"/")))
+            params    (or (some-> (.. js/document -location -search) (query-params)) {})]
         {:route  route
          :params params}))))
 
@@ -108,7 +108,8 @@
     (doseq [f listeners]
       (f route (assoc params ::history/direction direction)))))
 
-(defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events? prefix]
+(defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events? prefix recent-history default-route
+                         fulcro-app]
   RouteHistory
   (-push-route! [this route params]
     #?(:cljs
@@ -118,6 +119,7 @@
            (notify-listeners! this route params :push))
          (reset! current-uid (swap! generator inc))
          (reset! prior-route {:route route :params params})
+         (swap! recent-history #(cons {:route route :params params} %))
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
@@ -126,6 +128,7 @@
            (notify-listeners! this route params :replace))
          (log/spy :debug ["Replacing route" route params])
          (reset! prior-route {:route route :params params})
+         (swap! recent-history (fn [h] (->> h (rest) (cons {:route route :params params}))))
          (.replaceState js/history #js {"uid" @current-uid} "" url))))
   (-undo! [this _ {::history/keys [direction]}]
     (log/debug "Attempting to UNDO a routing request from the browser")
@@ -134,11 +137,19 @@
       (if (= :forward direction)
         (history/-replace-route! this route params)
         (history/-push-route! this route params))))
-  (-back! [_]
+  (-back! [this]
     #?(:cljs
-       (let []
-         (log/spy :debug ["Back to prior route" (some-> prior-route deref)])
-         (.back js/history))))
+       (do
+         (cond
+           (> (count @recent-history) 1) (do
+                                           (log/debug "Back to prior route" (some-> prior-route deref))
+                                           (.back js/history))
+           (:route default-route) (let [{:keys [route params]
+                                         :or   {params {}}} default-route]
+                                    (log/debug "No prior route. Using default route")
+                                    (when (= :routing (dr/change-route! fulcro-app route params))
+                                      (history/-push-route! this route params)))
+           :else (log/error "No prior route. Ignoring BACK request.")))))
   (-add-route-listener! [_ listener-key f] (swap! listeners assoc listener-key f))
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
   (-current-route [_] (url->route hash-based? prefix)))
@@ -148,15 +159,18 @@
 
    `hash-based?` - Use hash-based URIs instead of paths
    `all-events?` - Call the route listeners on all routing operations (not just pop state events).
+   `default-route` - A map of `{:route r :params p}` to use when there is no prior route, but the user tries to navigate to the prior screen.
+   IF YOU PROVIDE default-route, THEN YOU MUST ALSO PROVIDE `app` for it to work.
+   `app` - The Fulco application that is being served.
    `prefix`      - Prepend prefix to all routes, in cases we are not running on root url (context-root)"
-  [{:keys [hash-based? all-events? prefix] :or {all-events? false, hash-based? false, prefix nil}}]
+  [{:keys [hash-based? all-events? prefix default-route app] :or {all-events? false, hash-based? false, prefix nil}}]
   (assert (or (not prefix)
-              (and (str/starts-with? prefix "/")
-                   (not (str/ends-with? prefix "/"))))
-          "Prefix must start with a slash, and not end with one.")
+            (and (str/starts-with? prefix "/")
+              (not (str/ends-with? prefix "/"))))
+    "Prefix must start with a slash, and not end with one.")
   #?(:cljs
      (try
-       (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix)
+       (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix (atom []) default-route app)
              pop-state-listener (fn [evt]
                                   (let [current-uid (-> history (:current-uid) deref)
                                         event-uid   (gobj/getValueByKeys evt "state" "uid")
@@ -166,6 +180,7 @@
                                     (log/debug "Got pop state event." evt)
                                     (doseq [f listeners]
                                       (f route (assoc params ::history/direction (if forward? :forward :back))))
+                                    (swap! (:recent-history history) rest)
                                     (reset! (:prior-route history) (history/-current-route history))))]
          (.addEventListener js/window "popstate" pop-state-listener)
          history)
@@ -177,7 +192,7 @@
 
    `hash-based?` - Use hash-based URIs instead of paths
    `all-events?` - Call the route listeners on all routing operations (not just pop state events).
-   
+
   You should prefer using the new-html5-history, since it supports more options"
   ([] (new-html5-history {}))
   ([hash-based?] (new-html5-history {:hash-based? hash-based?}))
