@@ -493,7 +493,7 @@
   ([this]
    (uism/trigger! this (comp/get-ident this) :event/run))
   ([app-ish class-or-registry-key]
-   (uism/trigger app-ish (report-ident class-or-registry-key) :event/run)))
+   (uism/trigger! app-ish (report-ident class-or-registry-key) :event/run)))
 
 #?(:clj
    (defn req!
