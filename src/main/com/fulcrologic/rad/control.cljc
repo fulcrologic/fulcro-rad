@@ -73,12 +73,15 @@
 
 (defmutation set-parameter [{:keys [k value]}]
   (action [{:keys [component ref state]}]
-    (let [{:keys [local?]} (get (comp/component-options component ::controls) k)
-          id   (second ref)
-          path (if local? (conj ref :ui/parameters k) [::id k ::value])]
-      (if local?
-        (rad-routing/update-route-params! component assoc-in [id k] value)
-        (rad-routing/update-route-params! component assoc k value))
+    (let [options       (comp/component-options component)
+          track-in-url? (get options :com.fulcrologic.rad.report/track-in-url? true)
+          {:keys [local?]} (get-in options [::controls k])
+          id            (second ref)
+          path          (if local? (conj ref :ui/parameters k) [::id k ::value])]
+      (when-not (false? track-in-url?)
+        (if local?
+          (rad-routing/update-route-params! component assoc-in [id k] value)
+          (rad-routing/update-route-params! component assoc k value)))
       (swap! state assoc-in path value))))
 
 (defn set-parameter!

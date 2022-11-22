@@ -20,10 +20,12 @@
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.data-fetch :as df]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
+    [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fstate]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.control :as control :refer [Control]]
@@ -244,13 +246,14 @@
   "Internal state machine helper. May be used by extensions.
    Sends a message to routing system that the page number changed. "
   [env]
-  (let [pg        (uism/alias-value env :current-page)
-        row-path  (route-params-path env ::selected-row)
-        page-path (route-params-path env ::current-page)]
-    (rad-routing/update-route-params! (::uism/app env) (fn [p]
-                                                         (-> p
-                                                           (assoc-in row-path -1)
-                                                           (assoc-in page-path pg)))))
+  (when-not (false? (report-options env ro/track-in-url?))
+    (let [pg        (uism/alias-value env :current-page)
+          row-path  (route-params-path env ::selected-row)
+          page-path (route-params-path env ::current-page)]
+      (rad-routing/update-route-params! (::uism/app env) (fn [p]
+                                                           (-> p
+                                                             (assoc-in row-path -1)
+                                                             (assoc-in page-path pg))))))
   env)
 
 (defn postprocess-page
@@ -449,9 +452,10 @@
                                                            ascending? (if (= qualified-key sort-by)
                                                                         (not ascending?)
                                                                         true)]
-                                                       (rad-routing/update-route-params! app update-in sort-path merge
-                                                         {:ascending? ascending?
-                                                          :sort-by    qualified-key})
+                                                       (when-not (false? (report-options env ro/track-in-url?))
+                                                         (rad-routing/update-route-params! app update-in sort-path merge
+                                                           {:ascending? ascending?
+                                                            :sort-by    qualified-key}))
                                                        (-> env
                                                          (uism/assoc-aliased
                                                            :busy? false
@@ -464,7 +468,8 @@
         :event/select-row        {::uism/handler (fn [{::uism/keys [app event-data] :as env}]
                                                    (let [row               (:row event-data)
                                                          selected-row-path (route-params-path env ::selected-row)]
-                                                     (when (nat-int? row)
+                                                     (when (and (nat-int? row)
+                                                             (not (false? (report-options env ro/track-in-url?))))
                                                        (rad-routing/update-route-params! app assoc-in selected-row-path row))
                                                      (uism/assoc-aliased env :selected-row row)))}
 
@@ -958,3 +963,26 @@
                                                  (contains? params ::id) (assoc ::id (::id params))))
                               :ident         (fn [this props] [::id (or (::id props) registry-key)])})]
      (comp/configure-component! constructor registry-key options))))
+
+(defn clear-report*
+  "Mutation helper. Clear a report out of app state. The report should not be visible when you do this."
+  [state-map ReportClass]
+  (let [report-ident (comp/get-ident ReportClass {})
+        [table report-class-registry-key] report-ident]
+    (-> state-map
+      (update ::uism/asm-id dissoc report-ident)
+      (update table dissoc report-class-registry-key)
+      (merge/merge-component ReportClass (comp/get-initial-state ReportClass {})))))
+
+(defmutation clear-report
+  "MUTATION: Clear a report (which should not be on screen) out of app state."
+  [{:keys [report-ident]}]
+  (action [{:keys [state]}]
+    (let [[table report-class-registry-key] report-ident
+          Report (comp/registry-key->class report-class-registry-key)]
+      (swap! state clear-report* Report))))
+
+(defn clear-report!
+  "Run a transaction that completely clears a report (which should not be on-screen) out of app state."
+  [app-ish ReportClass]
+  (comp/transact! app-ish [(clear-report {:report-ident (comp/get-ident ReportClass {})})]))

@@ -552,3 +552,8 @@
 (def before-load
   "A UISM handler (fn [env] env') that will be run before loading the report's data."
   :com.fulcrologic.rad.report/before-load)
+
+(def track-in-url?
+  "Report option. Should the page number and other controls be tracked in the URL? Defaults to TRUE. Useful if embedding
+   a report into someething like a modal, where the URL parameters are not meant to affect or be modified by the content."
+  :com.fulcrologic.rad.report/track-in-url?)
