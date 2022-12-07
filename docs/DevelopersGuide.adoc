@@ -200,8 +200,8 @@ A minimal attribute will look something like this:
 (ns com.example.model.item (:require
     [com.fulcrologic.rad.attributes :as attr :refer [defattr]]))
 
-(defattr id :item/id :uuid 
-  {::attr/identity? true 
+(defattr id :item/id :uuid
+  {::attr/identity? true
    ::attr/schema :production})
 ----
 
@@ -210,9 +210,9 @@ you've provided a name for the attribute (`:item/id` in this case), and a type. 
 
 [source]
 ----
-(def id {::attr/qualified-key :item/id 
-         ::attr/type :uuid 
-         ::attr/identity? true 
+(def id {::attr/qualified-key :item/id
+         ::attr/type :uuid
+         ::attr/identity? true
          ::attr/schema :production})
 ----
 
@@ -578,9 +578,12 @@ an attribute's map. Here are some examples for `attributes-options`:
 `ao/required?`:: A boolean. Indicates that the system should constrain interactions such that
   entities/rows/documents that contain this attribute are considered invalid if they do not have it.
   Affects things like schema generation, form interactions, etc.
-`ao/target`:: A keyword. Required when the type of the attribute is `:ref`. It must be the qualified keyword
-  name of an `identity? true` attribute. For example
+`ao/target`:: A keyword. Required when the type of the attribute is `:ref` (unless you use ao/targets).
+  It must be the qualified keyword name of an `identity? true` attribute. For example
   `:account/addresses` might have a target of `:address/id`.
+`ao/targets`:: (NEW in 1.3.10) A SET of keywords. Required when the type of the attribute is `:ref` unless you use `ao/target`.
+  The keywords must be the qualified keywords
+  of `identity? true` attributes.  This allows for polymorphic types to be the target of edges.
 `ao/cardinality`:: Defines the expected cardinality of the attribute. Supported when the type of the attribute is `:ref`,
    and some database adapters may support it on other types. Defaults to `:one`, but can also be `:many`.
 `ao/enumerated-values`:: Only when type is `:enum`. A set of keywords that represent the legal possible values when the
@@ -2568,6 +2571,84 @@ It is useful to create `comp/computed-factory`s for your subforms so you can do 
       env
       {::form/parent          this
        ::form/parent-relation :person/address}))
+-----
+
+== Subforms with Multiple Target types
+
+In RAD 1.3.10 we added the `ao/targets` option to reference attributes to support the idea that an edge in the graph
+may point to more than one kind of thing.
+
+The setup and usage is identical to everything you've read so far in this guide, except for one thing: Your
+`fo/subform` option must be a proper Fulcro union component that properly composes together the possible forms
+that would be used at that edge. The new helper `form/defunion` can be used to generate such a component.
+
+[source]
+-----
+(ns com.example.ui.notes
+  (:require
+    #?(:clj  [com.fulcrologic.fulcro.dom-server :as dom]
+       :cljs [com.fulcrologic.fulcro.dom :as dom])
+    [taoensso.timbre :as log]
+    [com.example.model :as model]
+    [com.example.model.company :as company]
+    [com.example.model.entity :as entity]
+    [com.example.model.person :as person]
+    [com.example.model.note :as note]
+    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.control :as control]
+    [com.fulcrologic.rad.form-options :as fo]
+    [com.fulcrologic.rad.report :as report]
+    [com.fulcrologic.rad.report-options :as ro]))
+
+;; IN this example the Note entity has a creator and interested parties. Those can be Person or Company entities.
+
+;; 1. Declare a form for Person (as normal)
+(form/defsc-form PersonForm [this props]
+  {fo/id           person/id
+   fo/attributes   [person/first-name
+                    person/last-name
+                    entity/email]
+   fo/add-label    (fn [_ add!] (dom/button :.ui.basic.icon.button {:onClick add!}
+                                  (dom/i :.plus.icon)
+                                  "Add Person"))
+   fo/route-prefix "person"
+   fo/title        "Person"})
+
+;; 2. Declare a form for Company (as normal)
+(form/defsc-form CompanyForm [this props]
+  {fo/id           company/id
+   fo/attributes   [company/classification
+                    entity/email
+                    entity/name]
+   fo/add-label    (fn [_ add!] (dom/button :.ui.basic.icon.button {:onClick add!}
+                                  (dom/i :.plus.icon)
+                                  "Add Company"))
+   fo/route-prefix "company"
+   fo/title        "Company"})
+
+;; 3. Make a union component using the helper:
+(form/defunion PartyUnion PersonForm CompanyForm)
+
+(form/defsc-form NoteForm [this props]
+  {fo/id             note/id
+   fo/validator      model/all-attribute-validator
+   fo/attributes     [note/author
+                      note/content
+                      note/parties]
+   fo/default-values {:account/active?         true
+                      :account/primary-address {}
+                      :account/addresses       [{}]}
+   fo/route-prefix   "note"
+   fo/title          "Edit Note"
+   ;; 4. Use the union for the UI of the subform
+   fo/subforms       {:note/author  {fo/ui    PartyUnion
+                                     fo/title "Author"}
+                      :note/parties {fo/ui             PartyUnion
+                                     fo/can-delete?    true
+                                     fo/default-values [(fn [id] {:person/id id})
+                                                        (fn [id] {:company/id id})]
+                                     fo/title          "Interested Parties"}}})
 -----
 
 = Reports

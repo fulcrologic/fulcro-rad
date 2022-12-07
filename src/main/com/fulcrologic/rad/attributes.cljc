@@ -9,6 +9,7 @@
     [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.rad.ids :refer [new-uuid]]
+    [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.fulcro.components :as comp])
   #?(:clj
      (:import (clojure.lang IFn)
@@ -117,10 +118,13 @@
   [attrs]
   [::attributes => vector?]
   (reduce
-    (fn [outs {::keys [qualified-key type target]}]
-      (if (and target (#{:ref} type))
-        (conj outs {qualified-key [target]})
-        (conj outs qualified-key)))
+    (fn [outs {::keys [qualified-key type target targets]}]
+      (cond
+        (and (seq targets) (= :ref type)) (conj outs {qualified-key (into {}
+                                                                      (map (fn [t] [t [t]]))
+                                                                      targets)})
+        (and target (= :ref type)) (conj outs {qualified-key [target]})
+        :else (conj outs qualified-key)))
     []
     attrs))
 
@@ -196,6 +200,21 @@
   [::attributes => ::attribute-map]
   (into {}
     (map (fn [{::keys [qualified-key] :as a}] [qualified-key a]))
+    attributes))
+
+(>defn entity-map
+  "Returns a map of qualified ID key -> the collection of attributes on entities that have that ID."
+  [attributes]
+  [::attributes => (s/map-of qualified-keyword? ::attributes)]
+  (reduce
+    (fn [acc attr]
+      (let [identities (ao/identities attr)]
+        (reduce
+          (fn [acc2 k]
+            (update acc2 k (fnil conj []) attr))
+          acc
+          identities)))
+    {}
     attributes))
 
 (defn make-attribute-validator

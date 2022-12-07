@@ -41,7 +41,7 @@
       tx)))
 
 (defn- log! [env msg value]
-  (binding [*print-level* 4 *print-length* 4]
+  (binding [*print-level* 8 *print-length* 8]
     (let [{:keys [config]} env]
       (log/info msg
         (try

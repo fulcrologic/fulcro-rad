@@ -343,3 +343,16 @@
    to move away from the form. If it returns true, then any unsaved changes will be abandoned (reset in Fulcro state to
    their original values) and the navigation will be allowed."
   :com.fulcrologic.rad.form/silent-abandon?)
+
+(def add-label
+  "SUBFORM option (placed on any form that might be used as a subform). A string or
+   `(fn [ui-cls add-child!] string-or-dom-element)` that represents the label to use when an add button is generated
+   for to-one or to-many relations of that form.
+
+   The `ui-cls` will be the component class for which a label is desired, and the `add-child!` is a no-arg function to
+   call when you want to add a child.
+
+   IF your function returns a DOM element, then that DOM element must call the provided (no-arg) `add-child!` function when it is
+   triggered.
+  "
+  :com.fulcrologic.rad.form/add-label)

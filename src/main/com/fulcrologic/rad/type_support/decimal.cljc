@@ -109,7 +109,7 @@
   "Predicate for clj(s) negative bigdecimal"
   [v]
   [any? => boolean?]
-  (not (positive? v)))
+  (< (numeric v) 0))
 
 (defn numeric->currency-str
   "DEPRECATED: Use fulcro i18n support with something like js/Intl instead. js-joda locales are no longer the way to go,

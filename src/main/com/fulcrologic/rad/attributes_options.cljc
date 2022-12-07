@@ -85,12 +85,22 @@
 
 
 (def target
-  "REQUIRED for `:ref` attributes. A qualified keyword of an `identity? true` attribute that identifies the entities/rows/docs
+  "REQUIRED for `:ref` attributes (unless you specify `ao/targets`). A qualified keyword of an `identity? true` attribute that identifies the entities/rows/docs
    to which this attribute refers.
 
    If this attribute is a persisted edge (complex references can be resolved by resolvers and need not be reified in a database)
    then your database adapter will likely require other details so it can properly generate resolvers and save functionality."
   :com.fulcrologic.rad.attributes/target)
+
+(def targets
+  "ALTERNATIVE to `ao/target` for `:ref` attributes.
+
+   A SET of qualified keyword of an `identity? true` attribute that identifies the
+   entities/rows/docs to which this attribute can refer.
+
+   If this attribute is a persisted edge (complex references can be resolved by resolvers and need not be reified in a database)
+   then your database adapter may require other details so it can properly generate resolvers and save functionality."
+  :com.fulcrologic.rad.attributes/targets)
 
 (def cardinality
   "OPTIONAL. Default `:one`. Can also be `:many`.

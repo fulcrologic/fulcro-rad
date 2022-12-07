@@ -135,7 +135,7 @@
    #{:form-container :form-body-container}
    ```
   "
-  [{::keys [form-instance] :as form-env} element]
+  [{::keys [form-instance] :as _form-env} element]
   (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
         style-path             [::layout-styles element]
         layout-style           (or (some-> form-instance comp/component-options (get-in style-path)) :default)
@@ -166,9 +166,9 @@
                                fo/subform MyForm}
    ```
    "
-  [{::keys [form-instance] :as form-env} {::keys      [field-style]
-                                          ::attr/keys [qualified-key] :as attr}]
-  (let [{::keys [subforms field-styles] :as options} (comp/component-options form-instance)
+  [{::keys [form-instance] :as _form-env} {::keys      [field-style]
+                                           ::attr/keys [qualified-key] :as _attr}]
+  (let [{::keys [subforms field-styles]} (comp/component-options form-instance)
         field-style (or (get field-styles qualified-key) field-style)]
     (if field-style
       (fn [env attr _] (render-field env attr))
@@ -316,7 +316,7 @@
 (defn form-options->form-query
   "Converts form options to the necessary EQL query for a form class."
   [{id-attr ::id
-    ::keys  [attributes field-styles subforms] :as form-options}]
+    ::keys  [attributes subforms] :as _form-options}]
   (let [id-key             (::attr/qualified-key id-attr)
         {refs true scalars false} (group-by #(= :ref (::attr/type %)) attributes)
         query-with-scalars (into
@@ -368,7 +368,7 @@
   "
   ([app id form-class] (start-form! app id form-class {}))
   ([app id form-class params]
-   (let [{::attr/keys [qualified-key type]} (comp/component-options form-class ::id)
+   (let [{::attr/keys [qualified-key]} (comp/component-options form-class ::id)
          machine    (or (comp/component-options form-class ::machine) form-machine)
          new?       (tempid/tempid? id)
          form-ident [qualified-key id]]
@@ -710,28 +710,35 @@
       ::form/subforms {:people {::form/ui Person}}})
    ```
 
-   Default value can be a no-arg function, but the argument list may change in future versions.
+   Default value can be a 0-arg function. Each *value* can be a 1-arg function that receives a tempid to put on the
+   new default entity.
    "
   [FormClass attribute]
   (let [{::keys [subforms]} (comp/component-options FormClass)
         {:keys [::attr/qualified-key ::default-value]} attribute
-        default       (get-in subforms [qualified-key ::default-values])
-        default-value (?! (get default qualified-key default-value))]
-    (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])
-                 id-key   (some-> SubClass comp/component-options ::id ::attr/qualified-key)]
+        default-value (or
+                        (?! (comp/component-options FormClass fo/default-values qualified-key))
+                        (?! (get-in subforms [qualified-key ::default-values]))
+                        (?! default-value))]
+    (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])]
       (do
         (when-not SubClass
           (log/error "Subforms for class" (comp/component-name FormClass)
             "must include a ::form/ui entry for" qualified-key))
-        (when-not (keyword? id-key)
-          (log/error "Subform class" (comp/component-name SubClass)
-            "must include a ::form/id that is an attr/attribute"))
         (if (or (nil? default-value) (vector? default-value))
           (mapv (fn [v]
-                  (let [id (tempid/tempid)]
+                  (let [id          (tempid/tempid)
+                        base-entity (?! v id)
+                        [k iid :as ident] (comp/get-ident SubClass base-entity)
+                        ChildForm   (if (comp/union-component? SubClass)
+                                      (some-> SubClass comp/get-query (get k) comp/query->component)
+                                      SubClass)
+                        id-key      (some-> ChildForm comp/component-options ::id ::attr/qualified-key)]
+                    (when-not ChildForm
+                      (log/error "Union subform's default-value function failed to assign the ID. Cannot determine which kind of thing we are creating"))
                     (merge
-                      (default-state SubClass id)
-                      (?! v)
+                      (default-state ChildForm id)
+                      base-entity
                       {id-key id})))
             default-value)
           (do
@@ -767,18 +774,19 @@
         SubClass      (get-in subforms [qualified-key ::ui])
         new-id        (tempid/tempid)
         id-key        (some-> SubClass (comp/component-options ::id ::attr/qualified-key))]
-    (when-not SubClass
-      (log/error "Subforms for class" (comp/component-name FormClass)
-        "must include a ::form/ui entry for" qualified-key))
-    (when-not (keyword? id-key)
-      (log/error "Subform class" (comp/component-name SubClass)
-        "must include a ::form/id that is an attr/attribute"))
-    (if id-key
-      (merge
-        (default-state SubClass new-id)
-        (when (map? default-value) default-value)
-        {id-key new-id})
-      {})))
+    (when-not (comp/union-component? SubClass)
+      (when-not SubClass
+        (log/error "Subforms for class" (comp/component-name FormClass)
+          "must include a ::form/ui entry for" qualified-key))
+      (when-not (keyword? id-key)
+        (log/error "Subform class" (comp/component-name SubClass)
+          "must include a ::form/id that is an attr/attribute"))
+      (if id-key
+        (merge
+          (default-state SubClass new-id)
+          (when (map? default-value) default-value)
+          {id-key new-id})
+        {}))))
 
 (defn default-state
   "Generate a potentially recursive tree of data that represents the tree of initial
@@ -799,28 +807,30 @@
   (when-not (tempid/tempid? new-id)
     (throw (ex-info (str "Default state received " new-id " for a new form ID. It MUST be a Fulcro tempid.")
              {})))
-  (let [{::keys [id attributes default-values initialize-ui-props field-styles]} (comp/component-options FormClass)
-        {id-key ::attr/qualified-key} id
-        entity (reduce
-                 (fn [result {::attr/keys [qualified-key type field-style]
-                              ::keys      [default-value] :as attr}]
-                   (let [field-style   (?! (or (get field-styles qualified-key) field-style))
-                         default-value (?! (get default-values qualified-key default-value))]
-                     (cond
-                       (and (not field-style) (= :ref type) (attr/to-many? attr))
-                       (assoc result qualified-key (default-to-many FormClass attr))
+  (if (comp/union-component? FormClass)
+    {}
+    (let [{::keys [id attributes default-values initialize-ui-props field-styles]} (comp/component-options FormClass)
+          {id-key ::attr/qualified-key} id
+          entity (reduce
+                   (fn [result {::attr/keys [qualified-key type field-style]
+                                ::keys      [default-value] :as attr}]
+                     (let [field-style   (?! (or (get field-styles qualified-key) field-style))
+                           default-value (?! (get default-values qualified-key default-value))]
+                       (cond
+                         (and (not field-style) (= :ref type) (attr/to-many? attr))
+                         (assoc result qualified-key (default-to-many FormClass attr))
 
-                       (and (not field-style) (= :ref type) (not (attr/to-many? attr)))
-                       (assoc result qualified-key (default-to-one FormClass attr))
+                         (and (not field-style) (= :ref type) (not (attr/to-many? attr)))
+                         (assoc result qualified-key (default-to-one FormClass attr))
 
-                       :otherwise
-                       (if-not (nil? default-value)
-                         (assoc result qualified-key default-value)
-                         result))))
-                 {id-key new-id}
-                 attributes)]
-    ;; The merge is so that `initialize-ui-props` cannot possibly harm keys that are initialized by defaults
-    (merge (?! initialize-ui-props FormClass entity) entity)))
+                         :otherwise
+                         (if-not (nil? default-value)
+                           (assoc result qualified-key default-value)
+                           result))))
+                   {id-key new-id}
+                   attributes)]
+      ;; The merge is so that `initialize-ui-props` cannot possibly harm keys that are initialized by defaults
+      (merge (?! initialize-ui-props FormClass entity) entity))))
 
 (defn route-target-ready
   "Same as dynamic routing target-ready, but works in UISM via env."
@@ -861,7 +871,6 @@
 (defn- start-create [{::uism/keys [state-map] :as uism-env} start-params]
   (let [form-overrides   (:initial-state start-params)
         FormClass        (uism/actor-class uism-env :actor/form)
-        {:keys [on-cancel embedded?]} (uism/retrieve uism-env :options)
         form-ident       (uism/actor->ident uism-env :actor/form)
         routeable?       (boolean (get (comp/component-options FormClass) ::route-prefix))
         route-pending?   (and routeable? (some? (dr/router-for-pending-target state-map form-ident)))
@@ -954,7 +963,7 @@
                                       (or (= :one) (nil? cardinality)))))
                           attributes)]
     (reduce
-      (fn [env {::attr/keys [qualified-key target] :as attr}]
+      (fn [env {::attr/keys [qualified-key target] :as _attr}]
         (let [{::keys [ui]} (get subforms qualified-key)
               id         (tempid/tempid)
               new-entity (default-state ui id)
@@ -1007,7 +1016,7 @@
             ui-props        (?! initialize-ui-props FormClass denorm-props)
             query           (comp/get-query FormClass state-map)
             k->component    (into {}
-                              (keep (fn [{:keys [key component] :as node}]
+                              (keep (fn [{:keys [key component] :as _node}]
                                       (when component {key component})))
                               (:children (eql/query->ast query)))
             all-keys        (set (keys ui-props))
@@ -1096,7 +1105,7 @@
      (merge
        global-events
        {:event/save-failed
-        {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
+        {::uism/handler (fn [env]
                           (let [{:keys [on-save-failed]} (uism/retrieve env :options)
                                 errors     (some-> env ::uism/event-data ::uism/mutation-result :body (get `save-form) ::errors)
                                 form-ident (uism/actor->ident env :actor/form)
@@ -1269,7 +1278,7 @@
    (let [save-params (comp/component-options this ::save-params)
          params      (or (?! save-params form-rendering-env) {})]
      (save! form-rendering-env params)))
-  ([{this ::master-form :as form-rendering-env} addl-save-params]
+  ([{this ::master-form :as _form-rendering-env} addl-save-params]
    (uism/trigger! this (comp/get-ident this) :event/save addl-save-params)))
 
 (defn undo-all!
@@ -1481,7 +1490,7 @@
    - Ref to-many will be set to [] instead.
 
    Furthermore, idents that contain a nil ID are considered nil."
-  [{::keys [form-instance master-form] :as env} k value]
+  [{::keys [form-instance master-form] :as _env} k value]
   (let [form-ident (comp/get-ident form-instance)
         old-value  (get (comp/props form-instance) k)
         asm-id     (comp/get-ident master-form)]
@@ -1557,7 +1566,7 @@
           (when (not (empty? required-attributes))
             (doseq [k required-attributes]
               (when (nil? (get props k))
-                (log/error "Form is not valid because required attribute is missing:" k))))))
+                (log/debug "Form is not valid because required attribute is missing:" k))))))
      (and
        all-required-present?
        (or
@@ -1578,7 +1587,7 @@
 
 (>defn field-autocomplete
   "Returns the proper string (or nil) for a given attribute's autocomplete setting"
-  [{::keys [form-instance] :as env} attribute]
+  [{::keys [form-instance] :as _env} attribute]
   [::form-env ::attr/attribute => any?]
   (let [{::attr/keys [qualified-key]
          ::keys      [autocomplete]} attribute
@@ -1636,7 +1645,7 @@
   "Returns true if the given `attribute` is invalid in the given form `env` context. This is meant to be used in UI
   functions, not resolvers/mutations. If there is a validator defined on the form it completely overrides all
   attribute validators."
-  [{::keys [form-instance master-form] :as env} attribute]
+  [{::keys [form-instance master-form] :as _env} attribute]
   (let [k              (::attr/qualified-key attribute)
         props          (comp/props form-instance)
         value          (and attribute (get props k))
@@ -1651,7 +1660,7 @@
 
 (defn validation-error-message
   "Get the string that should be shown for the error message on a given attribute in the given form context."
-  [{::keys [form-instance master-form] :as env} {:keys [::validation-message ::attr/qualified-key] :as attribute}]
+  [{::keys [form-instance master-form] :as _env} {:keys [::validation-message ::attr/qualified-key] :as attribute}]
   (let [props          (comp/props form-instance)
         value          (and attribute (get props qualified-key))
         master-message (comp/component-options master-form ::validation-messages qualified-key)
@@ -1817,5 +1826,49 @@
 
 (defn undo-via-load!
   "Undo all changes to the current form by reloading it from the server."
-  [{::keys [master-form] :as rendering-env}]
+  [{::keys [master-form] :as _rendering-env}]
   (uism/trigger! master-form (comp/get-ident master-form) :event/reload))
+
+#?(:clj
+   (defmacro defunion
+     "Create a union component out of two or more RAD forms. Such a union can be the target of to-one or to-many refs
+      where the ref has the ao/targets option set (more than one possible target type). This allows heterogenous collections
+      in subforms, or to-one items that can be created from a selection of valid types.  The RADForms supplied must all
+      be valid targets for the reference edge in question."
+     [sym & RADForms]
+     (let [id-keys     `(mapv (comp ao/qualified-key fo/id comp/component-options) [~@RADForms])
+           nspc        (if (comp/cljs? &env) (-> &env :ns :name str) (name (ns-name *ns*)))
+           union-key   (keyword (str nspc) (name sym))
+           ident-fn    `(fn [_# props#]
+                          (some
+                            (fn [k#]
+                              (let [id# (get props# k#)]
+                                (when (or (uuid? id#) (int? id#) (tempid/tempid? id#))
+                                  [k# id#])))
+                            ~id-keys))
+           options-map {:query         `(fn [_#] (zipmap ~id-keys (map comp/get-query [~@RADForms])))
+                        :ident         ident-fn
+                        :componentName sym
+                        :render        `(fn [this#]
+                                          (comp/wrapped-render this#
+                                            (fn []
+                                              (enc/when-let [props#   (comp/props this#)
+                                                             [k#] (comp/get-ident this#)
+                                                             factory# (some (fn [c#]
+                                                                              (let [ck# (-> c# comp/component-options fo/id ao/qualified-key)]
+                                                                                (when (= ck# k#)
+                                                                                  (comp/computed-factory c# {:keyfn ck#}))))
+                                                                        [~@RADForms])]
+                                                (factory# props#)))))}]
+       (if (comp/cljs? &env)
+         `(do
+            (declare ~sym)
+            (let [options# ~options-map]
+              (defonce ~(vary-meta sym assoc :jsdoc ["@constructor"])
+                (comp/react-constructor nil))
+              (com.fulcrologic.fulcro.components/configure-component! ~sym ~union-key options#)))
+         `(do
+            (declare ~sym)
+            (let [options# ~options-map]
+              (def ~(vary-meta sym assoc :once true)
+                (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~union-key options#))))))))

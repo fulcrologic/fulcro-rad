@@ -78,7 +78,7 @@
         "gives a string version of a number"
         (math/numeric->str (math/numeric "1.334")) => "1.334"))))
 
-(specification "positive?" :focus
+(specification "positive?"
   (component "Normal mode"
     (assertions
       "Detects positive numbers"
@@ -105,6 +105,34 @@
         (math/positive? 4) => true
         (math/positive? "4") => true
         (math/positive? "-4") => false))))
+
+(specification "negative?" :focus
+  (component "Normal mode"
+    (assertions
+      "Detects positive numbers"
+      (math/negative? (math/numeric "0")) => false
+      (math/negative? (math/numeric "0.00001")) => false
+      (math/negative? (math/numeric "1.334")) => false
+      (math/negative? (math/numeric "-1.334")) => true
+      "Coerces raw values"
+      (math/negative? -4) => true
+      (math/negative? 4) => false
+      (math/negative? "4") => false))
+  (component "Primitive mode"
+    (math/with-primitive-ops
+      (assertions
+        "Detects positive numbers"
+        (math/negative? (math/numeric "0")) => false
+        (math/negative? (math/numeric "0.00001")) => false
+        (math/negative? (math/numeric "1.334")) => false
+        (math/negative? (math/numeric "-1.334")) => true
+        "Coerces raw values"
+        (math/negative? (bigd "4")) => false
+        (math/negative? (bigd "-4")) => true
+        (math/negative? -4) => true
+        (math/negative? 4) => false
+        (math/negative? "4") => false
+        (math/negative? "-4") => true))))
 
 (specification "Basic Math"
   (assertions
@@ -170,7 +198,7 @@
         (math/div 0.1 (bigd "0.2")) => (/ 0.1 0.2)
         (math/* (bigd "0.1") (math/numeric 0.2)) => (* 0.1 0.2)))))
 
-(specification "Comparison Operators" :focus
+(specification "Comparison Operators"
   (component "Normal mode"
     (assertions
       "Allows raw (coerced) and mixed values"
@@ -300,7 +328,7 @@
           (math/round 5.5 0 :half-even) => 6.0
           (math/round 2.5 0 :half-even) => 2.0)))))
 
-(specification "numeric?" :focus
+(specification "numeric?"
   #?(:clj
      (assertions
        "Detects clj big decimal constants"
