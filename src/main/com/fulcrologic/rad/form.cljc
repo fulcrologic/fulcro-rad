@@ -820,7 +820,7 @@
                          (and (not field-style) (= :ref type) (attr/to-many? attr))
                          (assoc result qualified-key (default-to-many FormClass attr))
 
-                         (and (not field-style) (= :ref type) (not (attr/to-many? attr)))
+                         (and default-value (not field-style) (= :ref type) (not (attr/to-many? attr)))
                          (assoc result qualified-key (default-to-one FormClass attr))
 
                          :otherwise
