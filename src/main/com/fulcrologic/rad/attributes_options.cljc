@@ -345,3 +345,15 @@
   For example: The Semantic UI Rendering plugin supports this option on strings and other types when you set
   `ao/style` to :picker."
   :com.fulcrologic.rad.attributes/computed-options)
+
+(def component?
+  "Used on `:ref` attributes. An indicator the reference edge points to entities that
+  are *exclusively owned* by the parent. A boolean or `(fn [owner] boolean?)`, where owner
+  is the ID key of the entity type (because an attribute can belong to multiple via `identities`).
+
+  This *could* be used to:
+
+  * Generate schema auto-delete rules in database plugins.
+  * Check for dropped edges during save middleware to auto-delete orphans.
+
+  Check your plugin documentation (or source) to see if it supports this flag.")
