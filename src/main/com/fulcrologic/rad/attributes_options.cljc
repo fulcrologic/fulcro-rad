@@ -356,4 +356,5 @@
   * Generate schema auto-delete rules in database plugins.
   * Check for dropped edges during save middleware to auto-delete orphans.
 
-  Check your plugin documentation (or source) to see if it supports this flag.")
+  Check your plugin documentation (or source) to see if it supports this flag."
+  :com.fulcrologic.rad.attributes/component?)
