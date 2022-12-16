@@ -930,6 +930,11 @@
         delta      (fs/dirty-fields props true)]
     {::delta delta}))
 
+(defn clear-server-errors
+  "UISM helper. Clears the server errors on the form."
+  [uism-env]
+  (uism/assoc-aliased uism-env :server-errors []))
+
 (def global-events
   {:event/exit          {::uism/handler (fn [env] (uism/exit env))}
    :event/reload        {::uism/handler (fn [env]
@@ -1080,6 +1085,7 @@
                  routeable?     (boolean (get (comp/component-options FormClass) ::route-prefix))
                  route-pending? (and routeable? (some? (dr/router-for-pending-target state-map form-ident)))]
              (-> env
+               (clear-server-errors)
                (auto-create-to-one)
                (handle-user-ui-props FormClass form-ident)
                (uism/apply-action fs/add-form-config* FormClass form-ident {:destructive? true})
@@ -1089,9 +1095,7 @@
         :event/failed
         {::uism/handler
          (fn [env]
-           ;; FIXME: error handling
-           #?(:cljs (js/alert "Load failed"))
-           env)}})}
+           (uism/assoc-aliased env :server-errors [{:message "Load failed."}]))}})}
 
     :state/asking-to-discard-changes
     {::uism/events
@@ -1168,6 +1172,7 @@
                (when (and ref? (not many?) (not missing?) (not (eql/ident? value)))
                  (log/error "Setting a ref-one attribute to incorrect type. Value should an ident:" qualified-key value)))
              (-> env
+               (clear-server-errors)
                (cond->
                  mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
                  (and path (nil? value)) (uism/apply-action update-in form-ident dissoc qualified-key)
@@ -1248,6 +1253,7 @@
                                     params        (merge event-data data-to-save)
                                     save-mutation (or save-mutation `save-form)]
                                 (-> env
+                                  (clear-server-errors)
                                   (uism/trigger-remote-mutation :actor/form save-mutation
                                     (merge params
                                       {::uism/error-event :event/save-failed
@@ -1264,7 +1270,7 @@
         {::uism/handler (fn [env]
                           (let [form-ident (uism/actor->ident env :actor/form)]
                             (-> env
-                              (uism/assoc-aliased :server-errors nil)
+                              (clear-server-errors)
                               (uism/apply-action fs/pristine->entity* form-ident))))}
 
         :event/cancel
@@ -1872,3 +1878,23 @@
             (let [options# ~options-map]
               (def ~(vary-meta sym assoc :once true)
                 (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~union-key options#))))))))
+
+(defn render-subform
+  "Render a RAD subform from a parent form. This can be used instead of a normal factory in order to avoid having
+   to construct the proper computed props for the subform.
+
+   parent-form-instance - The `this` of the parent form
+   relation-key - The key (in props) of the subform(s) data
+   ChildForm - The defsc-form component class to use for rendering the child"
+  [parent-form-instance relation-key ChildForm child-props]
+  (let [ui-factory (comp/computed-factory ChildForm)
+        renv       (rendering-env parent-form-instance)]
+    (ui-factory child-props (assoc renv
+                              ::parent parent-form-instance
+                              ::parent-relation relation-key))))
+
+(defn server-errors
+  "Given the top-level form instance (this), returns a vector of maps. Each map should have a `:message` key, and MAY
+   contain additional information if the back end added anything else to the error maps."
+  [top-form-instance]
+  (get (comp/props top-form-instance) ::errors))
