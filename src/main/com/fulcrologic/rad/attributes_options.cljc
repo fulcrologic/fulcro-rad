@@ -59,10 +59,8 @@
   write and install additional save middleware to enforce this constraint, if you need that level of validation)."
   :com.fulcrologic.rad.attributes/required?)
 
-;; FIXME: Signature should be `(fn [value form k] boolean?)` so attributes can use
-;; form context (e.g. type of tax) to determine how to check.
 (def valid?
-  "OPTIONAL. A `(fn [value props qualified-key] boolean?)`.
+  "OPTIONAL. A `(fn [attribute value form qualified-key] boolean?)`.
 
    IMPORTANT: This is ONLY used in the UI when you create a validator using `attr/make-attribute-validator`,
    AND you set that as the form validator with the `fo/validator` option.
