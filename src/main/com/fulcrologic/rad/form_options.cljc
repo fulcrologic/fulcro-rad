@@ -356,3 +356,9 @@
    triggered.
   "
   :com.fulcrologic.rad.form/add-label)
+
+(def show-header?
+  "Form-only option. A boolean or `(fn [master-form-instance] boolean?)`. Default true. Turns on/off the title/controls.
+   Useful when embedding a form in some other container. Can also be passed in the computed props of a top-level form
+   factory for contextual hiding of the header."
+  :com.fulcrologic.rad.form/show-header?)

@@ -86,7 +86,7 @@
             (th nil "before")
             (th nil "after")))
         (tbody nil
-          (for [ident (sort (keys diff))
+          (for [ident (keys diff)
                 :let [fields      (sort (keys (get diff ident)))
                       rowspan     (count fields)
                       first-field (first fields)]

@@ -2,6 +2,7 @@
   (:require
     [com.fulcrologic.fulcro.rendering.multiple-roots-renderer :as mroot]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.data-fetch :as df]
     #?@(:cljs
@@ -75,23 +76,35 @@
         (and mutation? (not has-children?)) (update :children conj (eql/expr->ast '*))
         mutation? (update :children conj (eql/expr->ast :tempids))))))
 
+(defn default-remote-error?
+  "Remote error detection for RAD that adds in support for form errors."
+  [{:keys [body] :as result}]
+  (or
+    (app/default-remote-error? result)
+    (seq (get-in body ['com.fulcrologic.rad.form/save-form
+                       :com.fulcrologic.rad.form/errors]))))
+
 (defn fulcro-rad-app
   "Create a new fulcro RAD application with reasonable defaults.
 
   `options` is the same as for `app/fulcro-app`. You should use caution when overridding the :optimized-render!
    or `:global-eql-transform` options."
-  [options]
+  [{:keys [remote-error?] :as options}]
   (app/fulcro-app
     (merge
       #?(:clj {}
          :cljs
-              (let [token (when-not (undefined? js/fulcro_network_csrf_token)
-                            js/fulcro_network_csrf_token)]
-                {:remotes {:remote (net/fulcro-http-remote {:url                "/api"
-                                                            :request-middleware (secured-request-middleware {:csrf-token token})})}}))
+         (let [token (when-not (undefined? js/fulcro_network_csrf_token)
+                       js/fulcro_network_csrf_token)]
+           {:remotes {:remote (net/fulcro-http-remote {:url                "/api"
+                                                       :request-middleware (secured-request-middleware {:csrf-token token})})}}))
       {:global-eql-transform (global-eql-transform (elision-predicate default-network-blacklist))
        :optimized-render!    mroot/render!}
-      options)))
+      options
+      {:remote-error? (fn [result]
+                        (or
+                          (true? (?! remote-error? result))
+                          (default-remote-error? result)))})))
 
 (defn install-ui-controls!
   "Install the given control set as the RAD UI controls used for rendering forms. This should be called before mounting

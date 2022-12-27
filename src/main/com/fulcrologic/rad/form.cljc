@@ -1052,6 +1052,29 @@
         (log/error "Invalid on-change handler! It MUST return an updated env!")
         env))))
 
+(defn- run-on-saved [env]
+  (try
+    (let [[id-key id :as form-ident] (uism/actor->ident env :actor/form)
+          {:keys [on-saved]} (uism/retrieve env :options)
+          on-saved (when on-saved
+                     (let [{:keys [children] :as ast} (eql/query->ast on-saved)
+                           new-ast (assoc ast :children
+                                     (mapv
+                                       (fn [{:keys [type] :as node}]
+                                         (if (= type :call)
+                                           (assoc-in node [:params id-key] id)
+                                           node))
+                                       children))
+                           txn     (eql/ast->query new-ast)]
+                       txn))]
+      (if (seq on-saved)
+        (do
+          (log/debug "Running on-saved tx:" on-saved)
+          (uism/transact env on-saved))
+        env))
+    (catch #?(:cljs :default :clj Throwable) e
+      (log/error e "Could not run the on-saved transaction"))))
+
 (defstatemachine form-machine
   {::uism/actors
    #{:actor/form}
@@ -1124,7 +1147,7 @@
                           (let [form-ident  (uism/actor->ident env :actor/form)
                                 Form        (uism/actor-class env :actor/form)
                                 {{:keys [saved]} ::triggers} (some-> Form (comp/component-options))
-                                {:keys [on-saved embedded?]} (uism/retrieve env :options)
+                                {:keys [embedded?]} (uism/retrieve env :options)
                                 use-history (and (not embedded?) (history/history-support? fulcro-app))]
                             (when use-history
                               (let [{:keys [route params]} (history/current-route fulcro-app)
@@ -1132,8 +1155,8 @@
                                 (history/replace-route! fulcro-app new-route params)))
                             (-> env
                               (cond->
-                                saved (saved form-ident)
-                                on-saved (uism/transact on-saved))
+                                saved (saved form-ident))
+                              (run-on-saved)
                               (uism/apply-action fs/entity->pristine* form-ident)
                               (uism/activate :state/editing))))}})}
 

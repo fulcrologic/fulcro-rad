@@ -387,11 +387,11 @@ $ cd src/main/com/example
 $ tree .
 .
 ├── model
-│   ├── account.cljc
-│   ├── address.cljc
-│   ├── invoice.cljc
-│   ├── item.cljc
-│   └── line_item.cljc
+│   ├── account.cljc
+│   ├── address.cljc
+│   ├── invoice.cljc
+│   ├── item.cljc
+│   └── line_item.cljc
 ├── model.cljc
 ----
 
@@ -638,6 +638,24 @@ and directly on forms:
 (def default-validator (attr/make-attribute-validator all-attributes))
 -----
 
+== Attribute Hot Code Reload
+
+
+Attributes are really just maps, which in Clojure are immutable. Unfortunately, as you build your model you'll often
+want to edit some attribute and be able to have that change take effect quickly in the server REPL (CLJS already hot reloads
+a dependency list, so it already works well). This usually involves loading the attribute's namespace, the model
+combination namespace, etc.
+
+RAD attributes come with a development-time feature that can make it much faster to evolve your model during development:
+RAD can replace the attribute maps with *mutatble* versions behind the scenes, so that re-evaluating
+a `defattr` in the REPL will fix *all* closures over that value! You will still have to reload multiple namespaces
+if you add or remove attributes, but changes to existing attributes in this mode is much faster.
+
+To enable it, just set the system property `rad.dev` to true before loading your code. This can be done with a JVM
+argument: `-Drad.dev=true`.
+
+NOTE: This is not meant to be a production feature, and without that JVM property defined the attribute maps are normal
+Clojure immutable data.
 
 = Server Setup
 
@@ -2651,9 +2669,24 @@ that would be used at that edge. The new helper `form/defunion` can be used to g
                                      fo/title          "Interested Parties"}}})
 -----
 
-= Reports
+== Choosing Where to go After an Edit
 
-WARNING: Reports are still in design phase, and the API may change drastically.
+When a user finishes editing something, you often want them to route back to where they came from. Early RAD versions
+defaulted to just this.
+Unfortunately, if they just loaded the form via a bookmark, "where you came from" is "nowhere".
+
+The form option `fo/cancel-route` was added as a way to supports a number of options for how a form should behave when the user decides
+to finish editing. The default is to "go back" to where you came from.
+
+There are other things you can place on this option:
+
+* `:back` (the default)
+* A route as a vector of strings
+* A component that you want to route to
+* A map with :route, :target, and :params keys
+* A `(fn [app form-props] ...)` that can return any of the above
+
+= Reports
 
 RAD Reports are based on the generalization that many reports are a query across data that is
 list-based, and most reports have parameters.  RAD's graph API is the source of the things that
@@ -2673,15 +2706,15 @@ A sample report might look like this:
       (dom/span (str first-name " " last-name (when-not enabled? " (disabled)"))))))
 
 (report/defsc-report EmployeeList [this props]
-  {::report/BodyItem                 EmployeeListItem
-   ::report/create-form              EmployeeForm
-   ::report/layout-style             :default
-   ::report/source-attribute         :employee/all-employees
-   ::report/parameters               {:include-disabled? {:type  :boolean
+  {ro/BodyItem                 EmployeeListItem
+   ro/create-form              EmployeeForm
+   ro/layout-style             :default
+   ro/source-attribute         :employee/all-employees
+   ro/parameters               {:include-disabled? {:type  :boolean
                                                           :label "Show Past Employees?"}}
-   ::report/initial-parameters       (fn [report-env] {:include-disabled? false})
-   ::report/run-on-mount?            true
-   ::report/run-on-parameter-change? true
+   ro/initial-parameters       (fn [report-env] {:include-disabled? false})
+   ro/run-on-mount?            true
+   ro/run-on-parameter-change? true
    :route-segment ["employee-list"]})
 -----
 
@@ -2689,19 +2722,19 @@ The report component has the following options, and of course this list is exten
 
 `:route-segment`:: Dynamic-router parameter. A report is a normal component, and has hooks for
 route enter and exit. Use this option to set the route's target segment.
-`::report/BodyItem`:: The UI component that renders the row of a report. You can use
-`::report/create-form`:: A Form that should be used to create new instances of items in the
+`ro/BodyItem`:: The UI component that renders the row of a report. You can use
+`ro/create-form`:: A Form that should be used to create new instances of items in the
 report. Optional. If supplied then the toolbar of the report will have an add
 button.
-`::report/layout-style`:: An alternate style (plugged into the app) for rendering the report.
-`::report/source-attribute`:: The EQL top-level key to query for the report. Combined with the
+`ro/layout-style`:: An alternate style (plugged into the app) for rendering the report.
+`ro/source-attribute`:: The EQL top-level key to query for the report. Combined with the
 `BodyItem` query to generate the full report query.
-`::report/parameters`:: A map from report parameter name to a map of configuration. The type/label
+`ro/parameters`:: A map from report parameter name to a map of configuration. The type/label
 options are used to generate a query toolbar.
-`::report/initial-parameters`:: A map from report parameter data key to an initial value. May also
+`ro/initial-parameters`:: A map from report parameter data key to an initial value. May also
 be a lambda to generate the map.
-`::report/run-on-mount?`:: Boolean. If true it causes the report to auto-run when mounted.
-`::report/run-on-parameter-change?`:: Boolean. If true it causes the report to auto-run when a parameter
+`ro/run-on-mount?`:: Boolean. If true it causes the report to auto-run when mounted.
+`ro/run-on-parameter-change?`:: Boolean. If true it causes the report to auto-run when a parameter
 is changed. Auto-debounced.
 
 == Handling Report Queries
@@ -2780,10 +2813,10 @@ Setting up your layout is just done on app config:
 -----
 (form/install-ui-controls! app
     (-> base-controls
-      (assoc-in [::report/style->layout :custom-layout] custom-report-layout)
+      (assoc-in [ro/style->layout :custom-layout] custom-report-layout)
 -----
 
-and then set the `::report/layout-style :custom-layout` option on the report.
+and then set the `ro/layout-style :custom-layout` option on the report.
 
 == Report Row Rendering
 
@@ -2809,3 +2842,78 @@ source of problems.
 Note also that filtering happens first, then sorting, then pagination. If you re-sort, then filtering will never
 be re-applied, but if you change the filters sorting will also happen (unless disabled).
 
+= Arbitrary Form and Report UI Composition
+
+The default setup of forms and reports is for them to be proper routes in your application in the dynamic routing system.
+This is an *option* (the default). Reports and forms are just components, and as such they can be composed in any of the
+ways other Fulcro components can be composed into an application. The primary thing to know is that the routing system
+hooks that are preconfigured on the forms and reports trigger a UI state machine to start when that form or report is
+routed to. In order for you to take control of rendering you need only:
+
+1. Make sure the component in question is in app state, and is either composed with the parent's query, or is being
+used through hooks like `use-component`.
+2. Start the state machine on the report or form.
+3. (Optional) Clear the state machine from app state when you remove it from the screen (so it will restart from scratch
+  the next time you show it). Skipping this step would let you show/hide a form/report without having to restart it.
+
+== Composing a Component in Dynamically
+
+If you don't know the report or form that is to be started in advance, then it is rather
+difficult to pre-compose it into app state and the query.
+
+It is recommended that you use `use-form` or `use-report` in a hooks component in this case;
+however, you can also leverage dynamic queries to place a form or report into anyplace
+in your tree, and a mutation to pre-populate things using `merge-component!`.
+
+Forms will auto-load themselves into state, so simply putting the correct form ident into
+app state at the proper location is sufficient.
+
+Reports have initial state (use `comp/get-initial-state`), so you can simply merge the
+report into app state and put it's ident (which is a constant) in the proper location.
+
+== Starting Forms
+
+* A UISM can be started with `uism/begin!`, but it is easier to use `form/start-form!`.
+** The machine to use is on the form itself (comp/component-options Form fo/machine), which defaults to `form/form-machine`.
+** The ASM ID for forms is simply the form's ident.
+** The only actor is :actor/form
+** The event-data can contain various options related to form startup.
+
+[source]
+-----
+(defsc-form Form [this props] ...)
+
+...
+
+;; in some mutation or something
+(form/start-form! app (tempid/tempid) Form options)
+-----
+
+The options include (see docstring for latest):
+
+* `:on-saved fulcro-txn` A transaction to run when the form is successfully saved. Exactly what you'd pass to `transact!`.
+  The form will add  `{:ident final-ident}` to the mutation's parameters (so you can see the remapped ID if it was new)
+* `:on-cancel fulcro-txn` A transaction to run when the edit is cancelled.
+* `:on-save-failed fulcro-txn` A transaction to run when the server refuses to save the data.
+* `:embedded? boolean` Disable history and routing for embedded forms. Default false.
+
+== Starting Reports
+
+Starting reports is similar. Use the `report/start-report!`.
+
+== Better Dynamic Composition: Hooks-based Forms and Reports
+
+React hooks give us a great way to compose all sorts of things in the UI.
+The `com.fulcrologic.rad.rad-hooks` namespace includes hooks-based form and report helpers:
+
+`form/use-form`:: A hook that takes a Form, and id, and options, and returns a factory and props for rendering the form
+in any context. The form state machine stays active while the containing component is mounted, and is automatically
+cleaned up afterwards.
+
+`report/use-report`:: A hook that takes a Report and options, and returns a factory and props for rendering the report
+in any context.
+
+The Semantic UI RAD plugin also has
+`com.fulcrologic.rad.rendering.semantic-ui.modals/ui-form-modal`, which leverages `useForm`. When you render it, it
+automatically pops the form in a modal. When the user saves/cancels the modal, a mutation is called of your choosing
+with the ident of the form. When you stop rendering the modal it disappears and removes the form state machine.

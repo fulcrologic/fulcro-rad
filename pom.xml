@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.fulcrologic</groupId>
     <artifactId>fulcro-rad</artifactId>
@@ -79,17 +80,17 @@
         <dependency>
             <groupId>commons-codec</groupId>
             <artifactId>commons-codec</artifactId>
-            <version>1.14</version>
+            <version>1.15</version>
         </dependency>
         <dependency>
             <groupId>com.fulcrologic</groupId>
             <artifactId>guardrails</artifactId>
-            <version>1.1.10</version>
+            <version>1.1.11</version>
         </dependency>
         <dependency>
             <groupId>edn-query-language</groupId>
             <artifactId>eql</artifactId>
-            <version>1.0.1</version>
+            <version>1.0.2</version>
         </dependency>
         <dependency>
             <groupId>com.taoensso</groupId>
@@ -102,6 +103,11 @@
             <version>0.0.5-alpha</version>
         </dependency>
         <dependency>
+            <groupId>com.widdindustries</groupId>
+            <artifactId>cljc.java-time</artifactId>
+            <version>0.1.21</version>
+        </dependency>
+        <dependency>
             <groupId>org.clojure</groupId>
             <artifactId>clojurescript</artifactId>
             <version>1.10.914</version>
@@ -109,17 +115,12 @@
         <dependency>
             <groupId>com.yetanalytics</groupId>
             <artifactId>colossal-squuid</artifactId>
-            <version>0.1.3</version>
+            <version>0.1.5</version>
         </dependency>
         <dependency>
             <groupId>com.fulcrologic</groupId>
             <artifactId>fulcro</artifactId>
-            <version>3.5.31</version>
-        </dependency>
-        <dependency>
-            <groupId>cljc.java-time</groupId>
-            <artifactId>cljc.java-time</artifactId>
-            <version>0.1.18</version>
+            <version>3.5.34</version>
         </dependency>
         <dependency>
             <groupId>com.taoensso</groupId>
@@ -129,12 +130,12 @@
         <dependency>
             <groupId>potemkin</groupId>
             <artifactId>potemkin</artifactId>
-            <version>0.4.5</version>
+            <version>0.4.6</version>
         </dependency>
         <dependency>
             <groupId>org.clojure</groupId>
             <artifactId>core.async</artifactId>
-            <version>1.3.618</version>
+            <version>1.6.673</version>
         </dependency>
     </dependencies>
 </project>

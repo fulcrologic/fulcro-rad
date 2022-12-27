@@ -73,7 +73,7 @@
          options-path  [::options-cache cache-key :options]
          now           (inst-ms (dt/now))
          cached-at     (get-in state-map time-path 0)
-         reload?       (> (- now cached-at) cache-time-ms)]
+         reload?       (or (:force-reload? load-options) (> (- now cached-at) cache-time-ms))]
      (when-not query-key
        (log/error "Cannot load picker options because there is no query-key."))
      (when-not query-component
@@ -209,3 +209,35 @@
   is done under ::cache-key."
   ::cache-time-ms)
 
+(def form
+  "Picker option (e.g. for fo/field-options). If present (and the rendering plugin supports it) this option names the class
+   of a `defsc-form` that CAN be used to create or edit instances of the type being picked. Including this option
+   automatically infers that creation should be allowed (rendering plugins should automatically show a way to trigger
+   the creation of a new element)."
+  ::form)
+
+(def allow-edit?
+  "Picker option (e.g. for fo/field-options). Requires po/form. Indicates that editing of a picked item should be possible.
+   Requires support from rendering plugin.
+
+   Boolean or `(fn [parent-instance parent-relation] bool)`"
+  ::allow-edit?)
+
+(def allow-create?
+  "Picker option (e.g. for fo/field-options). Requires po/form. Indicates that creating a new picked item should be possible.
+   Requires support from rendering plugin.
+
+   Boolean or `(fn [parent-instance parent-relation] bool)`"
+  ::allow-create?)
+
+(def quick-create
+  "Picker option (e.g. for fo/field-options).
+
+   A `(fn [parent-instance parent-relation] entity-with-tempid)` that must return an entity that can be immediately saved to the server
+   via `form/save!`. You MUST give the entity a tempid.
+
+   `po/form` is not required and is not used.
+
+   CAN be combined with allow-create?, allow-edit?, but that will enable both buttons for edit/create as well as
+   the ability to type a string and quick-add it."
+  ::quick-create)
