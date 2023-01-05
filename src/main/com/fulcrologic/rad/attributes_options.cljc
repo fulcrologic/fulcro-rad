@@ -358,3 +358,9 @@
 
   Check your plugin documentation (or source) to see if it supports this flag."
   :com.fulcrologic.rad.attributes/component?)
+
+(def label
+  "Attribute option. A default label for any context. Can be overridden by form/column option of the same name, but
+  this provides a global default in cases where the label is the same in all contexts.
+
+  Can be a string, or a `(fn [this] string?)`, where `this` depends on the context.")

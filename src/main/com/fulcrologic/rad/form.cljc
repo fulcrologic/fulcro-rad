@@ -1551,6 +1551,8 @@
   * On an attribute `::form/field-label`: A string or function returning a string.
   * On a form `::form/field-labels`: A map from attribute keyword to a string or function returning a string.
 
+  The ao/label option can be used to provide a default that applies in all contexts.
+
   If label functions are used they are passed the form instance that is rendering them. They must not side-effect.
   "
   [form-env attribute]
@@ -1560,6 +1562,7 @@
         field-label (?! (or
                           (get-in options [::field-labels k])
                           (::field-label attribute)
+                          (ao/label attribute)
                           (some-> k name str/capitalize (str/replace #"-" " "))) form-instance)]
     field-label))
 
