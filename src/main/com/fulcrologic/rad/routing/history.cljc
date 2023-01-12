@@ -86,10 +86,11 @@
                                          (dr/can-change-route? app)))))
 
 (defn push-route!
-  "Push the given route onto the route history (if history is installed)."
-  [app-or-component target route-params]
+  "Push the given route onto the route history (if history is installed). A route is a vector of the route segments
+   that locate a given target."
+  [app-or-component route route-params]
   (try
-    (some-> app-or-component (active-history) (-push-route! target route-params))
+    (some-> app-or-component (active-history) (-push-route! route route-params))
     (catch #?(:cljs :default :clj Exception) e
       (log/error e "Unable to execute history operation."))))
 
