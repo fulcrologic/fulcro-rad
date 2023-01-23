@@ -571,32 +571,31 @@
 ;; LOGIC
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#?(:clj
-   (defn save-form*
-     "Internal implementation of clj-side form save. Can be used in your own mutations to accomplish writes through
-      the save middleware.
+(defn save-form*
+  "Internal implementation of clj-side form save. Can be used in your own mutations to accomplish writes through
+   the save middleware.
 
-      params MUST contain:
+   params MUST contain:
 
-      * `::form/delta` - The data to save. Map keyed by ident whose values are maps with `:before` and `:after` values.
-      * `::form/id` - The actual ID of the entity being changed.
-      * `::form/master-pk` - The keyword representing the form's ID in your RAD model's attributes.
+   * `::form/delta` - The data to save. Map keyed by ident whose values are maps with `:before` and `:after` values.
+   * `::form/id` - The actual ID of the entity being changed.
+   * `::form/master-pk` - The keyword representing the form's ID in your RAD model's attributes.
 
-      Returns:
+   Returns:
 
-      {:tempid {} ; tempid remaps
-       master-pk id} ; the k/id of the entity saved. The id here will be remapped already if it was a tempid.
-      "
-     [env params]
-     (let [save-middleware (::save-middleware env)
-           save-env        (assoc env ::params params)
-           result          (if save-middleware
-                             (save-middleware save-env)
-                             (throw (ex-info "form/pathom-plugin is not installed on the parser." {})))
-           {::keys [id master-pk]} params
-           {:keys [tempids]} result
-           id              (get tempids id id)]
-       (merge result {master-pk id}))))
+   {:tempid {} ; tempid remaps
+    master-pk id} ; the k/id of the entity saved. The id here will be remapped already if it was a tempid.
+   "
+  [env params]
+  (let [save-middleware (::save-middleware env)
+        save-env        (assoc env ::params params)
+        result          (if save-middleware
+                          (save-middleware save-env)
+                          (throw (ex-info "form/pathom-plugin is not installed on the parser." {})))
+        {::keys [id master-pk]} params
+        {:keys [tempids]} result
+        id              (get tempids id id)]
+    (merge result {master-pk id})))
 
 ;; do-saves! params/env => return value
 ;; -> params/env -> middleware-in -> do-saves -> middleware-out
