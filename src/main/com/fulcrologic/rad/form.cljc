@@ -597,13 +597,19 @@
         id              (get tempids id id)]
     (merge result {master-pk id})))
 
+(def pathom2-server-save-form-mutation
+  {:com.wsscode.pathom.connect/mutate (fn [env params] (save-form* env params))
+   :com.wsscode.pathom.connect/sym    `save-form
+   :com.wsscode.pathom.connect/params #{::id ::master-pk ::delta}})
+
+(def pathom2-server-save-as-form-mutation
+  (assoc pathom2-server-save-form-mutation
+    :com.wsscode.pathom.connect/sym `save-as-form))
+
 ;; do-saves! params/env => return value
 ;; -> params/env -> middleware-in -> do-saves -> middleware-out
 #?(:clj
-   (def save-form
-     {:com.wsscode.pathom.connect/mutate (fn [env params] (save-form* env params))
-      :com.wsscode.pathom.connect/sym    `save-form
-      :com.wsscode.pathom.connect/params #{::id ::master-pk ::delta}})
+   (def save-form pathom2-server-save-form-mutation)
    :cljs
    (m/defmutation save-form
      "MUTATION: DO NOT USE. See save-as-form mutation for a mutation you can use to leverage the form save mechansims for
@@ -612,10 +618,7 @@
      (action [_] :noop)))
 
 #?(:clj
-   (def save-as-form
-     {:com.wsscode.pathom.connect/mutate (fn [env params] (save-form* env params))
-      :com.wsscode.pathom.connect/sym    `save-as-form
-      :com.wsscode.pathom.connect/params #{::id ::master-pk ::delta}})
+   (def save-as-form pathom2-server-save-as-form-mutation)
    :cljs
    (m/defmutation save-as-form
      "MUTATION: Run a full-stack write as-if it were the save of a form. This allows you to leverage the save middleware
@@ -1474,14 +1477,16 @@
                                                {:action create-action
                                                 :id     (str (new-uuid))}))))
 
+(def pathom2-server-delete-entity-mutation
+  {:com.wsscode.pathom.connect/sym    `delete-entity
+   :com.wsscode.pathom.connect/mutate (fn [env params]
+                                        (if-let [delete-middleware (::delete-middleware env)]
+                                          (let [delete-env (assoc env ::params params)]
+                                            (delete-middleware delete-env))
+                                          (throw (ex-info "form/pathom-plugin in not installed on Pathom parser." {}))))})
+
 #?(:clj
-   (def delete-entity
-     {:com.wsscode.pathom.connect/sym    `delete-entity
-      :com.wsscode.pathom.connect/mutate (fn [env params]
-                                           (if-let [delete-middleware (::delete-middleware env)]
-                                             (let [delete-env (assoc env ::params params)]
-                                               (delete-middleware delete-env))
-                                             (throw (ex-info "form/pathom-plugin in not installed on Pathom parser." {}))))})
+   (def delete-entity pathom2-server-delete-entity-mutation)
    :cljs
    (m/defmutation delete-entity [params]
      (ok-action [{:keys [state]}]
