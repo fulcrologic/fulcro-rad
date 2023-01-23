@@ -513,18 +513,20 @@
                           (#'comp/build-render sym thissym propsym computedsym extra-args body))
            options-expr `(let [get-class# (fn [] ~sym)]
                            (assoc (convert-options get-class# ~location ~options) :render ~render-form
-                             :componentName ~(keyword sym)))]
+                             :componentName ~fqkw))]
        (when (some #(= '_ %) arglist)
          (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
        (cond
          hooks?
-         `(let [options# ~options-expr]
-            (defonce ~sym
-              (fn [js-props#]
-                (let [render# (:render (comp/component-options ~sym))
-                      [this# props#] (comp/use-fulcro js-props# ~sym)]
-                  (render# this# props#))))
-            (comp/add-hook-options! ~sym options#))
+         `(do
+            (declare ~sym)
+            (let [options# ~options-expr]
+             (defonce ~sym
+               (fn [js-props#]
+                 (let [render# (:render (comp/component-options ~sym))
+                       [this# props#] (comp/use-fulcro js-props# ~sym)]
+                   (render# this# props#))))
+             (comp/add-hook-options! ~sym options#)))
 
          (comp/cljs? env)
          `(do
