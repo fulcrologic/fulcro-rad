@@ -182,7 +182,7 @@
    * `:action`: OPTIONAL. A side-effecting `(fn [report-instance])`.
    * `:label` : REQUIRED. A string or `(fn [report-instance] string-or-element?)`. If it is an element then nothing
                 but the element is rendered, i.e. it needs to hand user interaction itself.
-   * `:icon` : OPTIONAL. A string. A hint to the rendering plugin to display an icon.
+                (For more customization, check whether your rendering plugin supports extra options, e.g. a report-row-button-renderer)
    * `:visible?` : OPTIONAL. Defaults to true. A boolean or `(fn [report-class-or-instance] boolean?)`.
       Indicates that the control should not be displayed (likely because it is an input you only intend to
       set via routing params). You must also omit it from `control-layout`.
@@ -257,7 +257,6 @@
    * `:type`: OPTIONAL. Defaults to :button. Rendering plugins define what types are supported.
    * `:action`: REQUIRED. A side-effecting `(fn [report-instance row-props])`.
    * `:label` : REQUIRED. A string or `(fn [report-instance row-props control] string-or-element?)`.
-   * `:icon` : OPTIONAL. A string. A hint to the rendering plugin to display an icon.
    * `:disabled?` : OPTIONAL. A boolean or `(fn [report-instance row-props] boolean?)`.
    * `:visible?` : OPTIONAL. A boolean or `(fn [report-instance row-props] boolean?)`.
 
