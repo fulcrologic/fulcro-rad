@@ -83,7 +83,6 @@
    DB adapters and other utilities *may* use it, but that is up to the author of that code."
   :com.fulcrologic.rad.attributes/valid?)
 
-
 (def target
   "REQUIRED for `:ref` attributes (unless you specify `ao/targets`). A qualified keyword of an `identity? true` attribute that identifies the entities/rows/docs
    to which this attribute refers.
@@ -304,6 +303,14 @@
    Generally used to wrap the resolver/mutation function with some generic operation to augment its data or operations.
   "
   :com.wsscode.pathom3.connect.operation/transform)
+
+(def pathom3-batch?
+  "ALIAS to :com.wsscode.pathom3.connect.operation/batch?
+  See the pathom3 batch resolver docs: https://pathom3.wsscode.com/docs/resolvers/#batch-resolvers
+
+  Indicates to pathom3 that the resolver supports being called with a batch of inputs to work around the N+1 problem (https://www.apollographql.com/tutorials/dataloaders-dgs/02-the-n-plus-1-problem)
+  "
+  :com.wsscode.pathom3.connect.operation/batch?)
 
 (def read-only?
   "Boolean or `(fn [form-instance attribute] boolean?)`. If true it indicates to the form and db layer that writes
