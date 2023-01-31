@@ -164,7 +164,7 @@
   :com.fulcrologic.rad.form/query-inclusion)
 
 (def default-value
-  "ATTRIBUTE KEY. The default valule for this attribute when created in a new
+  "ATTRIBUTE KEY. The default value for this attribute when created in a new
   form. Can be a literal value or a `(fn [] value)`. Placed on an attribute to specify a default value."
   :com.fulcrologic.rad.form/default-value)
 
@@ -207,7 +207,7 @@
 (def triggers
   "Custom handlers in the form state lifecycle that can do tasks at particular times and affect form state.
 
-  * `:derive-fields` - A `(fn [props] new-props)` that can rewrite and of the props on the form (as a tree). This
+  * `:derive-fields` - A `(fn [props] new-props)` that can rewrite any of the props on the form (as a tree). This
   function is allowed to look into subforms, and even generate new members (though it must be careful to add
   form config if it does so). The `new-props` must be a tree of props that matches the correct shape of the form
   and is non-destructive to the form config and other non-field attributes on that tree.

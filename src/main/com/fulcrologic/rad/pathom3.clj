@@ -100,27 +100,35 @@
      - `:log-requests? boolean` Enable logging of incoming queries/mutations.
      - `:log-responses? boolean` Enable logging of parser results.
      - `:sensitive-keys` a set of keywords that should not have their values logged
+
+     Optional arguments:
+
+     - `update-base-env` a `(fn [env] env)` that gets the initialized base env with all resolvers and plugins and can
+       modify it before it is used to create a Pathom processor. F.ex. you can set it to `pathom-viz-connector`'s
+        `com.wsscode.pathom.viz.ws-connector.pathom3/connect-env` to enable Pathom Viz connections.
      "
-    [{{:keys [log-requests? log-responses?]} :com.fulcrologic.rad.pathom/config :as config} env-middleware extra-plugins resolvers]
-    (let [base-env (-> {}
-                     (p.plugin/register extra-plugins)
-                     (p.plugin/register-plugin attribute-error-plugin)
-                     (p.plugin/register-plugin rewrite-mutation-exceptions)
-                     ;(p.plugin/register-plugin log-resolver-error)
-                     (pci/register (convert-resolvers resolvers))
-                     (assoc :config config))
-          process  (p.eql/boundary-interface base-env)]
-      (fn [env tx]
-        (when log-requests?
-          (rpc/log-request! {:env env :tx tx}))
-        (let [ast      (eql/query->ast tx)
-              env      (assoc
-                         (env-middleware env)
-                         ;; for p2 compatibility
-                         :parser p.eql/process
-                         ;; legacy param support
-                         :query-params (rpc/combined-query-params ast))
-              response (process env {:pathom/ast           ast
-                                     :pathom/lenient-mode? true})]
-          (when log-responses? (rpc/log-response! env response))
-          response)))))
+    ([config env-middleware extra-plugins resolvers] (new-processor config env-middleware extra-plugins resolvers nil))
+    ([{{:keys [log-requests? log-responses?]} :com.fulcrologic.rad.pathom/config :as config} env-middleware extra-plugins resolvers update-base-env]
+     (let [base-env (cond-> (-> {}
+                                (p.plugin/register extra-plugins)
+                                (p.plugin/register-plugin attribute-error-plugin)
+                                (p.plugin/register-plugin rewrite-mutation-exceptions)
+                                ;(p.plugin/register-plugin log-resolver-error)
+                                (pci/register (convert-resolvers resolvers))
+                                (assoc :config config))
+                            update-base-env (update-base-env))
+           process  (p.eql/boundary-interface base-env)]
+       (fn [env tx]
+         (when log-requests?
+           (rpc/log-request! {:env env :tx tx}))
+         (let [ast      (eql/query->ast tx)
+               env      (assoc
+                          (env-middleware env)
+                          ;; for p2 compatibility
+                          :parser p.eql/process
+                          ;; legacy param support
+                          :query-params (rpc/combined-query-params ast))
+               response (process env {:pathom/ast           ast
+                                      :pathom/lenient-mode? true})]
+           (when log-responses? (rpc/log-response! env response))
+           response))))))
