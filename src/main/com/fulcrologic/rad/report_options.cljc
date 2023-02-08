@@ -461,7 +461,17 @@
                         :inventory/unit-cost]}
    ```
 
-   which is what you'd set this option to on that attribute."
+   which is what you'd set this option to on that attribute.
+
+   Notice that the above will not normalize the data. That might be preferable for performance reasons. If you want the
+   data normalized then use `get-query` just as in component queries. For example in combination with `nc`:
+
+   ```
+   {:product/inventory (rc/get-query (rc/nc [:inventory/id ; remember to include the id for nc
+                                             :location/name
+                                             :inventory/quantity
+                                             :inventory/unit-cost]}
+   ```"
   :com.fulcrologic.rad.report/column-EQL)
 
 (def layout-style
