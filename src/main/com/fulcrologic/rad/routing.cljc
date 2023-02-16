@@ -8,6 +8,7 @@
 
   Functions in this namespace that do relative routing will silently fail if no such history support is installed."
   (:require
+    [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.core :refer [>defn =>]]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.components :as comp]
@@ -22,6 +23,16 @@
   (let [app      (comp/any->app app-ish)
         app-root (app/root-class app)]
     (dr/resolve-path app-root RouteTarget route-params)))
+
+(defn can-change-route?
+  [app-or-component new-route]
+  (let [app (rc/any->app app-or-component)
+        root (app/root-class app)
+        [relative-class-or-instance _] (dr/evaluate-relative-path root new-route)
+        relative-class (if (rc/component? relative-class-or-instance)
+                         (comp/react-type relative-class-or-instance)
+                         relative-class-or-instance)]
+    (dr/can-change-route? app relative-class)))
 
 (defn route-to!
   "Change the UI to display the route to the specified class, with the additional parameter map as route params. If
@@ -39,10 +50,12 @@
       (when-not (every? string? path)
         (log/warn "Insufficient route parameters passed. Resulting route is probably invalid."
           (comp/component-name RouteTarget) route-params))
-      (when (not= :denied (dr/change-route! app-or-component path route-params))
+      (when (can-change-route? app-or-component path) 
         (if (::replace-route? route-params)
           (history/replace-route! app-or-component path route-params)
-          (history/push-route! app-or-component path route-params))))
+          (history/push-route! app-or-component path route-params)))
+      (dr/change-route! app-or-component path route-params))
+
     (log/error "Cannot find path for" (comp/component-name RouteTarget))))
 
 (defn back!
