@@ -1213,7 +1213,7 @@ combined with some other routing instruction.
 
 == A Complete Client
 
-We are now to the point of seeing what a complete Fulcro RAD client looks like. The bar minimal client will have:
+We are now to the point of seeing what a complete Fulcro RAD client looks like. The bare minimal client will have:
 
 * A Root UI component
 * (optional) Some kind of "landing" page (default route)
@@ -1433,7 +1433,7 @@ the user to simply select (or search for) "which" of the existing targets are de
 relation the form will usually model the items as editable sub-forms, with optional controls that allow the
 addition and removal of the elements in the relation.
 
-The form management system uses the concept of "subforms" to models all of the possible relationships, relies on
+The form management system uses the concept of "subforms" to model all of the possible relationships, relies on
 database adapters to manage things like cascading deletes, and needs some additional configuration (on a per-form basis)
 from you as to how relations should be rendered and interacted with in the UI.
 
@@ -1652,7 +1652,7 @@ There are currently 3 kinds of dynamism supported by RAD:
 
 . The ability for a field to be a completely computed bit of UI based on the current form, with no stored state.
 . The ability to derive one or more *stored* fields, spreadsheet-style, where the values are computed from user-input
-fields, the where the results of the computation *are* stored in the model.
+fields, where the results of the computation *are* stored in the model.
 . The ability to hook into the UI state machine of the form in order to drive dependent field changes and also
 drive I/O for things like cascading dropdowns and dynamically loading information
 of interest to the user about the form in progress (username already in use, current list price of an item, etc.).
@@ -1826,7 +1826,7 @@ in the JVM, JS VM, transit, and many storage systems.  As such, it is the standa
 interfaces also need to localize the date and time to either the user or context of the form/report in question.
 
 There are standard implementations of localization for js and the JVM, but since we're using CLJC already it makes the
-most since to us to just use `cljc.java-time`, which is a library that unifies the API of the standard JVM Time API.
+most sense to us to just use `cljc.java-time`, which is a library that unifies the API of the standard JVM Time API.
 This makes it much simpler to write localized support for dates and times in CLJC files. To date we are avoiding the
 `tick` library because it is not yet as mature, and is overkill for RAD itself (though you can certainly use it
 in your applications).
@@ -2375,7 +2375,7 @@ that manages the custom aspects of your write architecture:
 
 Note that since the database plugin uses Pathom plugins to augment the env there's no need
 to couple the mutation to *any* database logic (assuming your parameters contain enough info
-an no query is needed). Also note that attributes can span schema, meaning that such a save could
+and no query is needed). Also note that attributes can span schema, meaning that such a save could
 cross more than one database, and the middleware can just "handle" it!
 
 === Save Middleware
@@ -2413,7 +2413,7 @@ Here's sample middleware that let's you add in a function to arbitrarily rewrite
 -----
 
 As long as the RAD model understands the attributes you're placing in the diff, then a database
-plugin should be able to write them. So, it is perfectly value to *expand* what is in the diff.
+plugin should be able to write them. So, it is perfectly valid to *expand* what is in the diff.
 
 Here are some ideas for middleware that we've found useful:
 
@@ -2778,7 +2778,7 @@ function that can get all employees:
 
 Remember that Pathom resolvers auto-connect based on inputs and outputs, so any given report
 attribute can be connected from there. For example, perhaps your report generates
-the number of hours an employee has worked this pay period, you'd simple add that
+the number of hours an employee has worked this pay period, you'd simply add that
 attribute to the report and a resolver like this:
 
 [source]
