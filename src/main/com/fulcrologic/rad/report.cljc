@@ -718,7 +718,7 @@
    returns the formatted value of that column using the field formatter(s) defined
    on the column attribute or report. If no formatter is provided a default formatter
    will be used."
-  [report-instance row-props {::keys      [field-formatter column-formatter column-styles]
+  [report-instance row-props {::keys      [field-formatter column-formatter]
                               ::attr/keys [qualified-key type style] :as column-attribute}]
   (let [value                  (get row-props qualified-key)
         report-field-formatter (or
@@ -730,7 +730,7 @@
                                  column-formatter column-formatter
                                  field-formatter field-formatter
                                  :else (let [style                (or
-                                                                    (get column-styles qualified-key)
+                                                                    (comp/component-options report-instance ::column-styles qualified-key)
                                                                     style
                                                                     :default)
                                              installed-formatters (some-> runtime-atom deref :com.fulcrologic.rad/controls ::type->style->formatter)
