@@ -50,7 +50,7 @@
   (enc/when-let [resolver        (::pco/resolve attr)
                  k               (::attr/qualified-key attr)
                  output          [k]
-                 resolve-sym     (symbol (str k "-resolver"))]
+                 resolve-sym     (symbol (namespace k) (str (name k) "-resolver"))]
     (log/info "Building Pathom3 attribute resolver for" (::attr/qualified-key attr))
     (pco/resolver
       (merge
