@@ -459,11 +459,11 @@
         base-options               (merge
                                      {::validator        (attr/make-attribute-validator attributes)
                                       ::control/controls standard-controls
-                                      :route-denied      (fn [this relative-root proposed-route]
+                                      :route-denied      (fn [this relative-root proposed-route timeouts-and-params]
                                                            #?(:cljs
                                                               (when-let [confirm-fn (or (comp/component-options (get-class) ::confirm) js/confirm)]
                                                                 (when (confirm-fn "You will lose unsaved changes. Are you sure?")
-                                                                  (dr/retry-route! this relative-root proposed-route)))))}
+                                                                  (dr/retry-route! this relative-root proposed-route timeouts-and-params)))))}
                                      options
                                      (cond->
                                        {:ident           (fn [_ props] [id-key (get props id-key)])
