@@ -318,7 +318,10 @@
   [{id-attr ::id
     ::keys  [attributes subforms] :as _form-options}]
   (let [id-key             (::attr/qualified-key id-attr)
-        {refs true scalars false} (group-by #(= :ref (::attr/type %)) attributes)
+        {refs true scalars false} (group-by (fn [{::attr/keys [qualified-key type]}]
+                                              (and
+                                                (= :ref type)
+                                                (contains? subforms qualified-key))) attributes)
         query-with-scalars (into
                              [id-key
                               :ui/confirmation-message
@@ -521,12 +524,12 @@
          `(do
             (declare ~sym)
             (let [options# ~options-expr]
-             (defonce ~sym
-               (fn [js-props#]
-                 (let [render# (:render (comp/component-options ~sym))
-                       [this# props#] (comp/use-fulcro js-props# ~sym)]
-                   (render# this# props#))))
-             (comp/add-hook-options! ~sym options#)))
+              (defonce ~sym
+                (fn [js-props#]
+                  (let [render# (:render (comp/component-options ~sym))
+                        [this# props#] (comp/use-fulcro js-props# ~sym)]
+                    (render# this# props#))))
+              (comp/add-hook-options! ~sym options#)))
 
          (comp/cljs? env)
          `(do
