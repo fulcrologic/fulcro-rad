@@ -173,14 +173,10 @@
   "Checks if the value looks to be a valid value based on the ::attr/required? and ::attr/valid? options of the
    given attribute.
 
-   Returns true if:
-
-   * The value is completely missing (nil), and not marked `ao/required?`
-   * The attribute defines a `ao/valid?` predicate that returns true.
-   * The attribute has NO `ao/valid?` option but is marked `ao/required?`
-     but the value is non-nil (and if a string, non-blank).
-
-   Otherwise returns false.
+   Returns true:
+   * if the value is marked `ao/required?`, is non-nil (and if a string, non-blank)
+   and
+   * if the attribute defines a `ao/valid?` predicate, the predicate returns true.
    "
   [{::keys [required? valid?] :as attribute} value props k]
   (let [non-empty-value? (and
@@ -188,11 +184,9 @@
                            (or
                              (not (string? value))
                              (not= 0 (count (str/trim value)))))]
-    (or
-      (and (nil? value) (not required?))
-      (if valid?
-        (valid? value props k)
-        (or (not required?) non-empty-value?)))))
+    (and
+      (or (not required?) non-empty-value?)
+      (or (not valid?) (valid? value props k)))))
 
 (>defn attribute-map
   "Returns a map of qualified key -> attribute for the given attributes"
