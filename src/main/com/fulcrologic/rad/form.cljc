@@ -521,12 +521,12 @@
          `(do
             (declare ~sym)
             (let [options# ~options-expr]
-             (defonce ~sym
-               (fn [js-props#]
-                 (let [render# (:render (comp/component-options ~sym))
-                       [this# props#] (comp/use-fulcro js-props# ~sym)]
-                   (render# this# props#))))
-             (comp/add-hook-options! ~sym options#)))
+              (defonce ~sym
+                (fn [js-props#]
+                  (let [render# (:render (comp/component-options ~sym))
+                        [this# props#] (comp/use-fulcro js-props# ~sym)]
+                    (render# this# props#))))
+              (comp/add-hook-options! ~sym options#)))
 
          (comp/cljs? env)
          `(do
@@ -1212,14 +1212,19 @@
 
         :event/add-row
         {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
-                          (let [{::keys [order parent-relation parent child-class]} event-data
+                          (let [{::keys [order parent-relation parent child-class
+                                         initial-state default-overrides]} event-data
                                 {{:keys [on-change]} ::triggers} (some-> parent (comp/component-options))
                                 parent-ident         (comp/get-ident parent)
                                 relation-attr        (form-key->attribute parent parent-relation)
                                 many?                (attr/to-many? relation-attr)
                                 target-path          (conj parent-ident parent-relation)
                                 old-value            (get-in state-map target-path)
-                                new-child            (default-state child-class (tempid/tempid))
+                                new-child            (if (map? initial-state)
+                                                       initial-state
+                                                       (merge
+                                                         (default-state child-class (tempid/tempid))
+                                                         default-overrides))
                                 child-ident          (comp/get-ident child-class new-child)
                                 optional-keys        (optional-fields child-class)
                                 mark-fields-complete (fn [state-map]
@@ -1344,21 +1349,36 @@
   ```
 
   See renderers for usage examples.
+
+  If you use the variant `form-instance`, then the `options` are (the can be non-namespaced, or use ::form/...):
+
+  :order - :prepend of :append (default)
+  :initial-state - A map that will be used for the new child (YOU MUST add a tempid ID to this map. It will not use default-state at all)
+  :default-overrides - A map that will be merged into the calculated `default-state` of the new child. (NOT USED if you
+    supply `:initial-state`).
+
+  The options can also include any keyword you want (namespaced preferred) and will appear in event-data of the state
+  machine (useful if you customized the state machine). NOTE: The above three options will be renamed to include the ::form
+  namespace when passed through to the state machine.
   "
   ([{::keys [master-form] :as env}]
    (let [asm-id (comp/get-ident master-form)]
      (uism/trigger! master-form asm-id :event/add-row env)))
   ([form-instance parent-relation ChildForm]
    (add-child! form-instance parent-relation ChildForm {}))
-  ([form-instance parent-relation ChildForm options]
-   (let [env (rendering-env form-instance)]
+  ([form-instance parent-relation ChildForm {:keys [order initial-state default-overrides] :as options}]
+   (let [env     (rendering-env form-instance)
+         options (dissoc options :order :initial-state :default-overrides)]
      (add-child! (merge
                    env
                    {::order :prepend}
                    options
-                   {::parent-relation parent-relation
-                    ::parent          form-instance
-                    ::child-class     ChildForm})))))
+                   (cond-> {::parent-relation parent-relation
+                            ::parent          form-instance
+                            ::child-class     ChildForm}
+                     order (assoc ::order order)
+                     initial-state (assoc ::initial-state initial-state)
+                     default-overrides (assoc ::default-overrides default-overrides)))))))
 
 (defn delete-child!
   "Delete the current form instance from the parent relation of its containing form. You may pass either a
