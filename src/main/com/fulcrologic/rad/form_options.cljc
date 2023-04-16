@@ -221,6 +221,9 @@
   `(uism/apply-action uism-env assoc-in (conj form-ident :line-item/quantity) 1)` to update the form state. See UISM
   documentation for more details.
 
+  * `:started` - A (fn [uism-env ident]). Called after the form has been initialized. Note, new instances (create) will
+    have a tempid. Edits will have issued a load on the form, so if you're trying to load things that are in query
+    inclusions (that have a global resolver) then you only need to do so if the entity is new.  Must return UISM env.
   * `:saved` - A (fn [uism-env ident]). Called after a successful save. Must return a UISM env.
   * `:save-failed` - A (fn [uism-env ident]). Called after a failed save. Must return a UISM env.
   * `:started` - A `(fn [uism-env ident])`. Called as a form starts (state machine started, but load may still be in progress).
