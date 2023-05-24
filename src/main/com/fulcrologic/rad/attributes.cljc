@@ -182,12 +182,14 @@
 
    Otherwise returns false.
    "
-  [{::keys [required? valid?] :as attribute} value props k]
-  (let [non-empty-value? (and
-                           (not (nil? value))
+  [{::keys [required? type valid?] :as attribute} value props k]
+  (let [ref?             (= :ref type)
+        non-empty-value? (and
+                           (some? value)
+                           (or (not ref?) (not (empty? value)))
                            (or
                              (not (string? value))
-                             (not= 0 (count (str/trim value)))))]
+                             (pos? (count (str/trim value)))))]
     (or
       (and (nil? value) (not required?))
       (if valid?
@@ -223,12 +225,17 @@
 
    A field is considered valid in this validator IF AND ONLY IF `attr/valid-value` returns true. See that
    function's docstring for how that interacts with the `ao/valid?` option of attributes.
+
+   If `include-refs?` is true (default false) then references will be included in the validation.
    "
-  [attributes]
-  (let [attribute-map (attribute-map attributes)]
-    (fs/make-validator
-      (fn [form k]
-        (valid-value? (get attribute-map k) (get form k) form k)))))
+  ([attributes]
+   (make-attribute-validator attributes false))
+  ([attributes include-refs?]
+   (let [attribute-map (attribute-map attributes)]
+     (fs/make-validator
+       (fn [form k]
+         (valid-value? (get attribute-map k) (get form k) form k))
+       {:validate-edges? include-refs?}))))
 
 (defn wrap-env
   "Build a (fn [env] env') that adds RAD attribute data to an env. If `base-wrapper` is supplied, then it will be called

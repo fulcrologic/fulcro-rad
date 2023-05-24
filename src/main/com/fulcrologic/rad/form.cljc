@@ -457,7 +457,7 @@
         attribute-map              (attr/attribute-map attributes)
         pre-merge                  (form-pre-merge options attribute-map)
         base-options               (merge
-                                     {::validator        (attr/make-attribute-validator attributes)
+                                     {::validator        (attr/make-attribute-validator attributes true)
                                       ::control/controls standard-controls
                                       :route-denied      (fn [this relative-root proposed-route timeouts-and-params]
                                                            #?(:cljs
@@ -1612,19 +1612,21 @@
      (valid? form-instance props)))
   ([form-class-or-instance props]
    (let [{::keys [attributes validator]} (comp/component-options form-class-or-instance)
-         required-attributes   (into #{}
-                                 (comp
-                                   (filter ::attr/required?)
-                                   (map ::attr/qualified-key)) attributes)
+         required-attributes   (filter ::attr/required? attributes)
          all-required-present? (or
                                  (empty? required-attributes)
-                                 (every? #(not (nil? (get props %))) required-attributes))]
-     #?(:cljs
-        (when goog.DEBUG
-          (when (not (empty? required-attributes))
-            (doseq [k required-attributes]
-              (when (nil? (get props k))
-                (log/debug "Form is not valid because required attribute is missing:" k))))))
+                                 (every?
+                                   (fn [attr]
+                                     (let [k   (ao/qualified-key attr)
+                                           v   (get props k)
+                                           ok? (if (= :ref (ao/type attr))
+                                                 (not (empty? v))
+                                                 (some? v))]
+                                       #?(:cljs
+                                          (when (and goog.DEBUG (not ok?))
+                                            (log/debug "Form is not valid because required attribute is missing:" k)))
+                                       ok?))
+                                   required-attributes))]
      (and
        all-required-present?
        (or
