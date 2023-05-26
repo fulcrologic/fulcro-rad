@@ -8,21 +8,10 @@ desktop applications with a rich (and potentially federated) data model quickly.
 image:https://img.shields.io/clojars/v/com.fulcrologic/fulcro-rad.svg[link=https://clojars.org/com.fulcrologic/fulcro-rad]
 image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop"]
 
-WARNING: POSSIBLE BREAKING CHANGE after 1.0.28. The most recent version requires that you upgrade js-joda in package.json. RAD no
-longer requires js-joda locales, which will reduce the build size if you don't need date parsing, but the date-time namespace
-is no longer capable of doing custom date format *parsing* (though it can still *format* an inst with arbitrary localized
-date formats).  If you were using `tformat` to generate a java-time DateTimeFormatter, you must switch to using
-cljc.java-time directly (a very easy change), and make sure you include the locale that you need for proper parsing.
-
 NOTE: The latest version requires at least Fulcro 3.5.1.
 
-NOTE: Version 1.1 is in progress as of Oct. 2021, with formal releases coming by the end of the year. It will contain a number
-of improvements and bugfixes. You can try the latest version in a `deps.edn` project by using the most recent git SHA
-on the `develop` branch.
-
 Documentation is currently available in the docstrings of the namespaces (most up-to-date), and you can refer to the
-https://github.com/fulcrologic/fulcro-rad-demo[Fulcro RAD Demo] project (status varies, but is an accurate representation
-of what is working).
+https://github.com/fulcrologic/fulcro-rad-demo[Fulcro RAD Demo] project.
 
 There is a start on a book at http://book.fulcrologic.com/RAD.html.
 At the moment your best bet for knowing exactly what works is to look at the
