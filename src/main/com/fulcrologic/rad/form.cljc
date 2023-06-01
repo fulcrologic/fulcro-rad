@@ -443,6 +443,15 @@
             data-tree
             ks))))))
 
+(defn form-and-subform-attributes
+  "Find all attributes that are referenced by a form and all of its subforms, recursively."
+  [cls]
+  (let [options         (some-> cls (comp/component-options))
+        base-attributes (fo/attributes options)
+        subforms        (keep fo/ui (vals (fo/subforms options)))]
+    (into (set base-attributes)
+      (mapcat form-and-subform-attributes subforms))))
+
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
   [get-class location options]
@@ -457,7 +466,7 @@
         attribute-map              (attr/attribute-map attributes)
         pre-merge                  (form-pre-merge options attribute-map)
         base-options               (merge
-                                     {::validator        (attr/make-attribute-validator attributes true)
+                                     {::validator        (attr/make-attribute-validator (form-and-subform-attributes (get-class)) true)
                                       ::control/controls standard-controls
                                       :route-denied      (fn [this relative-root proposed-route timeouts-and-params]
                                                            #?(:cljs
