@@ -680,7 +680,7 @@
     [(-> uism-env ::uism/event-data ::attr/qualified-key)
      (-> uism-env ::uism/event-data :value)])
 
-(defn- start-edit [uism-env _]
+(defn start-edit [uism-env _]
   (let [FormClass  (uism/actor-class uism-env :actor/form)
         form-ident (uism/actor->ident uism-env :actor/form)]
     (log/debug "Issuing load of pre-existing form entity" form-ident)
@@ -881,7 +881,7 @@
     #{}
     m))
 
-(defn- start-create [{::uism/keys [state-map] :as uism-env} start-params]
+(defn start-create [{::uism/keys [state-map] :as uism-env} start-params]
   (let [form-overrides   (:initial-state start-params)
         FormClass        (uism/actor-class uism-env :actor/form)
         form-ident       (uism/actor->ident uism-env :actor/form)
@@ -1056,7 +1056,7 @@
         (uism/apply-action env populate-data))
       env)))
 
-(defn- protected-on-change
+(defn protected-on-change
   [env on-change form-ident qualified-key old-value value]
   (let [new-env (on-change env form-ident qualified-key old-value value)]
     (if (or (nil? new-env) (contains? new-env ::uism/state-map))
@@ -1065,7 +1065,7 @@
         (log/error "Invalid on-change handler! It MUST return an updated env!")
         env))))
 
-(defn- run-on-saved [env]
+(defn run-on-saved [env]
   (try
     (let [[id-key id :as form-ident] (uism/actor->ident env :actor/form)
           {:keys [on-saved]} (uism/retrieve env :options)
