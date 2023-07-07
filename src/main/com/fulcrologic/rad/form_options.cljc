@@ -65,7 +65,7 @@
 (def field-visible?
   "ATTRIBUTES KEY. OPTIONAL.
 
-   A boolean or `(fn [this] boolean?)`.
+   A boolean or `(fn [form-instance attr] boolean?)`. `attr` will be the full attribute that this option is attached to.
 
    An attribute-level key that can be used on an attribute to define the default visibility for an attribute on
    forms.  Forms may override the attribute-specific key with `fields-visible?`."
