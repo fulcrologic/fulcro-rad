@@ -1,10 +1,11 @@
 (ns com.fulcrologic.rad.options-util
   "Utilities for interpreting and coping with form/report options."
+  #?(:cljs (:require-macros com.fulcrologic.rad.options-util))
   (:require
     #?(:clj  [cljs.analyzer :as ana]
        :cljs [goog.functions :as gf])
     [clojure.spec.alpha :as s]
-    [clojure.string]
+    [clojure.string :as str]
     [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
@@ -171,3 +172,19 @@
          ast (eql/query->ast q)]
      (ast-child-classes ast recursive?))))
 
+#?(:clj
+   (defmacro defoption
+     "Define an option. Defines `sym` to be the keyword whose namespace matches the declaring one (minus \"-options\")
+      and whose name is `sym`. For example, if used in com.example.foo-options namespace:
+
+      `(defoption bar \"An option\")`
+
+      is the same as
+
+      `(def bar \"An option\" :com.example.foo/bar)`
+      "
+     [sym & docstring]
+     (let [nspc         (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
+           docstring    (str (first docstring))
+           corrected-ns (str/replace nspc #"-options$" "")]
+       `(def ~(with-meta sym {:docstring docstring}) ~(keyword corrected-ns (name sym))))))
