@@ -522,7 +522,7 @@
                           (#'comp/build-render sym thissym propsym computedsym extra-args body))
            options-expr `(let [get-class# (fn [] ~sym)]
                            (assoc (convert-options get-class# ~location ~options) :render ~render-form
-                             :componentName ~fqkw))]
+                                                                                  :componentName ~fqkw))]
        (when (some #(= '_ %) arglist)
          (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
        (cond
@@ -1072,12 +1072,12 @@
           on-saved (when on-saved
                      (let [{:keys [children] :as ast} (eql/query->ast on-saved)
                            new-ast (assoc ast :children
-                                     (mapv
-                                       (fn [{:keys [type] :as node}]
-                                         (if (= type :call)
-                                           (assoc-in node [:params id-key] id)
-                                           node))
-                                       children))
+                                              (mapv
+                                                (fn [{:keys [type] :as node}]
+                                                  (if (= type :call)
+                                                    (assoc-in node [:params id-key] id)
+                                                    node))
+                                                children))
                            txn     (eql/ast->query new-ast)]
                        txn))]
       (if (seq on-saved)
@@ -1948,13 +1948,18 @@
 
    parent-form-instance - The `this` of the parent form
    relation-key - The key (in props) of the subform(s) data
-   ChildForm - The defsc-form component class to use for rendering the child"
-  [parent-form-instance relation-key ChildForm child-props]
-  (let [ui-factory (comp/computed-factory ChildForm)
-        renv       (rendering-env parent-form-instance)]
-    (ui-factory child-props (assoc renv
-                              ::parent parent-form-instance
-                              ::parent-relation relation-key))))
+   ChildForm - The defsc-form component class to use for rendering the child
+   extra-computed-props - optional. Things to merge into the computed props for the child."
+  ([parent-form-instance relation-key ChildForm child-props]
+   (render-subform parent-form-instance relation-key ChildForm child-props {}))
+  ([parent-form-instance relation-key ChildForm child-props extra-computed-props]
+   (let [ui-factory (comp/computed-factory ChildForm)
+         renv       (rendering-env parent-form-instance)]
+     (ui-factory child-props (merge
+                               extra-computed-props
+                               (assoc renv
+                                 ::parent parent-form-instance
+                                 ::parent-relation relation-key))))))
 
 (defn server-errors
   "Given the top-level form instance (this), returns a vector of maps. Each map should have a `:message` key, and MAY
