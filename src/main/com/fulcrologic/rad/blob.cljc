@@ -18,7 +18,9 @@
   (:require
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.options-util :refer [narrow-keyword]]
+    [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
@@ -122,7 +124,6 @@
       {:action          (fn progress-action [{:keys [state] :as env}]
                           #?(:cljs
                              (fns/swap!-> state
-                               (assoc-in (conj file-ident qualified-key) file-sha)
                                (assoc-in name-path filename)
                                (assoc-in progress-path 0)
                                (assoc-in status-path :uploading))))
@@ -131,14 +132,21 @@
                              (let [pct (net/overall-progress env)]
                                (log/debug "Progress update" pct)
                                (swap! state assoc-in progress-path pct))))
-       :result-action   (fn result-action [{:keys [state result]}]
+       :result-action   (fn result-action [{:keys [state result] :as env}]
                           ;; TODO: Error handling
                           (log/debug "Upload complete" result)
                           (let [ok? (= 200 (:status-code result))]
+                            (m/default-result-action! env)
                             (fns/swap!-> state
                               (assoc-in status-path (if ok? :available :failed))
                               (assoc-in progress-path (if ok? 100 0)))))
-       remote-key       (fn remote [env] true)})))
+       remote-key       (fn remote [env]
+                          (if (eql/ident? file-ident)
+                            (m/returning env (rc/nc [(first file-ident) qualified-key
+                                                     (status-key qualified-key)
+                                                     (filename-key qualified-key)
+                                                     (url-key qualified-key)]))
+                            true))})))
 
 (defn upload-file!
   "This computes a SHA for the js-file, starts the upload (with progress tracking), and
@@ -168,17 +176,22 @@
    (def upload-file
      {:com.wsscode.pathom.connect/sym    `upload-file
       :com.wsscode.pathom.connect/doc    "Server-side handler for an uploaded file in the RAD Blob system"
-      :com.wsscode.pathom.connect/mutate (fn [{::keys [temporary-store] :as env}
-                                              {::keys             [file-sha id filename]
-                                               ::file-upload/keys [files] :as params}]
-                                           (log/debug "Received file" filename)
+      :com.wsscode.pathom.connect/mutate (fn [{::keys [temporary-store]}
+                                              {:keys              [file-ident]
+                                               ::keys             [file-sha]
+                                               ::attr/keys        [qualified-key]
+                                               ::file-upload/keys [files]}]
                                            (let [file (-> files first :tempfile)]
                                              (cond
                                                (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
                                                (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
                                                :else (with-open [in (jio/input-stream file)]
-                                                       (storage/save-blob! temporary-store file-sha in))))
-                                           {})}))
+                                                       (storage/save-blob! temporary-store file-sha in)
+                                                       (if (eql/ident? file-ident)
+                                                         {(first file-ident)      (second file-ident)
+                                                          qualified-key           file-sha
+                                                          (url-key qualified-key) (storage/blob-url temporary-store file-sha)}
+                                                         {})))))}))
 
 #?(:clj
    (defn wrap-persist-images
