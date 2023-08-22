@@ -31,6 +31,7 @@
     [com.fulcrologic.rad.options-util :as opts :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.rad.form-options :as fo]
+    [com.fulcrologic.rad.form-render :as fr]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
@@ -213,12 +214,18 @@
 (defn render-field
   "Given a form rendering environment and an attrbute: renders that attribute according to its type/style/value."
   [env attr]
+  (fr/render-field env attr))
+
+(defn default-render-field [env attr]
   (let [render (attr->renderer env attr)]
     (if render
       (render env attr)
       (do
         (log/error "No renderer installed to support attribute" attr)
         nil))))
+
+(defmethod fr/render-field :default [env attr]
+  (default-render-field env attr))
 
 (defn rendering-env
   "Create a form rendering environment. `form-instance` is the react element instance of the form (typically a master form),
@@ -263,11 +270,7 @@
       (render env)
       nil)))
 
-(defn render-layout
-  "Render the complete layout of a form. This is the default body of normal form classes. It will call a render factory
-   on any subforms, and they, in turn, will use this to render *their* body. Thus, any form can have a manually-overriden
-   render body."
-  [form-instance props]
+(defn default-render-layout [form-instance props]
   (when-not (comp/component? form-instance)
     (throw (ex-info "Invalid form instance propagated to render layout." {:form-instance form-instance})))
   (let [env    (rendering-env form-instance props)
@@ -275,6 +278,20 @@
     (if render
       (render env)
       nil)))
+
+(defn render-layout
+  "Render the complete layout of a form. This is the default body of normal form classes. It will call a render factory
+   on any subforms, and they, in turn, will use this to render *their* body. Thus, any form can have a manually-overriden
+   render body."
+  [form-instance props]
+  (when-not (comp/component? form-instance)
+    (throw (ex-info "Invalid form instance propagated to render layout." {:form-instance form-instance})))
+  (let [env (rendering-env form-instance props)]
+    (fr/render-form env (comp/component-options form-instance fo/id))))
+
+(defmethod fr/render-form :default [renv id-attr]
+  (when-let [render (form-container-renderer renv)]
+    (render renv)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Form creation/logic
@@ -1953,7 +1970,8 @@
   ([parent-form-instance relation-key ChildForm child-props]
    (render-subform parent-form-instance relation-key ChildForm child-props {}))
   ([parent-form-instance relation-key ChildForm child-props extra-computed-props]
-   (let [ui-factory (comp/computed-factory ChildForm)
+   (let [id-key     (-> ChildForm comp/component-options fo/id ao/qualified-key)
+         ui-factory (comp/computed-factory ChildForm {:keyfn id-key})
          renv       (rendering-env parent-form-instance)]
      (ui-factory child-props (merge
                                extra-computed-props
@@ -1966,3 +1984,17 @@
    contain additional information if the back end added anything else to the error maps."
   [top-form-instance]
   (get (comp/props top-form-instance) ::errors))
+
+#_(defn default-render-ref
+    "The default way this renderer renders refs."
+    [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} field-attr]
+    (let [relation-key (ao/qualified-key field-attr)
+          item         (-> form-instance comp/props relation-key)
+          ItemForm     (-> form-instance fo/subforms fo/ui)
+          to-many?     (= :many (ao/cardinality field-attr))]
+      (fr/render-header renv field-attr)
+      (if to-many?
+        (mapv (fn [i] (render-subform form-instance relation-key ItemForm i)) item)
+        (render-subform form-instance relation-key ItemForm item))
+      (fr/render-footer renv field-attr)))
+
