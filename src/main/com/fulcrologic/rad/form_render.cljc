@@ -62,7 +62,10 @@
    dispatch just on style and only customize on keys if really necessary."
   (fn [renv attr]
     (let [style (or
+                  (?! (-> renv :com.fulcrologic.rad.form/form-instance (rc/component-options) (fro/header-style)) attr renv)
                   (?! (fro/header-style attr) attr renv)
+                  (?! (-> renv :com.fulcrologic.rad.form/form-instance (rc/component-options) (fro/style)) attr renv)
+                  (?! (fro/style attr) attr renv)
                   :default)]
       [(ao/qualified-key attr) style]))
   :hierarchy #?(:cljs render-hierarchy
@@ -76,6 +79,7 @@
    Dispatches on [form-id-keyword style]."
   (fn [renv id-attr]
     (let [style (or
+                  (?! (-> renv :com.fulcrologic.rad.form/form-instance (rc/component-options) (fro/style)) id-attr renv)
                   (?! (fro/style id-attr) id-attr renv)
                   :default)]
       ;; NOTE: hierarchy maybe? (derive :sales/invoice :invoice/id). Make the rendering of :invoice/id forms be a
@@ -97,7 +101,10 @@
   dispatch just on style and only customize on keys if really necessary. "
   (fn [renv attr]
     (let [style (or
+                  (?! (-> renv :com.fulcrologic.rad.form/form-instance (rc/component-options) (fro/footer-style)) attr renv)
                   (?! (fro/footer-style attr) attr renv)
+                  (?! (-> renv :com.fulcrologic.rad.form/form-instance (rc/component-options) (fro/style)) attr renv)
+                  (?! (fro/style attr) attr renv)
                   :default)]
       [(ao/qualified-key attr) style]))
   :hierarchy #?(:cljs render-hierarchy
