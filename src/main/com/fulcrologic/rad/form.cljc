@@ -1953,7 +1953,7 @@
   ([parent-form-instance relation-key ChildForm child-props]
    (render-subform parent-form-instance relation-key ChildForm child-props {}))
   ([parent-form-instance relation-key ChildForm child-props extra-computed-props]
-   (let [ui-factory (comp/computed-factory ChildForm)
+   (let [ui-factory (comp/computed-factory ChildForm {:keyfn (fn [props] (str (second (comp/get-ident ChildForm props))))})
          renv       (rendering-env parent-form-instance)]
      (ui-factory child-props (merge
                                extra-computed-props
