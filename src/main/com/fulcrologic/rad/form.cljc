@@ -219,9 +219,16 @@
       (log/error "Unable to find control (no default) for attribute " attr))))
 
 (defn render-field
-  "Given a form rendering environment and an attrbute: renders that attribute according to its type/style/value."
+  "Given a form rendering environment and an attrbute: renders that attribute as a form field (e.g. a label and an
+   input) according to its type/style/value."
   [env attr]
   (fr/render-field env attr))
+
+(defn render-input
+  "Renders an attribute as a form input according to its type/style/value. This is just like `render-field` but
+   hints to the rendering layer that the label should NOT be rendered."
+  [env attr]
+  (render-field env (assoc attr fo/omit-label? true)))
 
 (defn default-render-field [env attr]
   (let [render (attr->renderer env attr)]

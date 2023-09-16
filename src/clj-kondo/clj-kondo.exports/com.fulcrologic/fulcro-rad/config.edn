@@ -1,0 +1,9 @@
+{:lint-as {com.fulcrologic.rad.attributes/defattr             clojure.core/def
+           com.fulcrologic.rad.authorization/defauthenticator clojure.core/defn
+           com.fulcrologic.rad.blob/defblobattr               clojure.core/def
+           com.fulcrologic.rad.container/defsc-container      clojure.core/defn
+           com.fulcrologic.rad.form/defsc-form                clojure.core/defn
+           com.fulcrologic.rad.form/defunion                  clojure.core/def
+           com.fulcrologic.rad.form/with-field-context        clojure.core/let
+           com.fulcrologic.rad.option-utils/defoption         clojure.core/def
+           com.fulcrologic.rad.report/defsc-report            clojure.core/defn}}

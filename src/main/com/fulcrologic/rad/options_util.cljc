@@ -29,7 +29,7 @@
    (defn resolve-key
      "Used by RAD macros to ensure that the given value is a keyword."
      [macro-env k?]
-     (let [macro-env (merge {::original-key k?} macro-env)]
+     (let [macro-env (if (contains? macro-env ::original-key) macro-env (merge {::original-key k?} macro-env))]
        (cond
          (var? k?) (var-get k?)
          (keyword? k?) k?
@@ -104,13 +104,14 @@
      (try
        (reduce-kv
          (fn [new-options k v]
-           (let [k (resolve-key env k)]
+           (let [k* (resolve-key env k)
+                 k* (if (and (keyword? k*) (empty? (namespace k*))) k k*)]
              (assoc new-options
-               k (if-let [xform (get key-transforms k)]
-                   (xform v)
-                   (if (and (contains? keys-to-fix k) (or (map? v) (symbol? v)))
-                     `(com.fulcrologic.rad.options-util/?fix-keys ~v)
-                     v)))))
+               k* (if-let [xform (get key-transforms k*)]
+                    (xform v)
+                    (if (and (contains? keys-to-fix k*) (or (map? v) (symbol? v)))
+                      `(com.fulcrologic.rad.options-util/?fix-keys ~v)
+                      v)))))
          {}
          options)
        (catch Exception e

@@ -5,7 +5,8 @@
 (defoption style
   "ID Attribute or FORM option. The style of form to render. This can affect things like rendering,
    state machine behavior, etc. Can be a keyword or a `(fn [attr rendering-env] keyword?)`.
-   (rendering-env e.g. contains ::form/form-instance, parent-relation, etc).")
+   (rendering-env e.g. contains ::form/form-instance, parent-relation, etc)."
+)
 
 (defoption header-style
   "Attribute option. The style of header to generate when rendering the attribute. Not all attributes

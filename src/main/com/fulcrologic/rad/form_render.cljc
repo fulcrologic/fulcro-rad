@@ -37,16 +37,17 @@
 
    Recommended that you call `allow-defaults!` on your RAD model so that you can
    dispatch just on style and only customize on keys if really necessary."
-  (fn [{:com.fulcrologic.rad.form/keys [parent parent-relation] :as renv} id-attr]
+  (fn [{:com.fulcrologic.rad.form/keys [form-instance parent parent-relation] :as renv} id-attr]
     (let [parent-style (some-> parent rc/component-options fo/subforms parent-relation fro/style)
           style        (or
-                         (?! (-> renv :com.fulcrologic.rad.form/form-instance (rc/component-options) (fro/style)) id-attr renv)
-                         (?! (fro/style id-attr) id-attr renv)
                          (?! parent-style id-attr renv)
-                         :default)]
+                         (?! (-> (rc/component-options form-instance) (fro/style)) id-attr renv)
+                         (?! (fro/style id-attr) id-attr renv)
+                         :default)
+          k            (ao/qualified-key id-attr)]
       ;; NOTE: hierarchy maybe? (derive :sales/invoice :invoice/id). Make the rendering of :invoice/id forms be a
       ;; "kind" of :sales/invoice. Still need the possible dispatch to default style.
-      [(ao/qualified-key id-attr) style]))
+      (log/spy :debug (str "dispatch render-form" k) [k style])))
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
 
@@ -132,7 +133,7 @@
                     (?! (fo/field-style field-attr) form-instance)
                     (?! (ao/style field-attr) form-instance)
                     :default)]
-      [(ao/type field-attr) style]))
+      (log/spy :debug (str "dispatch render-field" (ao/qualified-key field-attr)) [(ao/type field-attr) style])))
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
 
