@@ -10,7 +10,9 @@
 
   NOTE to maintainers and Plugin authors: These files must be CLJC to make sure the symbols are resolvable
   at *compile* time. No dynamic tricks please. The form and report macros must be able to resolve the option
-  symbols during evaluation.")
+  symbols during evaluation."
+  (:require
+    [com.fulcrologic.rad.options-util :refer [defoption]]))
 
 (def id
   "REQUIRED: The *attribute* that will act as the primary key for this form."
@@ -365,3 +367,9 @@
    Useful when embedding a form in some other container. Can also be passed in the computed props of a top-level form
    factory for contextual hiding of the header."
   :com.fulcrologic.rad.form/show-header?)
+
+(defoption omit-label?
+  "Attribute or Form option.  A HINT to field renderers that they should not put a label on the field.
+
+   On a form, it must be a map from keywords to booleans or (fn [this attr] boolean). On
+   an attribute it is just a boolean or the fn. ")

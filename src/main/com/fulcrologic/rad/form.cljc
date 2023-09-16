@@ -22,6 +22,7 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.application :as rapp]
+    [com.fulcrologic.rad.form-render-options :as fro]
     [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
     [com.fulcrologic.rad.type-support.integer :as int]
     [edn-query-language.core :as eql]
@@ -31,6 +32,7 @@
     [com.fulcrologic.rad.options-util :as opts :refer [?! narrow-keyword]]
     [com.fulcrologic.rad.picker-options :as picker-options]
     [com.fulcrologic.rad.form-options :as fo]
+    [com.fulcrologic.rad.form-render :as fr]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
@@ -135,16 +137,22 @@
    #{:form-container :form-body-container}
    ```
   "
-  [{::keys [form-instance] :as _form-env} element]
+  [{::keys [form-instance] :as form-env} element]
   (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
         style-path             [::layout-styles element]
-        layout-style           (or (some-> form-instance comp/component-options (get-in style-path)) :default)
+        copts                  (comp/component-options form-instance)
+        id-attr                (fo/id copts)
+        layout-style           (or
+                                 (get-in copts style-path)
+                                 (?! (fro/style copts) id-attr form-env)
+                                 :default)
         element->style->layout (some-> runtime-atom deref ::rad/controls ::element->style->layout)
-        render-fn              (some-> element->style->layout (get element) (get layout-style))]
+        render-fn              (some-> element->style->layout (get element) (get layout-style))
+        default-render-fn      (some-> element->style->layout (get element) :default)]
     (cond
       (not runtime-atom) (log/error "Form instance was not in the rendering environment. This means the form did not mount properly")
       (not render-fn) (log/error "No renderer was installed for layout style" layout-style "for UI element" element))
-    render-fn))
+    (or render-fn default-render-fn)))
 
 (defn form-container-renderer
   "The top-level container for the entire on-screen form"
@@ -213,12 +221,18 @@
 (defn render-field
   "Given a form rendering environment and an attrbute: renders that attribute according to its type/style/value."
   [env attr]
+  (fr/render-field env attr))
+
+(defn default-render-field [env attr]
   (let [render (attr->renderer env attr)]
     (if render
       (render env attr)
       (do
         (log/error "No renderer installed to support attribute" attr)
         nil))))
+
+(defmethod fr/render-field :default [env attr]
+  (default-render-field env attr))
 
 (defn rendering-env
   "Create a form rendering environment. `form-instance` is the react element instance of the form (typically a master form),
@@ -263,11 +277,7 @@
       (render env)
       nil)))
 
-(defn render-layout
-  "Render the complete layout of a form. This is the default body of normal form classes. It will call a render factory
-   on any subforms, and they, in turn, will use this to render *their* body. Thus, any form can have a manually-overriden
-   render body."
-  [form-instance props]
+(defn default-render-layout [form-instance props]
   (when-not (comp/component? form-instance)
     (throw (ex-info "Invalid form instance propagated to render layout." {:form-instance form-instance})))
   (let [env    (rendering-env form-instance props)
@@ -275,6 +285,20 @@
     (if render
       (render env)
       nil)))
+
+(defn render-layout
+  "Render the complete layout of a form. This is the default body of normal form classes. It will call a render factory
+   on any subforms, and they, in turn, will use this to render *their* body. Thus, any form can have a manually-overriden
+   render body."
+  [form-instance props]
+  (when-not (comp/component? form-instance)
+    (throw (ex-info "Invalid form instance propagated to render layout." {:form-instance form-instance})))
+  (let [env (rendering-env form-instance props)]
+    (fr/render-form env (comp/component-options form-instance fo/id))))
+
+(defmethod fr/render-form :default [renv id-attr]
+  (when-let [render (form-container-renderer renv)]
+    (render renv)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Form creation/logic
@@ -1465,6 +1489,24 @@
         (and (nil? form-field-visible?) (true? field-visible?))
         (and (nil? form-field-visible?) (nil? field-visible?))))))
 
+(defn omit-label?
+  "Should the `attr` on the given `form-instance` refrain from including a field label?
+
+  * On the attribute at `::form/omit-label?`. A boolean or `(fn [form-instance attr] boolean?)`
+  * On the form via the map `::form/omit-label?`. A map from attr keyword to boolean or `(fn [form-instance attr] boolean?)`
+
+  The default is false.
+  "
+  [form-instance {::keys      [omit-label?]
+                  ::attr/keys [qualified-key] :as attr}]
+  [comp/component? ::attr/attribute => boolean?]
+  (let [form-omit?  (?! (comp/component-options form-instance ::omit-label? qualified-key) form-instance attr)
+        field-omit? (?! omit-label? form-instance attr)]
+    (cond
+      (boolean? form-omit?) form-omit?
+      (boolean? field-omit?) field-omit?
+      :else false)))
+
 (defn view!
   "Route to the given form in read-only mode."
   ([this form-class entity-id]
@@ -1765,8 +1807,10 @@
         validation-message (when invalid? (validation-error-message env attribute))
         field-label        (field-label env attribute)
         visible?           (field-visible? form-instance attribute)
+        omit-label?        (omit-label? form-instance attribute)
         read-only?         (read-only? form-instance attribute)]
     {:value              value
+     :omit-label?        omit-label?
      :invalid?           invalid?
      :validation-message validation-message
      :field-label        field-label
@@ -1815,6 +1859,7 @@
                                                    (and ~attr-sym (get (comp/props ~'form-instance) ~'qualified-key)))
                             'invalid?           `(invalid-attribute-value? ~env-sym ~attr-sym)
                             'validation-message `(validation-error-message ~env-sym ~attr-sym)
+                            'omit-label?        `(omit-label? ~'form-instance ~attr-sym)
                             'field-label        `(field-label ~env-sym ~attr-sym)
                             'visible?           `(field-visible? ~'form-instance ~attr-sym)
                             'read-only?         `(read-only? ~'form-instance ~attr-sym)
@@ -1953,7 +1998,8 @@
   ([parent-form-instance relation-key ChildForm child-props]
    (render-subform parent-form-instance relation-key ChildForm child-props {}))
   ([parent-form-instance relation-key ChildForm child-props extra-computed-props]
-   (let [ui-factory (comp/computed-factory ChildForm {:keyfn (fn [props] (str (second (comp/get-ident ChildForm props))))})
+   (let [id-key     (-> ChildForm comp/component-options fo/id ao/qualified-key)
+         ui-factory (comp/computed-factory ChildForm {:keyfn id-key})
          renv       (rendering-env parent-form-instance)]
      (ui-factory child-props (merge
                                extra-computed-props
@@ -1966,3 +2012,17 @@
    contain additional information if the back end added anything else to the error maps."
   [top-form-instance]
   (get (comp/props top-form-instance) ::errors))
+
+#_(defn default-render-ref
+    "The default way this renderer renders refs."
+    [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} field-attr]
+    (let [relation-key (ao/qualified-key field-attr)
+          item         (-> form-instance comp/props relation-key)
+          ItemForm     (-> form-instance fo/subforms fo/ui)
+          to-many?     (= :many (ao/cardinality field-attr))]
+      (fr/render-header renv field-attr)
+      (if to-many?
+        (mapv (fn [i] (render-subform form-instance relation-key ItemForm i)) item)
+        (render-subform form-instance relation-key ItemForm item))
+      (fr/render-footer renv field-attr)))
+
