@@ -181,11 +181,11 @@
 
 (def default-value
   "Attribute option. The default value for this attribute when created in a new
-  form. Can be a literal value or a `(fn [] value)`. Placed on an attribute to specify a default value."
+  form. Can be a literal value or a `(fn [form-options attr] value)`. Placed on an attribute to specify a default value."
   :com.fulcrologic.rad.form/default-value)
 
 (def default-values
-  "Form option. A map from qualified key to a value, or a `(fn [] {k v})`.
+  "Form option. A map from qualified key to a value, or a `(fn [form-options attr] {k v})`.
 
    Overrides the ::form/default-value that can be placed on an attrubute."
   :com.fulcrologic.rad.form/default-values)
@@ -470,3 +470,18 @@
          k            (ao/qualified-key attr)
          form-options (?! (get-in form-options [field-options k]) form-options attr)]
      (or form-options (?! (field-options attr) form-options attr)))))
+
+(defn get-default-value
+  "Get the default value for `attr` in  the form-options context. Properly looks for the default value in
+   the form, on the attribute, and in subform options. Also checks if the value is a fn, and properly runs it
+   if so."
+  [form-options attribute]
+  (let [k             (ao/qualified-key attribute)
+        default-value (default-value attribute)
+        sfoptions     (subform-options form-options attribute)
+        SubForm       (?! (ui sfoptions) form-options k)]
+    (or
+      (?! (get-in form-options [default-values k]) form-options attribute)
+      (?! (default-values (subform-options form-options attribute)) form-options attribute)
+      (?! (get-in (some-> SubForm rc/component-options) [default-values k]) form-options attribute)
+      (?! default-value form-options attribute))))

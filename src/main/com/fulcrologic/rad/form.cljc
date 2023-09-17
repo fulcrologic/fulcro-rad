@@ -786,11 +786,8 @@
    "
   [FormClass attribute]
   (let [form-options  (comp/component-options FormClass)
-        {:keys [::attr/qualified-key ::default-value]} attribute
-        default-value (or
-                        (?! (comp/component-options FormClass fo/default-values qualified-key))
-                        (?! (::default-values (subform-options form-options attribute)))
-                        (?! default-value))]
+        {::attr/keys [qualified-key]} attribute
+        default-value (fo/get-default-value form-options attribute)]
     (enc/if-let [SubClass (subform-ui form-options attribute)]
       (do
         (when-not SubClass
@@ -839,9 +836,9 @@
   where `SubClass` is the UI class of the subform for the relation.
   "
   [FormClass attribute]
-  (let [{::keys [default-values] :as form-options} (comp/component-options FormClass)
-        {::keys [default-value] ::attr/keys [qualified-key]} attribute
-        default-value (?! (get default-values qualified-key default-value))
+  (let [form-options  (comp/component-options FormClass)
+        {::attr/keys [qualified-key]} attribute
+        default-value (fo/get-default-value form-options attribute)
         SubClass      (subform-ui form-options attribute)
         new-id        (tempid/tempid)
         id-key        (some-> SubClass (comp/component-options ::id ::attr/qualified-key))]
