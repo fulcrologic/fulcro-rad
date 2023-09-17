@@ -12,7 +12,10 @@
   at *compile* time. No dynamic tricks please. The form and report macros must be able to resolve the option
   symbols during evaluation."
   (:require
-    [com.fulcrologic.rad.options-util :refer [defoption]]))
+    [com.fulcrologic.fulcro.raw.components :as rc]
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.options-util :refer [?! defoption]]
+    [taoensso.timbre :as log]))
 
 (def id
   "REQUIRED: The *attribute* that will act as the primary key for this form."
@@ -103,8 +106,16 @@
   :com.fulcrologic.rad.form/field-styles)
 
 (def field-options
-  "OPTIONAL: A map from *qualified keyword* to a map of options targeted to the specific UI control for that
+  "OPTIONAL: Options related to behavior of a field when it appears on a form.
+
+  When used on a form: A map from *qualified keyword* of attributes to a map of options targeted to the specific UI control for that
   field. The content of the map will be defined by the control in question.
+
+  When used on an attribute, it should just be the form field options map for that attribute.
+
+  The value of the options can also be a `(fn [form-options attr] field-options)`.
+
+  Use `fo/get-field-options` to properly pull field options in code.
 
   See also the `picker-options` namespace."
   :com.fulcrologic.rad.form/field-options)
@@ -177,16 +188,54 @@
   :com.fulcrologic.rad.form/default-values)
 
 (def subforms
-  "A map from qualified key to a sub-map that describes details for what to use when a form attribute is a ref.
+  "FORM option. A map from qualified key to a sub-map that describes details for what to use when a form attribute is a ref.
 
-  Typical entries include:
+   The value of this option can be a map from keyword to submap, where the submap can instead be a
+   `(fn [form-component-options ref-attr] optionsmap)`.
 
-  * `::form/ui` - A form class that will be used to render the subform
+  Typical entries to the submap include:
+
+  * `fo/ui` - A form class that will be used to render the subform
+  * `po/*` - Picker options for pick-* style references
 
   Other entries are plugin-dependent. See `picker-options` for cases where a relationship is one where the parent
   form simply picks pre-existing things.
+
+  Use `fo/subform-options` as a helper function to properly get subform options in production code.
+
+  E.g.
+
+  ```
+  (defsc-form Person [this props]
+   {...
+    fo/subforms {:person/address {fo/ui Address}}))
+
+  (defsc-form Person [this props]
+   {...
+    fo/subforms {:person/address (fn [form-component-options attr]
+                                    (assert (= (ao/qualified-key attr) :person/address))
+                                    {fo/ui Address})}))
+  ```
   "
   :com.fulcrologic.rad.form/subforms)
+
+(defoption subform
+  "Attribute option for ref attributes. Defines the subform options. See fo/subforms.
+
+   Can be a map of subform options or a `(fn [form-instance ref-attr] options-map)`.
+
+   E.g.
+
+  ```
+  (defattr person-address :person/address :ref
+   {fo/subform {fo/ui :com.example.ui.address/AddressForm}})
+
+  (defattr person-address :person/address :ref
+   {fo/subform (fn [form-instance ref-attr] {fo/ui :com.example.ui.address/AddressForm})})
+  ```
+
+  Use `fo/subform-options` as a helper function to properly get subform options in production code.
+   ")
 
 (def layout-styles
   "A map whose keys name a container element and whose value indicates a desired style.
@@ -246,8 +295,10 @@
   :com.fulcrologic.rad.form/field-label)
 
 (def ui
-  "Used within `subforms`. This should be the Form component that will be used to render instances of
-   the subform."
+  "Used within `subform` or `subforms`. This should be the Form component that will be used to render instances of
+   the subform.
+
+   Can be one of: A component, component registry key, or `(fn [form-options ref-key] comp-or-reg-key)`"
   :com.fulcrologic.rad.form/ui)
 
 (def field-style-config
@@ -373,3 +424,46 @@
 
    On a form, it must be a map from keywords to booleans or (fn [this attr] boolean). On
    an attribute it is just a boolean or the fn. ")
+
+(defn subform-options
+  "Use form/subform-options instead."
+  ([form-options]
+   (let [ref-attrs (filterv #(= :ref (ao/type %)) (attributes form-options))]
+     (reduce
+       (fn [acc attr]
+         (let [opts (subform-options form-options attr)]
+           (if (seq opts)
+             (assoc acc (ao/qualified-key attr) opts)
+             acc)))
+       {}
+       ref-attrs)))
+  ([form-options ref-attr-or-key]
+   (let [k->a         (:com.fulcrologic.rad.form/key->attribute form-options)
+         ref-attr     (cond-> ref-attr-or-key
+                        (keyword? ref-attr-or-key) k->a)
+         k            (ao/qualified-key ref-attr)
+         form-options (?! (get-in form-options [subforms k]) form-options ref-attr)
+         raw-options  (or form-options (?! (subform ref-attr) form-options ref-attr))]
+     (cond-> raw-options
+       (contains? raw-options ui) (update ui (fn [c]
+                                               (cond-> (?! c form-options k)
+                                                 (not (rc/component-class? c)) (rc/registry-key->class))))))))
+
+(defn get-field-options
+  "Use form/get-field-options instead."
+  ([form-options]
+   (reduce
+     (fn [acc attr]
+       (let [opts (get-field-options form-options attr)]
+         (if (seq opts)
+           (assoc acc (ao/qualified-key attr) opts)
+           acc)))
+     {}
+     (attributes form-options)))
+  ([form-options attr-or-key]
+   (let [k->a         (:com.fulcrologic.rad.form/key->attribute form-options)
+         attr         (cond-> attr-or-key
+                        (keyword? attr-or-key) k->a)
+         k            (ao/qualified-key attr)
+         form-options (?! (get-in form-options [field-options k]) form-options attr)]
+     (or form-options (?! (field-options attr) form-options attr)))))

@@ -22,6 +22,8 @@
     [com.fulcrologic.fulcro.mutations :refer [defmutation]]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [taoensso.timbre :as log]))
@@ -76,7 +78,8 @@
          cached-at       (get-in state-map time-path 0)
          reload?         (or (:force-reload? load-options) (> (- now cached-at) cache-time-ms))
          query-component (cond
-                           query-component query-component
+                           (keyword? query-component) (rc/registry-key->class query-component)
+                           (comp/component-class? query-component) query-component
                            (vector? query) (rc/nc query))]
      (when-not query-key
        (log/error "Cannot load picker options because there is no query-key."))
@@ -114,8 +117,7 @@
   The picker options will be a combination of the field options for the field and any found on the attribute."
   ([app-ish form-class props attribute] (load-options! app-ish form-class props attribute {}))
   ([app-ish form-class props {:com.fulcrologic.rad.attributes/keys [qualified-key] :as attribute} load-options]
-   (let [{:com.fulcrologic.rad.form/keys [field-options]} (rc/component-options form-class)
-         field-options  (get field-options qualified-key)
+   (let [field-options  (fo/get-field-options (rc/component-options form-class) attribute)
          picker-options (merge attribute field-options)]
      (load-picker-options! app-ish form-class props picker-options load-options))))
 
@@ -156,12 +158,12 @@
 (defn current-form-options
   "Gets the current picker options for the given form-instance and attribute."
   [form-instance attr]
-  (let [{:com.fulcrologic.rad.form/keys [field-options]} (rc/component-options form-instance)
-        {:com.fulcrologic.rad.attributes/keys [qualified-key]} attr
-        field-options (get field-options qualified-key)
-        {::keys [cache-key query-key]} (merge attr field-options)
+  (let [k             (ao/qualified-key attr)
+        form-options  (rc/component-options form-instance)
+        field-options (fo/get-field-options form-options attr)
+        {::keys [cache-key query-key]} (merge attr field-options) ; not desired, but bw compat
         cache-key     (or (?! cache-key (comp/react-type form-instance) (rc/props form-instance)) query-key)
-        cache-key     (or cache-key query-key (log/error "Ref field MUST have either a ::picker-options/cache-key or ::picker-options/query-key in attribute " qualified-key))
+        cache-key     (or cache-key query-key (log/error "Ref field MUST have either a ::picker-options/cache-key or ::picker-options/query-key in attribute " k))
         props         (rc/props form-instance)
         options       (get-in props [::options-cache cache-key :options])]
     options))
@@ -189,61 +191,85 @@
     (str (or text (tr "UNSELECTED")))))
 
 (def remote
-  "The keyword name of the remote that the picker options are loaded from. Defaults to :remote."
+  "The keyword name of the remote that the picker options are loaded from. Defaults to :remote.
+
+    This goes on `fo/field-options`."
   ::remote)
 
 (def query-key
-  "The top-level query keyword to use when pulling the options."
+  "The top-level query keyword to use when pulling the options.
+
+   This goes on `fo/field-options`."
   ::query-key)
 
 (def query-component
-  "A Fulcro defsc with the subquery to use for pulling options. You must use this OR `po/query`. This one has
-   precedence."
+  "A Fulcro defsc with the subquery to use for pulling options. If this is a keyword, symbol, or string, then that will be used
+   to pull the component from the Fulcro component registry. You must use this OR `po/query`. This one has precedence.
+
+   This goes in `fo/field-options`"
   ::query-component)
 
 (def query
   "An EQL (vector) query to use when pulling the options. Will cause a normalizing component to be created with
-   `rc/nc`, which will only normalize data if there is an id field in the query."
+   `rc/nc`, which will only normalize data if there is an id field in the query.
+
+   This goes on `fo/field-options`."
   ::query)
 
 (def query-parameters
   "A map of query parameters to include in the option load, or a `(fn [app cls props] map?)` that can generate those
-   props on demand."
+   props on demand.
+
+    This goes on `fo/field-options`."
   ::query-parameters)
 
 (def cache-key
-  "A keyword or `(fn [cls props] keyword?)` under which the normalized picker options will be saved."
+  "A keyword or `(fn [cls props] keyword?)` under which the normalized picker options will be saved.
+
+   This goes on `fo/field-options`."
   ::cache-key)
 
 (def options-xform
   "A `(fn [normalized-result raw-result] [{:text t :value v} ...])`. This generates the options to show the user. If
-  not provided then it is assumed that the query result itself is a vector of these text/value pair maps."
+  not provided then it is assumed that the query result itself is a vector of these text/value pair maps.
+
+    This goes on `fo/field-options`."
   ::options-xform)
 
 (def cache-time-ms
   "How long the options can be cached. This allows multiple uses of the same options load to be used over time. Caching
-  is done under ::cache-key."
+  is done under ::cache-key.
+
+   This goes on `fo/field-options`."
   ::cache-time-ms)
 
 (def form
-  "Picker option (e.g. for fo/field-options). If present (and the rendering plugin supports it) this option names the class
+  "Picker option (placed on an attribute or within fo/field-options). If present (and the rendering plugin supports it) this option names the class
    of a `defsc-form` that CAN be used to create or edit instances of the type being picked. Including this option
    automatically infers that creation should be allowed (rendering plugins should automatically show a way to trigger
-   the creation of a new element)."
+   the creation of a new element).
+
+   The value can be one of: A component class, a component registry key, or a `(fn [form-instance attr-to-pick] component)`.
+
+    This goes on `fo/field-options`."
   ::form)
 
 (def allow-edit?
   "Picker option (e.g. for fo/field-options). Requires po/form. Indicates that editing of a picked item should be possible.
    Requires support from rendering plugin.
 
-   Boolean or `(fn [parent-instance parent-relation] bool)`"
+   Boolean or `(fn [parent-instance parent-relation] bool)`
+
+   This goes on `fo/field-options`."
   ::allow-edit?)
 
 (def allow-create?
   "Picker option (e.g. for fo/field-options). Requires po/form. Indicates that creating a new picked item should be possible.
    Requires support from rendering plugin.
 
-   Boolean or `(fn [parent-instance parent-relation] bool)`"
+   Boolean or `(fn [parent-instance parent-relation] bool)`
+
+    This goes on `fo/field-options`."
   ::allow-create?)
 
 (def quick-create
@@ -255,5 +281,7 @@
    `po/form` is not required and is not used.
 
    CAN be combined with allow-create?, allow-edit?, but that will enable both buttons for edit/create as well as
-   the ability to type a string and quick-add it."
+   the ability to type a string and quick-add it.
+
+   This goes on `fo/field-options`."
   ::quick-create)

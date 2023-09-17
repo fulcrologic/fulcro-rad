@@ -6,6 +6,7 @@
        :cljs [goog.functions :as gf])
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
+    [com.fulcrologic.fulcro.raw.components :as rc]
     [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.guardrails.core :refer [>defn => ?]]
@@ -55,7 +56,7 @@
   function then it will apply the remaining arguments to it; otherwise it will just return
   `v`."
   [v & args]
-  (if (fn? v)
+  (if (and (fn? v) (not (rc/component-class? v)))
     (apply v args)
     v))
 

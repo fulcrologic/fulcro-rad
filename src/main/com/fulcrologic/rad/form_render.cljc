@@ -38,13 +38,14 @@
    Recommended that you call `allow-defaults!` on your RAD model so that you can
    dispatch just on style and only customize on keys if really necessary."
   (fn [{:com.fulcrologic.rad.form/keys [form-instance parent parent-relation] :as renv} id-attr]
-    (let [parent-style (some-> parent rc/component-options fo/subforms parent-relation fro/style)
-          style        (or
-                         (?! parent-style id-attr renv)
-                         (?! (-> (rc/component-options form-instance) (fro/style)) id-attr renv)
-                         (?! (fro/style id-attr) id-attr renv)
-                         :default)
-          k            (ao/qualified-key id-attr)]
+    (let [parent-options (some-> parent (rc/component-options))
+          parent-style   (when parent-options (fro/style (fo/subform-options parent-options parent-relation)))
+          style          (or
+                           (?! parent-style id-attr renv)
+                           (?! (-> (rc/component-options form-instance) (fro/style)) id-attr renv)
+                           (?! (fro/style id-attr) id-attr renv)
+                           :default)
+          k              (ao/qualified-key id-attr)]
       ;; NOTE: hierarchy maybe? (derive :sales/invoice :invoice/id). Make the rendering of :invoice/id forms be a
       ;; "kind" of :sales/invoice. Still need the possible dispatch to default style.
       (log/spy :debug (str "dispatch render-form" k) [k style])))
@@ -64,14 +65,14 @@
    Recommended that you call `allow-defaults!` on your RAD model so that you can
    dispatch just on style and only customize on keys if really necessary."
   (fn [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} attr]
-    (let [options (rc/component-options form-instance)
-          k       (ao/qualified-key attr)
-          style   (or
-                    (?! (get-in options [fo/subforms k fro/header-style]) attr renv)
-                    (?! (fro/header-style attr) attr renv)
-                    (?! (get-in options [fo/subforms k fro/style]) attr renv)
-                    (?! (fro/style attr) attr renv)
-                    :default)]
+    (let [options   (rc/component-options form-instance)
+          sfoptions (fo/subform-options options attr)
+          style     (or
+                      (?! (fro/header-style sfoptions) attr renv)
+                      (?! (fro/header-style attr) attr renv)
+                      (?! (fro/style sfoptions) attr renv)
+                      (?! (fro/style attr) attr renv)
+                      :default)]
       [(ao/qualified-key attr) style]))
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
@@ -104,14 +105,14 @@
   Recommended that you call `allow-defaults! `on your RAD model so that you can
   dispatch just on style and only customize on keys if really necessary. "
   (fn [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} attr]
-    (let [options (rc/component-options form-instance)
-          k       (ao/qualified-key attr)
-          style   (or
-                    (?! (get-in options [fo/subforms k fro/footer-style]) attr renv)
-                    (?! (fro/footer-style attr) attr renv)
-                    (?! (get-in options [fo/subforms k fro/style]) attr renv)
-                    (?! (fro/style attr) attr renv)
-                    :default)]
+    (let [options   (rc/component-options form-instance)
+          sfoptions (fo/subform-options options attr)
+          style     (or
+                      (?! (fro/footer-style sfoptions) attr renv)
+                      (?! (fro/footer-style attr) attr renv)
+                      (?! (fro/style sfoptions) attr renv)
+                      (?! (fro/style attr) attr renv)
+                      :default)]
       [(ao/qualified-key attr) style]))
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
@@ -124,44 +125,19 @@
   Dispatches on [type style].
   "
   (fn [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} field-attr]
-    (let [options (rc/component-options form-instance)
-          k       (ao/qualified-key field-attr)
-          style   (or
-                    (?! (get-in options [fo/subforms k fro/style]) field-attr renv)
-                    (?! (get-in options [fo/field-styles k]) form-instance)
-                    (?! (fro/style field-attr) (assoc renv ::context :field))
-                    (?! (fo/field-style field-attr) form-instance)
-                    (?! (ao/style field-attr) form-instance)
-                    :default)]
-      (log/spy :debug (str "dispatch render-field" (ao/qualified-key field-attr)) [(ao/type field-attr) style])))
+    (let [options   (rc/component-options form-instance)
+          k         (ao/qualified-key field-attr)
+          sfoptions (fo/subform-options options field-attr)
+          style     (or
+                      (?! (fro/style sfoptions) field-attr renv)
+                      (?! (get-in options [fo/field-styles k]) form-instance)
+                      (?! (fro/style field-attr) renv)
+                      (?! (fo/field-style field-attr) form-instance)
+                      (?! (ao/style field-attr) form-instance)
+                      :default)]
+      [(ao/type field-attr) style]))
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
-
-#_(defmethod render-field [::composite :default] [renv {::keys [children]}]
-    (apply rc/fragment
-      (map
-        #(form/render-field renv %)
-        children)))
-
-#_(defn composite-field
-    " Group attributes together such that `render-field `will be called with `unique-key `in order to render
-  `children `. "
-    [unique-key children]
-    {ao/qualified-key unique-key
-     ao/type          ::composite
-     ::children       children})
-
-#_(defmethod render-field [:ref :default] [{::attr/keys                    [key->attribute]
-                                            :com.fulcrologic.rad.form/keys [form-instance] :as renv} field-attr]
-    (let [relation-key (ao/qualified-key field-attr)
-          item         (-> form-instance rc/props relation-key)
-          ItemForm     (-> form-instance fo/subforms fo/ui)
-          to-many?     (= :many (ao/cardinality field-attr))]
-      (render-header renv field-attr)
-      (if to-many?
-        (mapv (fn [i] (form/render-subform form-instance relation-key ItemForm i)) item)
-        (form/render-subform form-instance relation-key ItemForm item))
-      (render-footer renv field-attr)))
 
 (defn derive!
   "Cause the given `child-keyword `to act as-if it were `parent-keyword `in the rendering multimethods. This

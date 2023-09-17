@@ -19,35 +19,35 @@
 (def default-street "111 Main")
 (def default-email "nobody@example.net")
 
-(defattr person-id :person/id :uuid {::attr/identity? true})
+(defattr person-id :person/id :uuid {ao/identity? true})
 (defattr person-name :person/name :string {})
-(defattr account-id :account/id :uuid {::attr/identity? true})
-(defattr spouse :account/spouse :ref {::attr/cardinality :one
-                                      ::attr/target      :person/id})
-(defattr email :account/email :string {::attr/required?     true
-                                       ::form/default-value default-email})
-(defattr addresses :account/addresses :ref {::attr/target      :address/id
-                                            ::attr/cardinality :many})
-(defattr address-id :address/id :uuid {::attr/identity? true})
-(defattr street :address/street :string {::attr/required? true})
+(defattr account-id :account/id :uuid {ao/identity? true})
+(defattr spouse :account/spouse :ref {ao/cardinality :one
+                                      ao/target      :person/id})
+(defattr email :account/email :string {ao/required?     true
+                                       fo/default-value default-email})
+(defattr addresses :account/addresses :ref {ao/target      :address/id
+                                            ao/cardinality :many})
+(defattr address-id :address/id :uuid {ao/identity? true})
+(defattr street :address/street :string {ao/required? true})
 
 (defsc AddressForm [_ _]
-  {::form/attributes     [street]
-   ::form/default-values {:address/street default-street}
-   ::attr/target         :address/id
-   ::form/id             address-id
+  {fo/attributes     [street]
+   fo/default-values {:address/street default-street}
+   ao/target         :address/id
+   fo/id             address-id
    :query                [:mocked/query]})
 
 (defsc PersonForm [_ _]
-  {::form/attributes [person-name]
-   ::form/id         person-id})
+  {fo/attributes [person-name]
+   fo/id         person-id})
 
 (defsc AccountForm [_ _]
-  {::form/attributes     [email addresses spouse]
-   ::form/id             account-id
-   ::form/default-values {:account/spouse {}}
-   ::form/subforms       {:account/addresses {::form/ui AddressForm}
-                          :account/spouse    {::form/ui PersonForm}}})
+  {fo/attributes     [email addresses spouse]
+   fo/id             account-id
+   fo/default-values {:account/spouse {}}
+   fo/subforms       {:account/addresses {fo/ui AddressForm}
+                          :account/spouse    {fo/ui PersonForm}}})
 
 (specification "attributes->form-query"
   (component "Single-level query conversion"
@@ -120,7 +120,7 @@
    fo/subforms   {:test/children {fo/ui ChildForm}}})
 
 (specification "find-fields"
-  (let [fields (form/find-fields TestForm #(#{:ref :boolean} (get % ::attr/type)))]
+  (let [fields (form/find-fields TestForm #(#{:ref :boolean} (get % ao/type)))]
     (assertions
       "Finds all of the fields (recursively) that match the predicate."
       fields => #{:test/children :test/marketing? :test/agree? :child/node})))

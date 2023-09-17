@@ -119,10 +119,10 @@
   (some-> this comp/get-computed ::parent-relation))
 
 (defn form-key->attribute
-  "Get the RAD attribute definition for the given attribute key, given a FormClass that has that attribute
+  "Get the RAD attribute definition for the given attribute key, given a class-or-instance that has that attribute
    as a field. Returns a RAD attribute, or nil if that attribute isn't a form field on the form."
-  [FormClass attribute-key]
-  (some-> FormClass comp/component-options ::key->attribute attribute-key))
+  [class-or-instance attribute-key]
+  (some-> class-or-instance comp/component-options ::key->attribute attribute-key))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; RENDERING
@@ -163,6 +163,31 @@
    fields in nested forms. This renderer can determine layout of the fields themselves."
   [form-env] (render-fn form-env :form-body-container))
 
+(def subform-options
+  "[form-options]
+   [form-options ref-attr-or-keyword]
+
+   Find the subform options for the given form instance's ref-attr-or-keyword. Form-specific subform options
+   takes precedence over any defined as fo/subform on the ref-attr-or-keyword. Runs the supported nested lambdas
+   when found.
+
+   If you supply ref-attr-or-keyword, then the result is a map of that refs subform-options.
+
+   If you do NOT supply ref-attr-or-keyword, then the result is a map from ref-attr-key to subform-options IF that ref has
+   subform options on the form or attribute.
+   "
+  fo/subform-options)
+
+(defn subform-ui [form-options ref-key-or-attribute]
+  (some-> (subform-options form-options ref-key-or-attribute) fo/ui))
+
+(def get-field-options
+  "[form-options]
+   [form-options attr-or-key]
+
+   Get the fo/field-options for a form (arity 1) or a particular field (arity 2). Runs lambdas if necessary."
+  fo/get-field-options)
+
 (defn ref-container-renderer
   "Given the current rendering environment and an attribute: Returns the renderer that wraps and lays out
    elements of refs. This function interprets the ::form/subforms settings for referenced objects that
@@ -175,12 +200,12 @@
    ```
    "
   [{::keys [form-instance] :as _form-env} {::keys      [field-style]
-                                           ::attr/keys [qualified-key] :as _attr}]
-  (let [{::keys [subforms field-styles]} (comp/component-options form-instance)
+                                           ::attr/keys [qualified-key] :as attr}]
+  (let [{::keys [field-styles] :as form-options} (comp/component-options form-instance)
         field-style (or (get field-styles qualified-key) field-style)]
     (if field-style
       (fn [env attr _] (render-field env attr))
-      (let [{::keys [ui layout-styles]} (get subforms qualified-key)
+      (let [{::keys [ui layout-styles]} (subform-options form-options attr)
             {target-styles ::layout-styles} (comp/component-options ui)
             {:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
             element      :ref-container
@@ -347,7 +372,7 @@
 (defn form-options->form-query
   "Converts form options to the necessary EQL query for a form class."
   [{id-attr ::id
-    ::keys  [attributes subforms] :as _form-options}]
+    ::keys  [attributes] :as form-options}]
   (let [id-key             (::attr/qualified-key id-attr)
         {refs true scalars false} (group-by #(= :ref (::attr/type %)) attributes)
         query-with-scalars (into
@@ -361,8 +386,8 @@
                              (map ::attr/qualified-key)
                              scalars)
         full-query         (into query-with-scalars
-                             (mapcat (fn [{::attr/keys [qualified-key]}]
-                                       (if-let [subform (get-in subforms [qualified-key ::ui])]
+                             (mapcat (fn [{::attr/keys [qualified-key] :as attr}]
+                                       (if-let [subform (subform-ui form-options attr)]
                                          [{qualified-key (comp/get-query subform)}]
                                          (let [k->attr        (into {} (map (fn [{::attr/keys [qualified-key] :as attr}] [qualified-key attr])) attributes)
                                                target-id-key  (::attr/target (k->attr qualified-key))
@@ -453,10 +478,10 @@
 (defn form-pre-merge
   "Generate a pre-merge for a component that has the given for attribute map. Returns a proper
   pre-merge fn, or `nil` if none is needed"
-  [{::keys [subforms]} key->attribute]
+  [component-options key->attribute]
   (let [sorters-by-k (into {}
                        (keep (fn [k]
-                               (when-let [sorter (get-in subforms [k ::sort-children])]
+                               (when-let [sorter (::sort-children (subform-options component-options (key->attribute k)))]
                                  [k sorter])) (keys key->attribute)))]
     (when (seq sorters-by-k)
       (fn [{:keys [data-tree]}]
@@ -479,7 +504,7 @@
   [cls]
   (let [options         (some-> cls (comp/component-options))
         base-attributes (fo/attributes options)
-        subforms        (keep fo/ui (vals (fo/subforms options)))]
+        subforms        (keep (fn [a] (fo/ui (subform-options options a))) base-attributes)]
     (into (set base-attributes)
       (mapcat form-and-subform-attributes subforms))))
 
@@ -496,8 +521,9 @@
                                                                                     (not identity?)))
         attribute-map              (attr/attribute-map attributes)
         pre-merge                  (form-pre-merge options attribute-map)
+        Form                       (get-class)
         base-options               (merge
-                                     {::validator        (attr/make-attribute-validator (form-and-subform-attributes (get-class)) true)
+                                     {::validator        (attr/make-attribute-validator (form-and-subform-attributes Form) true)
                                       ::control/controls standard-controls
                                       :route-denied      (fn [this relative-root proposed-route timeouts-and-params]
                                                            #?(:cljs
@@ -506,13 +532,14 @@
                                                                   (dr/retry-route! this relative-root proposed-route timeouts-and-params)))))}
                                      options
                                      (cond->
-                                       {:ident           (fn [_ props] [id-key (get props id-key)])
-                                        ::key->attribute attribute-map
-                                        :form-fields     (into #{}
-                                                           (comp
-                                                             (filter form-field?)
-                                                             (map ::attr/qualified-key))
-                                                           attributes)}
+                                       {:ident               (fn [_ props] [id-key (get props id-key)])
+                                        ::key->attribute     attribute-map
+                                        :fulcro/registry-key (some-> Form (comp/class->registry-key))
+                                        :form-fields         (into #{}
+                                                               (comp
+                                                                 (filter form-field?)
+                                                                 (map ::attr/qualified-key))
+                                                               attributes)}
                                        pre-merge (assoc :pre-merge pre-merge)
                                        route-prefix (merge {:route-segment       [route-prefix :action :id]
                                                             :allow-route-change? form-allow-route-change
@@ -758,13 +785,13 @@
    new default entity.
    "
   [FormClass attribute]
-  (let [{::keys [subforms]} (comp/component-options FormClass)
+  (let [form-options  (comp/component-options FormClass)
         {:keys [::attr/qualified-key ::default-value]} attribute
         default-value (or
                         (?! (comp/component-options FormClass fo/default-values qualified-key))
-                        (?! (get-in subforms [qualified-key ::default-values]))
+                        (?! (::default-values (subform-options form-options attribute)))
                         (?! default-value))]
-    (enc/if-let [SubClass (get-in subforms [qualified-key ::ui])]
+    (enc/if-let [SubClass (subform-ui form-options attribute)]
       (do
         (when-not SubClass
           (log/error "Subforms for class" (comp/component-name FormClass)
@@ -812,10 +839,10 @@
   where `SubClass` is the UI class of the subform for the relation.
   "
   [FormClass attribute]
-  (let [{::keys [subforms default-values]} (comp/component-options FormClass)
+  (let [{::keys [default-values] :as form-options} (comp/component-options FormClass)
         {::keys [default-value] ::attr/keys [qualified-key]} attribute
         default-value (?! (get default-values qualified-key default-value))
-        SubClass      (get-in subforms [qualified-key ::ui])
+        SubClass      (subform-ui form-options attribute)
         new-id        (tempid/tempid)
         id-key        (some-> SubClass (comp/component-options ::id ::attr/qualified-key))]
     (when-not (comp/union-component? SubClass)
@@ -1000,7 +1027,8 @@
   (let [FormClass       (uism/actor-class env :actor/form)
         form-ident      (uism/actor->ident env :actor/form)
         form-value      (get-in state-map form-ident)
-        {::keys [subforms attributes]} (comp/component-options FormClass)
+        {::keys [attributes] :as form-options} (comp/component-options FormClass)
+        subforms        (subform-options form-options)
         possible-keys   (set (keys subforms))
         attrs-to-create (into []
                           (filter (fn [{::attr/keys [qualified-key type cardinality]}]
@@ -2019,17 +2047,3 @@
    contain additional information if the back end added anything else to the error maps."
   [top-form-instance]
   (get (comp/props top-form-instance) ::errors))
-
-#_(defn default-render-ref
-    "The default way this renderer renders refs."
-    [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} field-attr]
-    (let [relation-key (ao/qualified-key field-attr)
-          item         (-> form-instance comp/props relation-key)
-          ItemForm     (-> form-instance fo/subforms fo/ui)
-          to-many?     (= :many (ao/cardinality field-attr))]
-      (fr/render-header renv field-attr)
-      (if to-many?
-        (mapv (fn [i] (render-subform form-instance relation-key ItemForm i)) item)
-        (render-subform form-instance relation-key ItemForm item))
-      (fr/render-footer renv field-attr)))
-

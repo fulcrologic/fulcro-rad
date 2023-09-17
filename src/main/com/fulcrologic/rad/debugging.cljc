@@ -106,8 +106,10 @@
 (defn- form-attributes
   "Gets all of the attributes in use by a form and its subforms."
   [form]
-  (let [base-attributes (comp/component-options form fo/attributes)
-        subforms        (mapv fo/ui (vals (comp/component-options form fo/subforms)))]
+  (let [form-options    (comp/component-options form)
+        base-attributes (fo/attributes form-options)
+        subform-map     (form/subform-options form-options)
+        subforms        (mapv fo/ui (vals subform-map))]
     (into base-attributes
       (mapcat
         #(comp/component-options % fo/attributes)
