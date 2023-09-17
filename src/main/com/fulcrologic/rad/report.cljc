@@ -1053,3 +1053,29 @@
   "Run a transaction that completely clears a report (which should not be on-screen) out of app state."
   [app-ish ReportClass]
   (comp/transact! app-ish [(clear-report {:report-ident (comp/get-ident ReportClass {})})]))
+
+(defn trigger!
+  "Trigger an event on a report. You can use the `this` of the report with arity-2 and -3.
+
+   For arity-4 the `report-class-ish` is something from which the report's ident can be derived: I.e. The
+   report class, report's Fulcro registry key, or the ident itself.
+
+   This should not be used from within the state machine itself. Use `uism/trigger` for that."
+  ([report-instance event]
+   (trigger! report-instance event {}))
+  ([report-instance event event-data]
+   (trigger! report-instance report-instance event event-data))
+  ([app-ish report-class-ish event event-data]
+   (let [report-ident (cond
+                        (or
+                          (string? report-class-ish)
+                          (symbol? report-class-ish)
+                          (keyword? report-class-ish)) (some-> report-class-ish (comp/registry-key->class) (comp/get-ident {}))
+                        (vector? report-class-ish) report-class-ish
+                        (comp/component-class? report-class-ish) (comp/get-ident report-class-ish {})
+                        (comp/component-instance? report-class-ish) (comp/get-ident report-class-ish))]
+     (when-not (vector? report-ident)
+       (log/error (ex-info "Cannot trigger an event on a report with invalid report identifier"
+                    {:value report-class-ish
+                     :type  (type report-class-ish)})))
+     (uism/trigger!! app-ish report-ident event event-data))))

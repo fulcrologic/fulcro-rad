@@ -2044,3 +2044,15 @@
    contain additional information if the back end added anything else to the error maps."
   [top-form-instance]
   (get (comp/props top-form-instance) ::errors))
+
+(defn trigger!
+  "Trigger a UISM event on a form. You can use the rendering env `renv`, or if you want to
+   trigger an event on a known top-level form you can do so with the arity-4 version with an
+   `app-ish` (app or any component instance) and the top-level form's ident.
+
+   This should not be used from within the state machine itself. Use `uism/trigger` for that."
+  ([renv event] (trigger! renv event {}))
+  ([{::keys [master-form form-instance] :as renv} event event-data]
+   (trigger! form-instance (comp/get-ident master-form) event event-data))
+  ([app-ish top-form-ident event event-data]
+   (uism/trigger!! app-ish top-form-ident event event-data)))
