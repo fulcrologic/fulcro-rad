@@ -18,16 +18,16 @@
     [taoensso.timbre :as log]))
 
 (def id
-  "REQUIRED: The *attribute* that will act as the primary key for this form."
+  "RForm option. EQUIRED: The *attribute* that will act as the primary key for this form."
   :com.fulcrologic.rad.form/id)
 
 (def attributes
-  "REQUIRED: A vector of *attributes* that should be state-managed (should be saved/loaded). If the attribute
+  "Form option. REQUIRED: A vector of *attributes* that should be state-managed (should be saved/loaded). If the attribute
   isn't in this list, it will not be managed."
   :com.fulcrologic.rad.form/attributes)
 
 (def layout
-  "OPTIONAL (may not be supported by your rendering plugin): A vector of vectors holding the
+  "Form option. OPTIONAL (may not be supported by your rendering plugin): A vector of vectors holding the
   *qualified keys* of the editable attributes.
 
    This is intended to represent the *desired* layout of the fields on this form. The inner vectors loosely
@@ -42,7 +42,7 @@
   :com.fulcrologic.rad.form/layout)
 
 (def tabbed-layout
-  "OPTIONAL, may not be supported by your rendering plugin.
+  "Form option. OPTIONAL, may not be supported by your rendering plugin.
 
   A description of a layout that will place fields in tabs to reduce visual clutter. The layout
   specification is:
@@ -64,11 +64,11 @@
   :com.fulcrologic.rad.form/tabbed-layout)
 
 (def title
-  "OPTIONAL: The title for the form. Can be a string or a `(fn [form-instance form-props])`."
+  "Form option. OPTIONAL: The title for the form. Can be a string or a `(fn [form-instance form-props])`."
   :com.fulcrologic.rad.form/title)
 
 (def field-visible?
-  "ATTRIBUTES KEY. OPTIONAL.
+  "Attribute option. OPTIONAL.
 
    A boolean or `(fn [form-instance attr] boolean?)`. `attr` will be the full attribute that this option is attached to.
 
@@ -77,12 +77,12 @@
   :com.fulcrologic.rad.form/field-visible?)
 
 (def fields-visible?
-  "OPTIONAL: A map from *qualified keyword* to a boolean or a `(fn [this])`. Makes fields statically or dynamically
+  "Form option. OPTIONAL: A map from *qualified keyword* to a boolean or a `(fn [this])`. Makes fields statically or dynamically
    visible on the form. May be given a default on the attribute definition using `::form/field-visible?`"
   :com.fulcrologic.rad.form/fields-visible?)
 
 (def field-style
-  "ATTRIBUTE KEY. OPTIONAL: A *keyword* (or `(fn [form-instance] kw)`)
+  "Attribute option. OPTIONAL: A *keyword* (or `(fn [form-instance] kw)`)
    that changes the style of the control that is rendered for the given field. If not found, the renderer will
    revert to `:default`. If the attribute has a `::attr/style` then that will be attempted as a backup to this
    option.
@@ -91,7 +91,7 @@
   :com.fulcrologic.rad.form/field-style)
 
 (def field-styles
-  "OPTIONAL: A map from *qualified keyword* of the attribute to the *style* (a keyword) desired for the renderer of that
+  "Form option. OPTIONAL: A map from *qualified keyword* of the attribute to the *style* (a keyword) desired for the renderer of that
   attribute (a keyword defined by your rendering plugin).
 
   The values in this map can be `(fn [form-instance] keyword)`.
@@ -106,7 +106,7 @@
   :com.fulcrologic.rad.form/field-styles)
 
 (def field-options
-  "OPTIONAL: Options related to behavior of a field when it appears on a form.
+  "Form OR Attribute option. OPTIONAL: Options related to behavior of a field when it appears on a form.
 
   When used on a form: A map from *qualified keyword* of attributes to a map of options targeted to the specific UI control for that
   field. The content of the map will be defined by the control in question.
@@ -121,23 +121,23 @@
   :com.fulcrologic.rad.form/field-options)
 
 (def field-labels
-  "OPTIONAL: A map from *qualified keyword* to a string label for that field, or a `(fn [this] string?)` that can
+  "Form option. OPTIONAL: A map from *qualified keyword* to a string label for that field, or a `(fn [this] string?)` that can
   generate the label. Can be overridden by ::form/field-label on the attribute."
   :com.fulcrologic.rad.form/field-labels)
 
 (def validator
-  "OPTIONAL: A Fulcro `form-state` validator (see `make-validator`). Will be used to validate all fields on this
+  "Form option. OPTIONAL: A Fulcro `form-state` validator (see `make-validator`). Will be used to validate all fields on this
   form. Subforms may define a validator, but the master form's validator takes precedence."
   :com.fulcrologic.rad.form/validator)
 
 (def route-prefix
-  "OPTIONAL: A string. The string to use as this form's route prefix. If you do not provide this key then the router
+  "Form options. OPTIONAL: A string. The string to use as this form's route prefix. If you do not provide this key then the router
    will primarily be usable as a subform, since it will not support routing.
    "
   :com.fulcrologic.rad.form/route-prefix)
 
 (def cancel-route
-  "OPTIONAL: A vector of strings, a route target class (recommended), a map with :route/:target and :params keys,
+  "Form option. OPTIONAL: A vector of strings, a route target class (recommended), a map with :route/:target and :params keys,
    or `:back` (default).
 
    The route to go to on cancel.
@@ -155,16 +155,19 @@
 (def controls
   "ALIAS to com.fulcrologic.rad.control/controls, which is a map from a made-up control key to a control definition
   (e.g. a button). See the control ns. Forms have a standard map of controls, and if you set this you should
-  merge `form/standard-controls` with your new controls, unless you want to completely redefined the controls."
+  merge `form/standard-controls` with your new controls, unless you want to completely redefined the controls.
+
+  Controls can be rendered in the action buttons (see fo/action-buttons) OR their keys can be included in the layout
+  of the form itself to put arbitrary non-field controls anywhere on the form."
   :com.fulcrologic.rad.control/controls)
 
 (def action-buttons
-  "A vector of action button keys (see controls). Specifies the layout order of action buttons in the form header.
+  "Form option. A vector of action button keys (see controls). Specifies the layout order of action buttons in the form header.
    Forms have a built-in standard set of buttons, so if you modify them you should also specify this option."
   :com.fulcrologic.rad.form/action-buttons)
 
 (def query-inclusion
-  "A vector of EQL that will be appended to the component's query. Usually used to add `:ui/???` props for use with
+  "Form option. A vector of EQL that will be appended to the component's query. Usually used to add `:ui/???` props for use with
    hand-rendered UI. See `initialize-ui-props`.
 
    NOTES:
@@ -177,18 +180,18 @@
   :com.fulcrologic.rad.form/query-inclusion)
 
 (def default-value
-  "ATTRIBUTE KEY. The default value for this attribute when created in a new
+  "Attribute option. The default value for this attribute when created in a new
   form. Can be a literal value or a `(fn [] value)`. Placed on an attribute to specify a default value."
   :com.fulcrologic.rad.form/default-value)
 
 (def default-values
-  "A map from qualified key to a value, or a `(fn [] {k v})`.
+  "Form option. A map from qualified key to a value, or a `(fn [] {k v})`.
 
    Overrides the ::form/default-value that can be placed on an attrubute."
   :com.fulcrologic.rad.form/default-values)
 
 (def subforms
-  "FORM option. A map from qualified key to a sub-map that describes details for what to use when a form attribute is a ref.
+  "Form option. A map from qualified key to a sub-map that describes details for what to use when a form attribute is a ref.
 
    The value of this option can be a map from keyword to submap, where the submap can instead be a
    `(fn [form-component-options ref-attr] optionsmap)`.
@@ -238,20 +241,20 @@
    ")
 
 (def layout-styles
-  "A map whose keys name a container element and whose value indicates a desired style.
+  "Form option. A map whose keys name a container element and whose value indicates a desired style.
 
    Render plugins (and your own customizations) can customize the elements and styles available, so
    see your rendering plugin for details."
   :com.fulcrologic.rad.form/layout-styles)
 
 (def validation-messages
-  "A map whose keys are qualified-keys, and whose values are strings or `(fn [props qualified-key] string?)` to generate
+  "Form option. A map whose keys are qualified-keys, and whose values are strings or `(fn [props qualified-key] string?)` to generate
   the validation message.  A default value for these can be given by putting ::form/validation-message
   on the attribute itself, which has a different signature."
   :com.fulcrologic.rad.form/validation-messages)
 
 (def validation-message
-  "ATTRIBUTE KEY. Specify a default validation message for an attribute.
+  "Attribute option. Specify a default validation message for an attribute.
   Can either be a string or a `(fn [value] string?)`."
   :com.fulcrologic.rad.form/validation-message)
 
@@ -287,7 +290,7 @@
   :com.fulcrologic.rad.form/enumerated-labels)
 
 (def field-label
-  "ATTRIBUTE OPTION. String or `(fn [form-instance] string-or-element)`. Rendering plugins may require a string return
+  "Attribute option. String or `(fn [form-instance] string-or-element)`. Rendering plugins may require a string return
   value.
 
   Placing this on an attribute indicates a default for the label for the attribute on forms. The default is a
@@ -302,7 +305,7 @@
   :com.fulcrologic.rad.form/ui)
 
 (def field-style-config
-  "ATTRIBUTE OPTION: A map of options that are used by the rendering plugin to augment the style of a rendered input.
+  "Attribute option: A map of options that are used by the rendering plugin to augment the style of a rendered input.
   Such configuration options are really up to the render plugin, but could include things like `:input/props` as
   additional DOM k/v pairs to put on the input."
   :com.fulcrologic.rad.attributes/field-style-config)
@@ -401,7 +404,7 @@
   :com.fulcrologic.rad.form/silent-abandon?)
 
 (def add-label
-  "SUBFORM option (placed on any form that might be used as a subform). A string or
+  "Subform option (placed on any form that might be used as a subform). A string or
    `(fn [ui-cls add-child!] string-or-dom-element)` that represents the label to use when an add button is generated
    for to-one or to-many relations of that form.
 

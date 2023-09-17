@@ -1,5 +1,5 @@
 (ns com.fulcrologic.rad.form-render
-  "An extensible form rendering system that uses styles to allow you to render forms that conform to patterns.
+  "An extensible form rendering system that uses styles to allow you to generate rendering for forms that conform to patterns.
 
    See Form Rendering in the RAD book.
 
@@ -11,6 +11,23 @@
    * ::form/form-instance - Equivalent to this form
    * ::form/parent - when in a subform, this is the immediate parent
    * ::form/parent-relation - when in a subform, this is the ref key that was followed to get there.
+
+   The primary idea is that the `render-form` multimethod is called by RAD's generated forms, and the default for
+   that does whatever the current rendering plugin has configured.
+
+   By placing an `fro/style` on a form, you can cause a dispatch to your own `defmethod` to do that rendering. Several
+   other multimethods (render-fields, render-field, render-header, and render-footer) are defined as well, though
+   have no defaults other than `render-field` (whose default calls through to the underlying UI plugin).
+
+   All of these multimethods use vectors for dispatch, and a custom hierarchy that this sets things up to allow for
+   polymorphism among the rendering methods.
+
+   This ns has some methods for working with that hierarchy:
+
+   * `derive!` - Add a parent/child relationship between keywords
+   * `allow-defaults!` - Pre-calls `derive!` on every qualified keyword in the given RAD model so that :default
+     behaves as the parent of them.
+   * `is-a?` - Just like clojure.core/isa?, but works on the render hierarchy
   "
   (:refer-clojure :exclude [isa?])
   (:require
