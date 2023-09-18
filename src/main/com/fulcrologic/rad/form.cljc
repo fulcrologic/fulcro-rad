@@ -1547,17 +1547,33 @@
   ([this form-class entity-id extra-params]
    (rad-routing/route-to! this form-class (merge extra-params
                                             {:action view-action
-                                             :id     entity-id}))))
+                                             :id     entity-id})))
+  ([this form-class entity-id extra-params dynamic-routing-options]
+   (rad-routing/route-to! this (merge
+                                 dynamic-routing-options
+                                 {:target       form-class
+                                  :route-params (merge extra-params
+                                                  {:action view-action
+                                                   :id     entity-id})}))))
 
 (defn edit!
-  "Route to the given form for editing the entity with the given ID."
+  "Route to the given form for editing the entity with the given ID.
+
+   `dynamic-routing-options` - can be used for dr/route-to! dynamic route injection support (:target will be auto-filled)."
   ([this form-class entity-id]
    (rad-routing/route-to! this form-class {:action edit-action
                                            :id     entity-id}))
   ([this form-class entity-id extra-params]
    (rad-routing/route-to! this form-class (merge extra-params
                                             {:action edit-action
-                                             :id     entity-id}))))
+                                             :id     entity-id})))
+  ([this form-class entity-id extra-params dynamic-routing-options]
+   (rad-routing/route-to! this (merge
+                                 dynamic-routing-options
+                                 {:target       form-class
+                                  :route-params (merge extra-params
+                                                  {:action edit-action
+                                                   :id     entity-id})}))))
 
 (defn create!
   "Create a new instance of the given form-class using the provided `entity-id` and then route
@@ -1571,6 +1587,9 @@
 
    * `:initial-state` - A tree of data to be deep-merged into the new instance of the form before form config
    is added. This can be used to pre-set form fields to specific values.
+
+   `dynamic-routing-options` - Same as the options supported by `dr/route-to!` for route injection/loading (target will
+   be auto-populated by form-class, which can be a sym/keyword).
    "
   ([app-ish form-class]
    ;; This function uses UUIDs for all ID types, since they will end up being tempids
@@ -1580,7 +1599,15 @@
   ([app-ish form-class options]
    (rad-routing/route-to! app-ish form-class (merge options
                                                {:action create-action
-                                                :id     (str (new-uuid))}))))
+                                                :id     (str (new-uuid))})))
+  ([app-ish form-class options dynamic-routing-options]
+   (rad-routing/route-to! app-ish (merge
+                                    dynamic-routing-options
+                                    {:target       form-class
+                                     :route-params (merge
+                                                     options
+                                                     {:action create-action
+                                                      :id     (str (new-uuid))})}))))
 
 (def pathom2-server-delete-entity-mutation
   {:com.wsscode.pathom.connect/sym    `delete-entity

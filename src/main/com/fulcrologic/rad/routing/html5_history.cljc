@@ -4,6 +4,7 @@
    and will merge the current URL's query parameters with returned route params."
   (:require
     #?(:cljs [goog.object :as gobj])
+    [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.core :refer [>defn >defn- => ?]]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.rad.routing :as routing]
@@ -204,7 +205,8 @@
   [app {:keys [route params] :as saved-route}]
   (if-let [target (dr/resolve-target app route)]
     (let [app-root        (app/root-class app)
-          raw-path        (dr/resolve-path app-root target params)
+          raw-path        (binding [rc/*query-state* (app/current-state app)]
+                            (dr/resolve-path app-root target params))
           embedded-params (reduce
                             (fn [m [raw resolved]]
                               (if (keyword? raw)
