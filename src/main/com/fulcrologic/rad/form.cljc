@@ -1994,7 +1994,7 @@
          get-class       (fn [] @component-class)
          options         (assoc (convert-options get-class {:registry-key registry-key} options) :render render)
          constructor     (comp/react-constructor (get options :initLocalState))
-         result          (com.fulcrologic.fulcro.components/configure-component! constructor registry-key options)]
+         result          (comp/configure-component! constructor registry-key options)]
      (vreset! component-class result))))
 
 (defn undo-via-load!
