@@ -68,10 +68,11 @@
 (>defn- route->url
   "Construct URL from route and params"
   [route params hash-based?]
-  [coll? map? boolean? => string?]
-  (if hash-based?
-    (str (query-string params) "#/" (str/join "/" (map str route)))
-    (str "/" (str/join "/" (map str route)) (query-string params))))
+  [coll? (? map?) boolean? => string?]
+  (let [q (query-string (or params {}))]
+    (if hash-based?
+      (str q "#/" (str/join "/" (map str route)))
+      (str "/" (str/join "/" (map str route)) q))))
 
 (defn url->route
   "Convert the current browser URL into a route path and parameter map. Returns:
@@ -224,7 +225,8 @@
 (defn restore-route!
   "Attempt to restore the route given in the URL. If that fails, simply route to the default given (a class and map).
 
-   WARNING: This should not be called until the HTML5 history is installed in your app."
+   WARNING: This should not be called until the HTML5 history is installed in your app, and any module that might be
+   needed is loaded."
   [app default-page default-params]
   (let [this      (history/active-history app)
         url-route (history/-current-route this)]
