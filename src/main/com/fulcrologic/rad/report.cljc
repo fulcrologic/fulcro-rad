@@ -22,6 +22,7 @@
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
     [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
@@ -643,73 +644,6 @@
 
 #?(:clj (s/fdef defsc-report :args ::comp/args))
 
-(defn generated-row-class [parent-registry-key report-options]
-  (let [{::keys [columns row-pk form-links row-query-inclusion denormalize? row-actions] :as options} report-options
-        body-registry-key (keyword (namespace parent-registry-key) (str (name parent-registry-key) "-Row"))
-        normalize?        (not denormalize?)
-        row-query         (fn [_]
-                            (let [forms    (::form-links options)
-                                  id-attrs (keep #(comp/component-options % ::form/id) (vals forms))]
-                              (vec
-                                (into (set row-query-inclusion)
-                                  (map
-                                    (fn [attr] (or (::column-EQL attr) (::attr/qualified-key attr)))
-                                    (conj (set (concat id-attrs columns)) row-pk))))))
-        row-actions       (or row-actions [])
-        row-ident         (fn [this props] (let [k (::attr/qualified-key row-pk)] [k (get props k)]))
-        row-item-options  (cond-> {:query        row-query
-                                   ::row-actions row-actions
-                                   ::columns     columns}
-                            normalize? (assoc :ident row-ident)
-                            form-links (assoc ::form-links form-links))
-        body-render-fn    (fn [this props]
-                            (render-row this (comp/registry-key->class body-registry-key) props))]
-    (comp/sc body-registry-key row-item-options body-render-fn)))
-
-(defn sc-report
-  "A function that will dynamically create a report class and optionally register it with Fulcro."
-  ([registry-key report-options]
-   (sc-report registry-key report-options nil))
-  ([registry-key report-options render-fn]
-   (let [{::control/keys [controls]
-          ::keys         [BodyItem query-inclusions route] :as options} report-options
-         ItemClass     (if BodyItem BodyItem (generated-row-class registry-key options))
-         query         (fn [_]
-                         (into [::id
-                                :ui/parameters
-                                :ui/cache
-                                :ui/busy?
-                                :ui/page-count
-                                :ui/current-page
-                                [::uism/asm-id [::id registry-key]]
-                                [::picker-options/options-cache '_]
-                                {:ui/controls (comp/get-query Control)}
-                                {:ui/current-rows (comp/get-query ItemClass)}
-                                [df/marker-table '_]]
-                           query-inclusions))
-         options       (merge
-                         {::compare-rows default-compare-rows
-                          :will-enter    (fn [app route-params] (report-will-enter app route-params (comp/registry-key->class registry-key)))}
-                         options
-                         {:route-segment (if (vector? route) route [route])
-                          ::BodyItem     ItemClass
-                          :query         query
-                          :initial-state (fn [params]
-                                           (cond-> {:ui/parameters   {}
-                                                    :ui/cache        {}
-                                                    :ui/controls     (mapv #(select-keys % #{::control/id})
-                                                                       (remove :local? (control/control-map->controls controls)))
-                                                    :ui/busy?        false
-                                                    :ui/current-page 1
-                                                    :ui/page-count   1
-                                                    :ui/current-rows []}
-                                             (contains? params ::id) (assoc ::id (::id params))))
-                          :ident         (fn [_ _] [::id registry-key])})
-         render-report (if render-fn
-                         render-fn
-                         (fn [this props] (render-layout this)))]
-     (comp/sc registry-key options render-report))))
-
 (def ^:deprecated reload!
   "Alias to `control/run!`. Runs the report."
   control/run!)
@@ -952,29 +886,27 @@
   [registry-key options]
   (let [{::keys [columns row-pk form-links initLocalState
                  row-query-inclusion denormalize? row-actions]} options
-        normalize?      (not denormalize?)
-        row-query       (let [id-attrs (keep #(comp/component-options % ::form/id) (vals form-links))]
-                          (vec
-                            (into (set row-query-inclusion)
-                              (map (fn [attr] (or
-                                                (::column-EQL attr)
-                                                (::attr/qualified-key attr))) (conj (set (concat id-attrs columns)) row-pk)))))
-        row-constructor (comp/react-constructor initLocalState)
-        row-key         (::attr/qualified-key row-pk)
-        row-ident       (fn [this props] [row-key (get props row-key)])
-        row-actions     (or row-actions [])
-        row-render      (fn [this]
-                          (comp/wrapped-render this
-                            (fn []
-                              (let [props (comp/props this)]
-                                (render-row (:report-instance (comp/get-computed this)) row-constructor props)))))
-        body-options    (cond-> {:query        (fn [this] row-query)
-                                 :render       row-render
-                                 ::row-actions row-actions
-                                 ::columns     columns}
-                          normalize? (assoc :ident row-ident)
-                          form-links (assoc ::form-links form-links))]
-    (comp/configure-component! row-constructor registry-key body-options)))
+        normalize?   (not denormalize?)
+        row-query    (let [id-attrs (keep #(comp/component-options % ::form/id) (vals form-links))]
+                       (vec
+                         (into (set row-query-inclusion)
+                           (map (fn [attr] (or
+                                             (::column-EQL attr)
+                                             (::attr/qualified-key attr))) (conj (set (concat id-attrs columns)) row-pk)))))
+        row-key      (::attr/qualified-key row-pk)
+        row-ident    (fn [this props] [row-key (get props row-key)])
+        row-actions  (or row-actions [])
+        row-render   (fn [this]
+                       (comp/wrapped-render this
+                         (fn []
+                           (let [props (comp/props this)]
+                             (render-row this (rc/registry-key->class registry-key) props)))))
+        body-options (cond-> {:query        (fn [this] row-query)
+                              ::row-actions row-actions
+                              ::columns     columns}
+                       normalize? (assoc :ident row-ident)
+                       form-links (assoc ::form-links form-links))]
+    (comp/sc registry-key body-options row-render)))
 
 (defn report
   "Create a RAD report component. `options` is the map of report/Fulcro options. The `registry-key` is the globally
@@ -995,21 +927,23 @@
          constructor       (comp/react-constructor (:initLocalState options))
          get-class         (fn [] constructor)
          ItemClass         (or BodyItem (genrow generated-row-key options))
-         query             (fn [_]
-                             (into [::id
-                                    :ui/parameters
-                                    :ui/cache
-                                    :ui/busy?
-                                    :ui/page-count
-                                    :ui/current-page
-                                    [::picker-options/options-cache '_]
-                                    {:ui/controls (comp/get-query Control)}
-                                    {:ui/current-rows (comp/get-query ItemClass)}
-                                    [df/marker-table '_]]
-                               query-inclusions))
-         render            (fn [this] (comp/wrapped-render this (fn []
-                                                                  (let [props (comp/props this)]
-                                                                    (render this props)))))
+         query             (into [::id
+                                  :ui/parameters
+                                  :ui/cache
+                                  :ui/busy?
+                                  :ui/page-count
+                                  :ui/current-page
+                                  [::uism/asm-id [::id registry-key]]
+                                  [::picker-options/options-cache '_]
+                                  {:ui/controls (comp/get-query Control)}
+                                  {:ui/current-rows (comp/get-query ItemClass)}
+                                  [df/marker-table '_]]
+                             query-inclusions)
+         render            (fn [this]
+                             (comp/wrapped-render this
+                               (fn []
+                                 (let [props (comp/props this)]
+                                   (render this props)))))
          options           (merge
                              {::compare-rows default-compare-rows
                               :will-enter    (fn [app route-params] (report-will-enter app route-params (get-class)))}
@@ -1017,7 +951,7 @@
                              {:route-segment (if (vector? route) route [route])
                               :render        render
                               ::BodyItem     ItemClass
-                              :query         query
+                              :query         (fn [] query)
                               :initial-state (fn [params]
                                                (cond-> {:ui/parameters   {}
                                                         :ui/cache        {}
@@ -1029,7 +963,10 @@
                                                         :ui/current-rows []}
                                                  (contains? params ::id) (assoc ::id (::id params))))
                               :ident         (fn [this props] [::id (or (::id props) registry-key)])})]
-     (comp/configure-component! constructor registry-key options))))
+     (comp/sc registry-key options render))))
+
+(def ^:deprecated generated-row-class "Accidental duplication. Use genrow instead" genrow)
+(def ^:deprecated sc-report "Accidental duplication. Use `report` instead." report)
 
 (defn clear-report*
   "Mutation helper. Clear a report out of app state. The report should not be visible when you do this."
