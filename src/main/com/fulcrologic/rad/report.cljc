@@ -925,7 +925,8 @@
          {::control/keys [controls]
           ::keys         [BodyItem query-inclusions route]} options
          constructor       (comp/react-constructor (:initLocalState options))
-         get-class         (fn [] constructor)
+         generated-class   (volatile! nil)
+         get-class         (fn [] @generated-class)
          ItemClass         (or BodyItem (genrow generated-row-key options))
          query             (into [::id
                                   :ui/parameters
@@ -962,8 +963,11 @@
                                                         :ui/page-count   1
                                                         :ui/current-rows []}
                                                  (contains? params ::id) (assoc ::id (::id params))))
-                              :ident         (fn [this props] [::id (or (::id props) registry-key)])})]
-     (comp/sc registry-key options render))))
+                              :ident         (fn [this props] [::id (or (::id props) registry-key)])})
+         cls               (comp/sc registry-key options render)]
+     (vreset! generated-class cls)
+     cls)
+   ))
 
 (def ^:deprecated generated-row-class "Accidental duplication. Use genrow instead" genrow)
 (def ^:deprecated sc-report "Accidental duplication. Use `report` instead." report)
