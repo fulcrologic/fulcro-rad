@@ -2292,16 +2292,37 @@ Many of the helper functions in the RAD `form` namespace will accept this as a p
 
 === Form Rendering via Multimethods (RAD V1.6+, 1.6.0-SNAPSHOT ALPHA SUBJECT TO CHANGE) [[MultimethodRender]]
 
-This section of the manual will refer to two new namespaces:
+The rendering system in RAD prefers to use maps to define plugins in order to avoid the use of multimethods. This choice
+was made for several reasons:
+
+* Multimethods have to be `required` to work, and once required cannot be dead code eliminated. If you're not using
+some subset of controls when using plain maps, you can remove them from the maps and they will dead code eliminate.
+* Multimethods in stack traces are harder to follow, so debugging them can be a hassle.
+* Hard to figure out which `defmethod` is being called for a particular bit of output.
+
+However, after experiencing the map-based mechanism, it suffers from similar issues:
+
+* Still hard to trace the rendering to figure out what is generating output.
+* Dead code elimination tuning is probably not going to save you much, given that these renderers are few in number
+* It's actually kind of hard to plug in anything except a new field/formatter. Revamping some subset of the UI isn't very
+fun.
+
+So, in 1.6.0 it was decided that adding multimethods to the system would give extra flexibility and utility, and if the
+defaults just called the existing plugins, would neither break anything or really even add overhead if you don't want to
+use them.
+
+The result was generally positive: It is much easier to use the multimethods to customize how things render, and the
+use of a predefined hierarchy (for multimethods) means you can add additional multimethods to customize how rendering
+should work in general. The new support defines a number of multimethods, but you can actually choose not to use
+some of them at all.
+
+This section of the manual will refer to the new namespaces:
 
 [source]
 -----
   [com.fulcrologic.rad.form-render :as fr]
   [com.fulcrologic.rad.form-render-options :as fro]
 -----
-
-RAD version 1.6 revamped the internals of how rendering works.
-It is still backwards compatible with the old plugin architecture, but the new structure is a more flexible, and makes it easier to reuse custom rendering.
 
 The RAD form namespace has the following primary entry points:
 
@@ -2313,19 +2334,18 @@ The default implementation of this will do a legacy search of the control map in
 `com.fulcrologic.rad.form-render/render-field`, whose `:default` dispatch does the old behavior.
 You can redefine that dispatch to change the default.
 
-Technically, redefining the default dispatch (via defmethod) for those two will let you completely override how forms are rendered.
-
-That said, the `form-render` namespace has some additional features that you may want to leverage (or at least use for ideas).
+Technically, redefining the default dispatch (via defmethod) for those two will let you completely override how
+forms are rendered (just make sure you do that after you require the form ns).
 
 ==== Dispatch Hierarchy
 
-The multimethods in form-render all use the `form-render/render-hierarchy` (See Clojure Multimethods) and most of them dispatch on a vector (e.g. [type style] or [attribute-keyword style]).
-You can use the hierarchy to set up fall-through.
-The `form-render/derive!` function is a CLJC function that does the correct call to `clojure.core/derive` on the custom hierarchy.
-Unfortunately hierarchies differ slightly in CLJ vs CLJS.
-In CLJ the render-hierarchy is a plain var, but in CLJS it is an atom so that the hierarchy can be modified at runtime.
-This makes the usage of `derive`
-and `isa?` a little confusing so the form-render ns includes a CLJC version called `derive!` and and `isa?` that will work without having to think about it.
+The multimethods in form-render all use the `form-render/render-hierarchy` (See Clojure Multimethods) and most of them
+dispatch on a vector (e.g. [type style] or [attribute-keyword style]). You can use the hierarchy to set up fall-through.
+
+Unfortunately hierarchies differ slightly in CLJ vs CLJS. In CLJ the render-hierarchy is a plain var, but in CLJS
+it is an atom so that the hierarchy can be modified at runtime. This makes the usage of `derive`
+and `isa?` a little confusing so the form-render ns includes a CLJC version called `derive!` and and `isa?` that will
+work without having to think about it.
 
 For example, say you want to use the same rendering code to render all kinds of numeric fields.
 The supplied `fr/render-field` dispatches on `[data-type style]` (where style is from form field-styles, attribute field-style, or attribute style).
@@ -2346,9 +2366,9 @@ You could indicate the relation of the numeric data types, and define two styles
   (dom/div ...))
 -----
 
-Another example is for relating types.
-Perhaps you have two different kinds of entities (let's say entities identified by :car/id and :vehicle/id) in your database that are very closely related and you can see how one render function could be used for rendering both kinds of forms.
-The `fr/render-form` method dispatches on id-keyword and style.
+Another example is for relating types. Perhaps you have two different kinds of entities (let's say entities identified
+by :car/id and :vehicle/id) in your database that are very closely related and you can see how one render function
+could be used for rendering both kinds of forms. The `fr/render-form` method dispatches on id-keyword and style.
 So, you could use derive to indicate this fall-through:
 
 [source]
@@ -2361,7 +2381,8 @@ So, you could use derive to indicate this fall-through:
   (dom/div ...))
 -----
 
-If you'd like the system to start out considering `:default` to be the parent of all attribute keywords (so you can dispatch just on style when the attribute key is part of the dispatch), then you can call the helper:
+If you'd like the system to start out considering `:default` to be the parent of all attribute keywords (so that
+the vector dispatch supports :default within the vector), then you can call the helper:
 
 [source]
 -----
@@ -2376,23 +2397,44 @@ If you'd like the system to start out considering `:default` to be the parent of
 ==== Predefined Methods
 
 * `(render-form renv id-attribute)` - Intended to encapsualte the rendering of the entire form.
-Usually would call the other multimethods like `render-header` and `render-fields`.
-Dispatches on `[id-keyword style]`, where the style is taken from the fro/style option on the form, or the fro/style option on the id-attribute.
-* `(render-header renv attr)` - Intended to render headers for things.
-Your composition of this into your other calls will determine how it is used.
-Dispatches on `[attr-keyword style]` where style is `fro/header-style (on the attribute. ID attribute is used for top-level forms)
-* `(render-footer renv attr)` - Intended to render footers for things.
-Your composition of this into your other calls will determine how it is used.
-Dispatches on `[attr-keyword style]` where style is `fro/footer-style (on the attribute.
-ID attribute is used for top-level forms)
-* `(render-fields renv id-attr)` - Intended to act as the field layout "hook".
-Only used if your definition of other methods calls it.
-Dispatches the same as form.
-* `(render-field renv attr)` - Renders a usable form field.
-Dispatches on `[type style]`.
+Usually the definition of this would call the other multimethods like `render-header` and `render-fields`, but that
+is completely up to you. The global default calls the map-based default for the UI plugin.
+* `(render-header renv attr)` - Intended to render headers for things. This exists for your (optional) convenience, and
+your composition of this into your other calls will determine how it is used.
+* `(render-footer renv attr)` - Intended to render footers for things. Comments about this are the same as for header.
+* `(render-fields renv id-attr)` - Intended to act as the field layout. Optional and for your convenience.
+* `(render-field renv attr)` - Renders a usable form field. Dispatches on `[type style]`. The default falls back to the
+UI plugin map.
 
-IMPORTANT: ONLY `render-form` and `render-field` are used by default in order to maintain bw compatibility with the older way of building a rendering plugin.
+IMPORTANT: ONLY `render-form` and `render-field` are used by default in order to maintain
+bw compatibility with the older way of building a rendering plugin.
 The other methods are defined to establish possible useful patterns.
+
+NOTE: If you enable dev-time source line attribution in the compiler options you can at least see where a DOM element came from
+in the source. See the https://book.fulcrologic.com/#_shadow_cljs_build_tool_configuration[Fulcro Developer's Guide].
+
+===== Dispatch for `render-form`, `render-fields`, `render-header` and `render-footer`.
+
+The dispatch uses a vector of `[qualified-keyword style]`, where the `style` is derived as follows (the first
+matching rule wins) (for style option: headers use `fro/header-style`, footers use `fro/footer-style`, and fields use `fro/style`).:
+
+* Subform options on parent form: If the form is being used as a subform AND the subform options for that
+  reference (which can be declared on a reference attribute via `fo/subform` or parent form via `fo/subforms`)
+  specifies the style option.
+* Form: If the form *itself* has the style option.
+* Attribute: If the attribute has the style option.
+* Otherwise `:default` is used (resulting in [keyword :default]).
+
+Note that the attribute in question will be the entity ID attribute. In the case of render-header/footer/fields you
+write the calling code and can choose the attribute to pass in.
+
+===== Dispatch for `render-field`
+
+Field dispatch returns a `[data-type style]`. The data type is take from the attribute via `ao/type`. The style is:
+
+* The value for the qualified-keyword in the form's `fo/field-styles`
+* The value of `fo/field-style` on the attribute
+* The value of `ao/style` on the attribute
 
 ==== Example Setup
 
