@@ -4,7 +4,7 @@ This file is often not updated.
 1.6.0
 -----
 - Support for Fulcro's new Dynamic Routing improvements (routing/route-to!) 
-- New multimethod basis for rendering (bw compatible with plugin rendering via maps)
+- New multimethod basis for rendering (bw compatible with plugin rendering via maps). See Developer's Guide.
 - Improved support for dynamically generating artifacts (reports/forms) at runtime.
 - Expanded options available in fn version of many options
 - Allow picker options on attribute model

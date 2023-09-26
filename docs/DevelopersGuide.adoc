@@ -2493,19 +2493,25 @@ Dispatches on `[field-data-type style]` where style is derived as follows:
 
 ==== Example Setup
 
-Let's say you want to use the semantic UI rendering plugin to get the table support and predefined field renderers, but you want to also better leverage the new multimethods.
-The forms will already have set up a default render-field that uses the SUI controls, so there is nothing to do there; however, the render-form defaults to calling into the old plugin.
+Let's say you want to use the semantic UI rendering plugin to get the table support and predefined field renderers,
+but you want to also better leverage the new multimethods. The forms will already have set up a default
+render-field that uses the SUI controls, so there is nothing to do there; however, the render-form defaults
+to calling into the old plugin.
 
 Let's also assume you have Tailwind CSS (e.g. class "mt-12").
 
-So, the first thing you need to do is redefine how to render a form in general:
+The first thing is to make a function that can install the support under a well-known style key so
+we can opt into the new rendering (and let the SUI plugin take care of pre-existing code):
 
 [source]
 -----
-(ns my.app.custom-rendering
+(ns com.example.ui.form-rendering
   (:require
-    [com.fulcrologic.fulcro.dom :as dom :refer [div label]]
+    #?(:cljs [com.fulcrologic.fulcro.dom :as dom :refer [div]]
+       :clj  [com.fulcrologic.fulcro.dom-server :as dom :refer [div]])
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.dom.html-entities :as ent]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.control :as control]
@@ -2514,168 +2520,212 @@ So, the first thing you need to do is redefine how to render a form in general:
     [com.fulcrologic.rad.form-render :as fr]
     [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.rendering.semantic-ui.form :as rsf]
-    [taoensso.encore :as enc]
+    [com.fulcrologic.rad.semantic-ui-options :as suo]
     [taoensso.timbre :as log]))
 
-(defmethod fr/render-form :default [{::form/keys [master-form form-instance] :as renv} id-attr]
-  (let [top? (= master-form form-instance)]
-    (dom/div :.mt-12 {:classes [(if top? "ui container form" "")]}
-      (fr/render-header renv id-attr)
-      (fr/render-fields renv id-attr)
-      (fr/render-footer renv id-attr))))
+(defn install!
+  "Install multimethod rendering such that:
+
+   * All keywords in the RAD model will derive from :default.
+   * A form can use `fro/style :multimethod` to switch from the built-in plugin rendering to multimethod rendering.
+  "
+  [app attrs]
+  (fr/allow-defaults! attrs)
+  (fr/install-as! app :multimethod))
 -----
 
-NOTE: If you want to OPT-IN to this, then just make a new style for render-form and do NOT override the default.
-E.g. call `allow-defaults! and then `(defmethod fr/render-form [:default :new] ...)` and put
-`fro/style :new` on any form that should use the new rendering.
+Calling `install!` on startup will make it so that any forms that set `fro/style :multimethod` will use the new
+rendering.
 
-The `render-header` and `render-footer` methods are not called by default, and have no implementation, so you should at least give them defaults:
+Next, we should set up some defaults so that selecting multimethod as the style does something. We'll leverage the
+plugin to provide those defaults, but split them out so we can customize them. Note that we have to supply a default
+for rendering `:ref` fields because once we're using the multimethods there is no special handling of refs like there
+is in the standard SUI plugin, but we can dispatch to the code that is in the plugin.
 
 [source]
 -----
-(defmethod fr/render-header :default [{::form/keys [master-form form-instance]} attr]
-  (let [k (ao/qualified-key attr)]
-    (cond
-      (ao/identity? attr)
-      #_=> (let [props          (comp/props form-instance)
-                 {::form/keys [title action-buttons]} (comp/component-options form-instance)
-                 action-buttons (if action-buttons action-buttons form/standard-action-buttons)
-                 title          (?! title form-instance props)]
-             (div :.ui.top.attached.segment
-               (div {:style {:display        "flex"
-                             :justifyContent "space-between"
-                             :flexWrap       "wrap"}}
-                 (dom/h3 :.ui.header {:style {:wordWrap "break-word" :maxWidth "100%"}} title)
-                 (div :.ui.buttons {:style {:textAlign "right" :display "inline" :flexGrow "1"}}
-                   (keep #(control/render-control master-form %) action-buttons)))))
-      (= :many (ao/cardinality attr))
-      #_=> (let [Form    (-> form-instance (comp/component-options) fo/subforms k fo/ui)
-                 options (some-> Form (comp/component-options))
-                 props   (get (comp/props form-instance) k)
-                 title   (?! (fo/title options) form-instance props)]
-             (dom/h4 :.ui.header (or title ""))))))
+;; Default to render forms that choose fro/style :multimethod
+(defmethod fr/render-form [:default :multimethod] [{::form/keys [form-instance parent parent-relation master-form] :as renv} id-attr]
+  (dom/div :.ui.container.form {:key (str (comp/get-ident form-instance))}
+    (fr/render-header renv id-attr)
+    (fr/render-fields renv id-attr)
+    (fr/render-footer renv id-attr)))
 
+;; Need this so that the plugin's default way of rendering refs is used when rendering with multimethods
+(defmethod fr/render-field [:ref :default] [{::form/keys [form-instance] :as renv} field-attr]
+  (rsf/standard-ref-container renv field-attr (comp/component-options form-instance)))
+
+;; Use SUI's layout code for rendering fields by default
+(defmethod fr/render-fields :default [{::form/keys [form-instance] :as renv} attr]
+  (rsf/standard-form-layout-renderer renv))
+
+;; This gives us the standard headings for forms and to-many. Renders controls on top-level forms,
+;; and renders optional delete button on deleteable nested forms.
+;; This is copied from Semantic UI StandardFormContainer. It's everything but the calls to `render-fields`.
+(defmethod fr/render-header :default [{::form/keys [master-form form-instance] :as env} attr]
+  (let [nested?         (not= master-form form-instance)
+        props           (comp/props form-instance)
+        computed-props  (comp/get-computed props)
+        {::form/keys [title action-buttons controls show-header?]} (comp/component-options form-instance)
+        title           (?! title form-instance props)
+        action-buttons  (if action-buttons action-buttons form/standard-action-buttons)
+        show-header?    (cond
+                          (some? show-header?) (?! show-header? master-form)
+                          (some? (fo/show-header? computed-props)) (?! (fo/show-header? computed-props) master-form)
+                          :else true)
+        {::form/keys [can-delete?]} computed-props
+        read-only-form? (or
+                          (?! (comp/component-options form-instance ::form/read-only?) form-instance)
+                          (?! (comp/component-options master-form ::form/read-only?) master-form))
+
+        {:ui/keys    [new?]
+         ::form/keys [errors]} props
+        invalid?        (if read-only-form? false (form/invalid? env))
+        errors?         (or invalid? (seq errors))]
+    (if nested?
+      (div {:className (or (?! (comp/component-options form-instance ::ref-element-class) env) "ui segment")}
+        (div :.ui.form {:classes [(when errors? "error")]
+                        :key     (str (comp/get-ident form-instance))}
+          (when can-delete?
+            (dom/button :.ui.icon.primary.right.floated.button {:disabled (not can-delete?)
+                                                                :onClick  (fn [] (form/delete-child! env))}
+              (dom/i :.times.icon)))))
+      (div {:key       (str (comp/get-ident form-instance))
+            :className (or
+                         (?! (suo/get-rendering-options form-instance suo/layout-class) env)
+                         (?! (comp/component-options form-instance suo/layout-class) env)
+                         (?! (comp/component-options form-instance ::top-level-class) env)
+                         "ui container")}
+        (when show-header?
+          (div {:className (or
+                             (?! (suo/get-rendering-options form-instance suo/controls-class) env)
+                             (?! (comp/component-options form-instance ::controls-class) env)
+                             "ui top attached segment")}
+            (div {:style {:display        "flex"
+                          :justifyContent "space-between"
+                          :flexWrap       "wrap"}}
+              (dom/h3 :.ui.header {:style {:wordWrap "break-word" :maxWidth "100%"}}
+                title)
+              (div :.ui.buttons {:style {:textAlign "right" :display "inline" :flexGrow "1"}}
+                (keep #(control/render-control master-form %) action-buttons)))))
+        (div {:classes [(or (?! (comp/component-options form-instance ::form-class) env) "ui attached form")
+                        (when errors? "error")]}
+          (when invalid?
+            (div :.ui.red.message (tr "The form has errors and cannot be saved.")))
+          (when (seq errors)
+            (div :.ui.red.message
+              (div :.content
+                (dom/div :.ui.list
+                  (map-indexed
+                    (fn [idx {:keys [message]}]
+                      (dom/div :.item {:key (str idx)}
+                        (dom/i :.triangle.exclamation.icon)
+                        (div :.content (str message))))
+                    errors))
+                (when-not new?
+                  (dom/a {:onClick (fn []
+                                     (form/undo-via-load! env))} (tr "Reload from server")))))))))))
+
+;; No footer by default
 (defmethod fr/render-footer :default [renv attr])
 -----
 
-Here we're using `render-header` to render the top-level form title and controls, and are not really leveraging the footer by default.
-We can check that the attribute is an ID attribute to decide that we're rendering the entire form (or could look for "id" to be the name).
-
-We've now also dropped any support for laying out the fields.
-To get that back we'll copy the layout code from the SUI plugin and adapt that:
-
-[source]
------
-(defn- render-layout* [env options k->attribute layout]
-  (try
-    (into []
-      (map-indexed
-        (fn [idx row]
-          (div {:key idx :className (rsf/n-fields-string (count row))}
-            (mapv (fn [col]
-                    (enc/if-let [_    k->attribute
-                                 attr (k->attribute col)]
-                      (form/render-field env attr)
-                      (if (some-> options ::control/controls (get col))
-                        (control/render-control (::form/form-instance env) col)
-                        (log/error "Missing attribute (or lookup) for" col))))
-              row)))
-        layout))
-    (catch :default _)))
-
-(defn render-layout [env {::form/keys [attributes layout] :as options}]
-  (let [k->attribute (attr/attribute-map attributes)]
-    (render-layout* env options k->attribute layout)))
-
-(defmethod fr/render-fields :default [{::form/keys [form-instance] :as renv}]
-  (div :.ui.attached.segment
-    (dom/div :.ui.form
-      (render-layout renv (comp/component-options form-instance)))))
------
-
-In this new system ref attributes are not treated in a special way (as they were in the old model), and there are no "defaults" installed for rendering refs, so we'll need to handle that as well:
-
-[source]
------
-(defmethod fr/render-field [:ref :default] [{::attr/keys                    [key->attribute]
-                                             :com.fulcrologic.rad.form/keys [form-instance] :as renv} field-attr]
-  (let [relation-key (ao/qualified-key field-attr)
-        options      (comp/component-options form-instance)
-        data         (-> form-instance comp/props relation-key)
-        ItemForm     (form/subform-ui options relation-key)
-        to-many?     (= :many (ao/cardinality field-attr))]
-    (if ItemForm
-      (comp/fragment
-        (fr/render-header renv field-attr)
-        (if to-many?
-          (mapv (fn [i] (form/render-subform form-instance relation-key ItemForm i)) data)
-          (form/render-subform form-instance relation-key ItemForm data))
-        (fr/render-footer renv field-attr))
-      (log/warn "There is no subform for" relation-key))))
------
-
-Note that we've sorta skipped over pickers for the moment (and are always assuming this render-field is going to
-have a subform defined), but note that this new mechanism simplified rendering a ref as a picker, since we can just
-define that as a style now.
-
-Also, altering the wrapping of subforms is now easier, and you can do things like specify a "table" style for subform
-rendering where you just specify `fro/style :table` on the subform that will render like a table row, and then
-install something like this:
-
-[source]
------
-(defmethod fr/render-field [:ref :table] [{::attr/keys                    [key->attribute]
-                                           :com.fulcrologic.rad.form/keys [form-instance] :as renv} field-attr]
-  (let [relation-key (ao/qualified-key field-attr)
-        options      (comp/component-options form-instance)
-        data         (-> form-instance comp/props relation-key)
-        ItemForm     (form/subform-ui options relation-key)
-        to-many?     (= :many (ao/cardinality field-attr))]
-    (if ItemForm
-      (comp/fragment
-        (fr/render-header renv field-attr)
-        (dom/table :.ui.very.basic.compact.collapsing.table.ml-8
-          (dom/tbody nil
-            (if to-many?
-              (mapv (fn [i] (form/render-subform form-instance relation-key ItemForm i)) data)
-              (form/render-subform form-instance relation-key ItemForm data)))
-          (dom/tfoot nil
-            (dom/tr nil
-              (dom/td nil
-                (dom/button :.ui.tiny.icon.button
-                  {:onClick #(form/add-child! (assoc renv
-                                                ::form/order :append
-                                                ::form/parent-relation relation-key
-                                                ::form/parent form-instance
-                                                ::form/child-class ItemForm))}
-                  (dom/i :.plus.icon))))))
-        (fr/render-footer renv field-attr))
-      (log/warn "There is no subform for" relation-key))))
------
-
-and explicitly emit table rows from the subform (render by hand) or even install a form renderer for that!
-
-[source]
------
-;; Assumes you `allowed-defaults!` on your model
-(defmethod fr/render-fields [:default :table] [{::form/keys [form-instance] :as env id-attr]
-  (let [attrs (-> form-instance comp/component-options fo/attributes)]
-    (dom/tr {:key (str (comp/get-ident form-instance))}
-      (map-indexed
-        (fn [idx attr] (dom/td {:key (str idx)} (form/render-field env attr)))
-        attrs))))
------
-
 The plugin already has rendering for fields defined for a lot of types, and the multimethod for `render-field` has
-a default that uses the installed UI plugin's map.
-
-If you do a `defmethod` on `fr/render-field` then that will take precedence:
+a default that uses the installed UI plugin's map. So there is nothing to do to get fields to render with
+multimethods, but if you do a `defmethod` on `fr/render-field` then that will take precedence:
 
 [source]
 -----
 ;; Override how to render the default string field
 (defmethod fr/render-field [:string :default] ...)
 -----
+
+Finally, let's do something new! Let's say we want to-many subforms to render as a table, where the header of the
+table has the field labels, and the rows just show the inputs.
+
+First, we define how to render a `:ref` field that uses a `:table` style. This will let us add `fro/style` to the
+subform options and get a table:
+
+[source]
+-----
+;; Rendering the to-many field must wrap things in the table, and wrap the subforms (which will render as rows) in a tbody.
+(defmethod fr/render-field [:ref :table] [{::form/keys [form-instance] :as renv} field-attr]
+  (let [relation-key (ao/qualified-key field-attr)
+        item         (-> form-instance comp/props relation-key)
+        ItemForm     (form/subform-ui (comp/component-options form-instance) field-attr)
+        to-many?     (= :many (ao/cardinality field-attr))]
+    (if ItemForm
+      (dom/table :.ui.table {:key (str relation-key)}
+        (fr/render-header renv field-attr)
+        (dom/tbody nil
+          (if to-many?
+            (mapv (fn [i] (form/render-subform form-instance relation-key ItemForm i)) item)
+            (form/render-subform form-instance relation-key ItemForm item)))
+        (fr/render-footer renv field-attr))
+      (log/error "There is no Subform UI declared for" relation-key "on" (comp/component-name form-instance)))))
+-----
+
+We need to use `render-subform` for each of the items, which in turn will hit `render-form` for each of them.
+We're also calling `render-header` and `render-footer`, so we should write those. Basically the header is going
+to be the field lables, and the footer is going to be the (optional) add button.
+
+[source]
+-----
+;; We aren't supporting using this on top-level forms, so we output a warning div if it gets used that way
+(defmethod fr/render-header [:default :table] [{::form/keys [form-instance] :as env} field-attr]
+  (if (ao/identity? field-attr)
+    (dom/div "Table header only supports rendering as a subform")
+    (let [{ItemForm    ::form/ui
+           ::form/keys [can-add?]} (fo/subform-options (comp/component-options form-instance) field-attr)
+          attrs (comp/component-options ItemForm fo/attributes)]
+      (dom/thead nil
+        (dom/tr nil
+          (mapv
+            (fn [a] (dom/th {:key (str (ao/qualified-key a))} (form/field-label env a)))
+            attrs)
+          (when can-add?
+            (dom/th nil ent/nbsp)))))))
+
+(defmethod fr/render-footer [:default :table] [{::form/keys [form-instance] :as env} {::attr/keys [qualified-key] :as field-attr}]
+  (if (ao/identity? field-attr)
+    (dom/div "Table footer only supports rendering as a subform")
+    (let [{ItemForm    ::form/ui
+           ::form/keys [can-add?]} (fo/subform-options (comp/component-options form-instance) qualified-key)
+          can-add? (?! can-add? form-instance field-attr)]
+      (when can-add?
+        (dom/tfoot nil
+          (dom/tr nil
+            (dom/td nil
+              (dom/button :.ui.icon.button
+                {:onClick (fn []
+                            (form/add-child! form-instance qualified-key ItemForm {:order :append}))}
+                (dom/i :.plus.icon)))))))))
+-----
+
+The only thing left to do is add `render-form` for laying out the subform as a row:
+
+[source]
+-----
+;; Rendering the an actual form as a table row is supported. If table is used on a top-level form we just emit a warning div.
+(defmethod fr/render-form [:default :table] [{::form/keys [parent parent-relation form-instance] :as renv} idattr]
+  (if parent
+    (let [{::form/keys [attributes]} (comp/component-options form-instance)
+          {::form/keys [can-delete?]} (fo/subform-options (comp/component-options parent) parent-relation)
+          can-delete? (?! can-delete? parent (comp/props form-instance))]
+      (dom/tr {:key (str (comp/get-ident form-instance))}
+        (mapv (fn [attr]
+                (dom/td {:key (str (ao/qualified-key attr))}
+                  (form/render-input renv attr))) attributes)
+        (when can-delete?
+          (dom/td {:style {:verticalAlign "middle"}}
+            (dom/button :.ui.icon.button {:onClick (fn [] (form/delete-child! parent parent-relation (comp/get-ident form-instance)))}
+              (dom/i :.times.icon))))))
+    (dom/div nil "Rendering top-level forms as a table is not supported.")))
+-----
+
+Note that we use `render-input`, which is `render-field` that hints to the plugin that it doesn't want the label.
+
+See the `new-rendering` branch of the Fulcro Rad Demo to play with this exact code.
 
 ===== Remember To Derive!
 
