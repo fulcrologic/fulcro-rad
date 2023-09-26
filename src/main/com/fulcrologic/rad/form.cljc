@@ -2046,6 +2046,12 @@
               (def ~(vary-meta sym assoc :once true)
                 (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~union-key options#))))))))
 
+(defn subform-rendering-env [parent-form-instance relation-key]
+  (let [renv (rendering-env parent-form-instance)]
+    (assoc renv
+      ::parent parent-form-instance
+      ::parent-relation relation-key)))
+
 (defn render-subform
   "Render a RAD subform from a parent form. This can be used instead of a normal factory in order to avoid having
    to construct the proper computed props for the subform.
@@ -2059,12 +2065,8 @@
   ([parent-form-instance relation-key ChildForm child-props extra-computed-props]
    (let [id-key     (-> ChildForm comp/component-options fo/id ao/qualified-key)
          ui-factory (comp/computed-factory ChildForm {:keyfn id-key})
-         renv       (rendering-env parent-form-instance)]
-     (ui-factory child-props (merge
-                               extra-computed-props
-                               (assoc renv
-                                 ::parent parent-form-instance
-                                 ::parent-relation relation-key))))))
+         renv       (subform-rendering-env parent-form-instance relation-key)]
+     (ui-factory child-props (merge extra-computed-props renv)))))
 
 (defn server-errors
   "Given the top-level form instance (this), returns a vector of maps. Each map should have a `:message` key, and MAY

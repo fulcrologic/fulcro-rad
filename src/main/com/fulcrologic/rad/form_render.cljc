@@ -16,8 +16,9 @@
    that does whatever the current rendering plugin has configured.
 
    By placing an `fro/style` on a form, you can cause a dispatch to your own `defmethod` to do that rendering. Several
-   other multimethods (render-fields, render-field, render-header, and render-footer) are defined as well, though
-   have no defaults other than `render-field` (whose default calls through to the underlying UI plugin).
+   other multimethods (render-fields, render-field, render-header, and render-footer) are defined as well (along
+   with `fro/header-style` etc.), though these have no defaults other than `render-field` (whose default calls
+   through to the underlying UI plugin).
 
    All of these multimethods use vectors for dispatch, and a custom hierarchy that this sets things up to allow for
    polymorphism among the rendering methods.
@@ -28,44 +29,68 @@
    * `allow-defaults!` - Pre-calls `derive!` on every qualified keyword in the given RAD model so that :default
      behaves as the parent of them.
    * `is-a?` - Just like clojure.core/isa?, but works on the render hierarchy
+
+   See the RAD Developer's Guide for more information on leveraging the
+   dispatch hierarchy.
   "
   (:refer-clojure :exclude [isa?])
   (:require
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
-    [com.fulcrologic.rad.form-render-options :as fro]
     [com.fulcrologic.rad.form-options :as fo]
-    [com.fulcrologic.rad.options-util :refer [?!]]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.rad.form-render-options :as fro]
+    [com.fulcrologic.rad.options-util :refer [?!]]))
 
 (defonce render-hierarchy #?(:cljs (atom (make-hierarchy))
                              :clj  (make-hierarchy)))
 
+(defn gen-dispatch
+  "Generate a multimethod dispatch function that assumes the attribute is an id-attribute (being called
+   in the context of the rendering env's form-instance) and attempts to find the `style-key` in
+   the subform options of the parent form (to override any declared on the form itself), then
+   on the form-instance, and finally on the attribute.
+
+   If `fallback-to-style?` is true, then if it does not find `style-key` it will repeat the sequence using
+   fro/style."
+  [style-key fallback-to-style?]
+  (fn [{:com.fulcrologic.rad.form/keys [form-instance parent parent-relation] :as renv} id-attr]
+    (let [parent-options         (some-> parent (rc/component-options))
+          parent-subform-options (some-> parent-options (fo/subform-options parent-relation))
+          style                  (or
+                                   (?! (style-key parent-subform-options) id-attr renv)
+                                   (?! (style-key (rc/component-options form-instance)) id-attr renv)
+                                   (?! (style-key id-attr) id-attr renv)
+                                   (and fallback-to-style?
+                                     (or
+                                       (?! (fro/style parent-subform-options) id-attr renv)
+                                       (?! (fro/style (rc/component-options form-instance)) id-attr renv)
+                                       (?! (fro/style id-attr) id-attr renv)))
+                                   :default)
+          k                      (ao/qualified-key id-attr)]
+      [k style])))
+
 (defmulti render-form
   "[rendering-env id-attr]
 
-   Dispatches on [attr-key style].
-
    Render a form using the given environment. This is the top-level call from the (default) body of any
-   form. Normally it might call `render-header`, `render-fields`, and `render-footer`.
+   form that switches rendering to these multimethods. Normally it might call `render-header`,
+   `render-fields`, and `render-footer`.
 
-   Recommended that you call `allow-defaults!` on your RAD model so that you can
-   dispatch just on style and only customize on keys if really necessary."
-  (fn [{:com.fulcrologic.rad.form/keys [form-instance parent parent-relation] :as renv} id-attr]
-    (let [parent-options (some-> parent (rc/component-options))
-          parent-style   (when parent-options (fro/style (fo/subform-options parent-options parent-relation)))
-          style          (or
-                           (?! parent-style id-attr renv)
-                           (?! (-> (rc/component-options form-instance) (fro/style)) id-attr renv)
-                           (?! (fro/style id-attr) id-attr renv)
-                           :default)
-          k              (ao/qualified-key id-attr)]
-      ;; NOTE: hierarchy maybe? (derive :sales/invoice :invoice/id). Make the rendering of :invoice/id forms be a
-      ;; "kind" of :sales/invoice. Still need the possible dispatch to default style.
-      (log/spy :debug (str "dispatch render-form" k) [k style])))
+   Dispatches to a vector of `[id-keyword-of-entity style]`
+
+   The style is derived as follows:
+
+   * The dispatch function will first look to see if it is rendering as a subform
+     * if so will find the subform options on the `parent` for `parent-relation` and look for the fro/style there.
+   * If that fails, it will look for the fro/style on the form-instance being rendered
+   * finally will look on the attribute.
+   * Otherwise it will use a style of `:default`
+
+   See namespace documentation as well.
+   "
+  (gen-dispatch fro/style false)
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
 
@@ -77,70 +102,95 @@
    any time you want. Typically, it is composed in front of entire forms, and when
    there is nested content (like subforms).
 
-   Dispatch on [attr-key fro/header-style].
+   Dispatch on [attr-key style].
 
-   Recommended that you call `allow-defaults!` on your RAD model so that you can
-   dispatch just on style and only customize on keys if really necessary."
-  (fn [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} attr]
-    (let [options   (rc/component-options form-instance)
-          sfoptions (fo/subform-options options attr)
-          style     (or
-                      (?! (fro/header-style sfoptions) attr renv)
-                      (?! (fro/header-style attr) attr renv)
-                      (?! (fro/style sfoptions) attr renv)
-                      (?! (fro/style attr) attr renv)
-                      :default)]
-      [(ao/qualified-key attr) style]))
+   The style is derived as follows:
+
+   * If `attr` is an `ao/identity?` attribute
+   ** dispatch identically to render-form, but looking for `fro/header-style` (preferred) and `fro/style` fallback.
+   * If it is NOT an id attribute, then:
+   ** Look for fro/header-style on the current form's subform options at the qualified key of attr
+   ** Look for fro/header-style on the attr
+   ** Look for fro/style on the current form's subform options at the qualified key of attr
+   ** Look for fro/style on the attr
+
+   Otherwise style will be `:default`
+
+   See namespace documentation as well.
+   "
+  (let [id-attr-dispatch (gen-dispatch fro/header-style true)]
+    (fn [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} attr]
+      (if (ao/identity? attr)
+        (id-attr-dispatch renv attr)
+        (let [options   (rc/component-options form-instance)
+              sfoptions (fo/subform-options options attr)
+              style     (or
+                          (?! (fro/header-style sfoptions) attr renv)
+                          (?! (fro/header-style attr) attr renv)
+                          (?! (fro/style sfoptions) attr renv)
+                          (?! (fro/style attr) attr renv)
+                          :default)]
+          [(ao/qualified-key attr) style]))))
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
 
 (defmulti render-fields
   "[rendering-env id-attribute]
 
-   Render the fields of the current `form-instance `in `renv `.
+   Render the fields. Dispatch is identical to `render-form` ([id-key style]), and this method is always intended to be
+   called in the context of the currently-rendering form-instance with an id-attribute.
 
-   Dispatches on [form-id-keyword style]."
-  (fn [renv id-attr]
-    (let [style (or
-                  (?! (fro/style id-attr) id-attr renv)
-                  :default)]
-      ;; NOTE: hierarchy maybe? (derive :sales/invoice :invoice/id). Make the rendering of :invoice/id forms be a
-      ;; "kind" of :sales/invoice. Still need the possible dispatch to default style.
-      [(ao/qualified-key id-attr) style]))
+   The style will first try to find fro/fields-style, and then fro/style.
+
+   See namespace documentation as well.
+   "
+  (gen-dispatch fro/fields-style true)
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
 
 (defmulti render-footer
-  " [renv attr]
+  "[renv attr]
 
-  Render something after the given attr. This MAY be composed into rendering
-  any time you want. Typically, it is composed behind entire forms, and when
-  there is nested content (like subforms) .
+   Dispatch works identically to `render-header`, other than it looks for `fro/footer-style` and then `fro/style`.
 
-  Dispatches on [qualified-key fro/footer-style] .
-
-  Recommended that you call `allow-defaults! `on your RAD model so that you can
-  dispatch just on style and only customize on keys if really necessary. "
-  (fn [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} attr]
-    (let [options   (rc/component-options form-instance)
-          sfoptions (fo/subform-options options attr)
-          style     (or
-                      (?! (fro/footer-style sfoptions) attr renv)
-                      (?! (fro/footer-style attr) attr renv)
-                      (?! (fro/style sfoptions) attr renv)
-                      (?! (fro/style attr) attr renv)
-                      :default)]
-      [(ao/qualified-key attr) style]))
+   See namespace documentation as well.
+   "
+  (let [id-attr-dispatch (gen-dispatch fro/footer-style true)]
+    (fn [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} attr]
+      (if (ao/identity? attr)
+        (id-attr-dispatch renv attr)
+        (let [options   (rc/component-options form-instance)
+              sfoptions (fo/subform-options options attr)
+              style     (or
+                          (?! (fro/footer-style sfoptions) attr renv)
+                          (?! (fro/footer-style attr) attr renv)
+                          (?! (fro/style sfoptions) attr renv)
+                          (?! (fro/style attr) attr renv)
+                          :default)]
+          [(ao/qualified-key attr) style]))))
   :hierarchy #?(:cljs render-hierarchy
                 :clj  (var render-hierarchy)))
 
 (defmulti render-field
   "[env attr]
 
-  Render a field.
+   Render a field.
 
-  Dispatches on [type style].
-  "
+   Dispatches on [type style].
+
+   The style is derived as follows:
+
+   * Look for fro/style on the subform options. This is for the case of ref attributes where the field render
+     (which might need to wrap a to-many collection) must know the context that the subform will be rendered in,
+     and that should be preferred.
+   * Then look in form `fo/field-styles` (map from k -> field style)
+   * Then look for `fro/style` on the attribute
+   * Then look for `fo/field-style` on the attribute
+   * Then look for `ao/style` on the attribute
+   * Otherwise :default.
+
+   See namespace documentation as well.
+   "
   (fn [{:com.fulcrologic.rad.form/keys [form-instance] :as renv} field-attr]
     (let [options   (rc/component-options form-instance)
           k         (ao/qualified-key field-attr)

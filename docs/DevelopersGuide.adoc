@@ -2298,20 +2298,21 @@ was made for several reasons:
 * Multimethods have to be `required` to work, and once required cannot be dead code eliminated. If you're not using
 some subset of controls when using plain maps, you can remove them from the maps and they will dead code eliminate.
 * Multimethods in stack traces are harder to follow, so debugging them can be a hassle.
-* Hard to figure out which `defmethod` is being called for a particular bit of output.
+* Hard to figure out which `defmethod` is being called for a particular bit of output, or even which file it is in. This
+can be problematic in large projects.
 
 However, after experiencing the map-based mechanism, it suffers from similar issues:
 
-* Still hard to trace the rendering to figure out what is generating output.
-* Dead code elimination tuning is probably not going to save you much, given that these renderers are few in number
-* It's actually kind of hard to plug in anything except a new field/formatter. Revamping some subset of the UI isn't very
-fun.
+* Still hard to trace the rendering to figure out what is generating output, though having a single map you can look
+at does make it a little easier to discover things, and navigate to them via IDE jump.
+* Dead code elimination tuning is probably not going to save you much, given that these renderers are few in number, and
+you can avoid requiring things you don't want in the first place.
 
 So, in 1.6.0 it was decided that adding multimethods to the system would give extra flexibility and utility, and if the
 defaults just called the existing plugins, would neither break anything or really even add overhead if you don't want to
 use them.
 
-The result was generally positive: It is much easier to use the multimethods to customize how things render, and the
+The result seems pretty positive: It is much easier to use the multimethods to customize how things render, and the
 use of a predefined hierarchy (for multimethods) means you can add additional multimethods to customize how rendering
 should work in general. The new support defines a number of multimethods, but you can actually choose not to use
 some of them at all.
@@ -2396,7 +2397,9 @@ the vector dispatch supports :default within the vector), then you can call the 
 
 ==== Predefined Methods
 
-* `(render-form renv id-attribute)` - Intended to encapsualte the rendering of the entire form.
+The multimethod rendering pre-defines:
+
+* `(render-form renv id-attribute)` - Intended to encapsulate the rendering of the entire form.
 Usually the definition of this would call the other multimethods like `render-header` and `render-fields`, but that
 is completely up to you. The global default calls the map-based default for the UI plugin.
 * `(render-header renv attr)` - Intended to render headers for things. This exists for your (optional) convenience, and
@@ -2406,35 +2409,87 @@ your composition of this into your other calls will determine how it is used.
 * `(render-field renv attr)` - Renders a usable form field. Dispatches on `[type style]`. The default falls back to the
 UI plugin map.
 
-IMPORTANT: ONLY `render-form` and `render-field` are used by default in order to maintain
-bw compatibility with the older way of building a rendering plugin.
-The other methods are defined to establish possible useful patterns.
+but the mere existence of the multimethods does not mean they get called, since you have to write the
+`defmethod` for each dispatch value you plan to use, and *you* choose what to call from where (do you want a header
+for the given element style?).
 
-NOTE: If you enable dev-time source line attribution in the compiler options you can at least see where a DOM element came from
+For example, when rendering a to-many ref as a table clearly the header is the top of the table that lists things
+like column names, and that must be rendered in the context of the form that has the to-many ref, not in the
+context of each row (which are themselves forms that could have headers/footers, but in this case probably won't).
+
+IMPORTANT: ONLY `render-form` and `render-field` are used by default in order to maintain
+backward compatibility with the map-based rendering plugin.
+The other methods are defined to establish possible useful patterns and are not used by base RAD.
+
+TIP: If you enable dev-time source line attribution in the compiler options you can at least see where a DOM element came from
 in the source. See the https://book.fulcrologic.com/#_shadow_cljs_build_tool_configuration[Fulcro Developer's Guide].
 
-===== Dispatch for `render-form`, `render-fields`, `render-header` and `render-footer`.
+==== Render Multimethod Dispatch
 
-The dispatch uses a vector of `[qualified-keyword style]`, where the `style` is derived as follows (the first
-matching rule wins) (for style option: headers use `fro/header-style`, footers use `fro/footer-style`, and fields use `fro/style`).:
+The dispatch rules for the predefined rendering multimethods looks a bit complex at first, but in general they
+are meant to allow the least typing for the common case in options.
 
-* Subform options on parent form: If the form is being used as a subform AND the subform options for that
-  reference (which can be declared on a reference attribute via `fo/subform` or parent form via `fo/subforms`)
-  specifies the style option.
-* Form: If the form *itself* has the style option.
-* Attribute: If the attribute has the style option.
-* Otherwise `:default` is used (resulting in [keyword :default]).
+The `fro/style` option is the fallback for pretty much everything. There are other style keys (e.g.
+`fro/header-style`) which are meant to *override* the general style of a form. For example, if you chose
+to render a subform with a `:table` style, you probably also need the header, fields, and footer to know that as well.
+So, it makes sense to use `fro/style` the fall-through.
 
+For fields there are already existing options for styles (`ao/style`, `fo/field-style`, and `fo/field-styles`), so it
+makes sense to honor those in the new method dispatch.
+
+The complete rules of dispatch are:
+
+`render-form`::
++
+The dispatch uses a vector of `[qualified-keyword style]`, where the `style` is derived as follows:
++
+* The dispatch function will first look to see if it is rendering as a subform
+** if so will find the subform options on the `parent` for `parent-relation` and look for the fro/style there.
+* If that fails, it will look for the `fro/style` on the form instance being rendered
+* finally will look on the attribute.
+* Otherwise it will use a style of `:default`
++
 Note that the attribute in question will be the entity ID attribute. In the case of render-header/footer/fields you
 write the calling code and can choose the attribute to pass in.
 
-===== Dispatch for `render-field`
+`render-fields`::
 
-Field dispatch returns a `[data-type style]`. The data type is take from the attribute via `ao/type`. The style is:
+The `render-fields` method dispatch is identical to `render-form` (`[id-key style]`), and this method is always
+intended to be called in the context of the currently-rendering form-instance with an id-attribute. The only
+difference is that it will first try to find `fro/fields-style`, and then fall back to `fro/style`.
 
-* The value for the qualified-keyword in the form's `fo/field-styles`
-* The value of `fo/field-style` on the attribute
-* The value of `ao/style` on the attribute
+`render-header`::
++
+Dispatch on [attr-key style].
++
+The style is derived as follows:
++
+* If `attr` is an `ao/identity?` attribute
+** dispatch identically to render-form, but looking for `fro/header-style` (preferred) and `fro/style` fallback.
+* If it is NOT an id attribute, then:
+** Look for `fro/header-style` on the current form's subform options at the qualified key of attr
+** Look for `fro/header-style` on the attr
+** Look for `fro/style` on the current form's subform options at the qualified key of attr
+** Look for `fro/style` on the attr
++
+Otherwise style will be `:default`
+
+`render-footer`::
++
+Same as render-header, but replace `fro/header-style` with `fro/footer-style`.
+
+`render-field`::
++
+Dispatches on `[field-data-type style]` where style is derived as follows:
++
+* Look for `fro/style` on the subform options. This is for the case of ref attributes where the field render
+  (which might need to wrap a to-many collection) must know the context that the subform will be rendered in,
+  and that should be preferred.
+* Then look in form `fo/field-styles` (map from k -> field style)
+* Then look for `fro/style` on the attribute
+* Then look for `fo/field-style` on the attribute
+* Then look for `ao/style` on the attribute
+* Otherwise `:default`.
 
 ==== Example Setup
 
@@ -2547,7 +2602,7 @@ In this new system ref attributes are not treated in a special way (as they were
   (let [relation-key (ao/qualified-key field-attr)
         options      (comp/component-options form-instance)
         data         (-> form-instance comp/props relation-key)
-        ItemForm     (-> options fo/subforms relation-key fo/ui)
+        ItemForm     (form/subform-ui options relation-key)
         to-many?     (= :many (ao/cardinality field-attr))]
     (if ItemForm
       (comp/fragment
@@ -2559,9 +2614,13 @@ In this new system ref attributes are not treated in a special way (as they were
       (log/warn "There is no subform for" relation-key))))
 -----
 
-Note that we've sorta skipped over pickers for the moment (and are always assuming this render-field is going to have a subform defined), but note that this new mechanism simplified rendering a ref as a picker, since we can just define that as a style now.
+Note that we've sorta skipped over pickers for the moment (and are always assuming this render-field is going to
+have a subform defined), but note that this new mechanism simplified rendering a ref as a picker, since we can just
+define that as a style now.
 
-Also, altering the wrapping of subforms is now easier, and you can do things like specify a "table" style for subform rendering where you just specify `fro/style :table` on the subform that will render like a table row, and then install something like this:
+Also, altering the wrapping of subforms is now easier, and you can do things like specify a "table" style for subform
+rendering where you just specify `fro/style :table` on the subform that will render like a table row, and then
+install something like this:
 
 [source]
 -----
@@ -2570,7 +2629,7 @@ Also, altering the wrapping of subforms is now easier, and you can do things lik
   (let [relation-key (ao/qualified-key field-attr)
         options      (comp/component-options form-instance)
         data         (-> form-instance comp/props relation-key)
-        ItemForm     (-> options fo/subforms relation-key fo/ui)
+        ItemForm     (form/subform-ui options relation-key)
         to-many?     (= :many (ao/cardinality field-attr))]
     (if ItemForm
       (comp/fragment
@@ -2606,6 +2665,39 @@ and explicitly emit table rows from the subform (render by hand) or even install
         (fn [idx attr] (dom/td {:key (str idx)} (form/render-field env attr)))
         attrs))))
 -----
+
+The plugin already has rendering for fields defined for a lot of types, and the multimethod for `render-field` has
+a default that uses the installed UI plugin's map.
+
+If you do a `defmethod` on `fr/render-field` then that will take precedence:
+
+[source]
+-----
+;; Override how to render the default string field
+(defmethod fr/render-field [:string :default] ...)
+-----
+
+===== Remember To Derive!
+
+For the vector-based entry of `:default` to act like you expect, all keywords that should fall through to that default
+must be "derived" using the `fr/derive!` function. So, for example if you want [:ref :table] to fall through to
+[:ref :default] (instead of the top level `:default`), then you must run `(fr/derive! :table :default)` before
+you render with that style.
+
+This allows you to relate your styles:
+
+[source]
+-----
+(derive! :alternating-row-color-table :celled-table)
+(derive! :celled-table :plain-table)
+(derive! :plain-table :table)
+(derive! :table :default)
+-----
+
+===== Demo
+
+The Fulcro RAD Demo repository has a https://github.com/fulcrologic/fulcro-rad-demo/tree/new-rendering[`new-rendering`]
+branch that defines and uses these multimethods for rendering.
 
 === Custom Field Rendering
 
