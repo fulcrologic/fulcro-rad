@@ -449,8 +449,7 @@
          raw-options  (or form-options (?! (subform ref-attr) form-options ref-attr))]
      (cond-> raw-options
        (contains? raw-options ui) (update ui (fn [c]
-                                               (cond-> (?! c form-options k)
-                                                 (not (rc/component-class? c)) (rc/registry-key->class))))))))
+                                               (some-> (?! c form-options k) (rc/registry-key->class))))))))
 
 (defn get-field-options
   "Use form/get-field-options instead."

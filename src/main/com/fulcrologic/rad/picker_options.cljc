@@ -78,7 +78,7 @@
          cached-at       (get-in state-map time-path 0)
          reload?         (or (:force-reload? load-options) (> (- now cached-at) cache-time-ms))
          query-component (cond
-                           (keyword? query-component) (rc/registry-key->class query-component)
+                           (rc/legal-registry-lookup-key? query-component) (rc/registry-key->class query-component)
                            (comp/component-class? query-component) query-component
                            (vector? query) (rc/nc query))]
      (when-not query-key
