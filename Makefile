@@ -11,3 +11,7 @@ book: docs/DevelopersGuide.html
 publish: book
 	rsync -av docs/DevelopersGuide.html linode:/usr/share/nginx/html/RAD.html
 	rsync -av docs/assets linode:/usr/share/nginx/html/
+
+deploy:
+	rm -rf target
+	mvn deploy

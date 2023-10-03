@@ -218,14 +218,6 @@
   #?(:cljs (swap! render-hierarchy derive child-keyword parent-keyword)
      :clj  (alter-var-root #'render-hierarchy derive child-keyword parent-keyword)))
 
-(defn install-as!
-  "Install the new form rendering support as a custom layout style `k `. "
-  [app k]
-  (let [{::app/keys [runtime-atom]} app]
-    (swap! runtime-atom assoc-in [::rad/controls :com.fulcrologic.rad.form/element->style->layout :form-container k]
-      (fn [renv]
-        (render-form renv (fo/id (rc/component-options (:com.fulcrologic.rad.form/form-instance renv))))))))
-
 (defn allow-defaults!
   " Allow :default to be a fall-through any time an attribute's qualified key is used as a dispatch value on
   rendering multimethods. "

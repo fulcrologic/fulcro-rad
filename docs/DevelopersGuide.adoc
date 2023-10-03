@@ -2290,7 +2290,7 @@ This information is referred to as the `rendering-env`, and can include:
 
 Many of the helper functions in the RAD `form` namespace will accept this as a potential argument, and some of them may require you to construct one (there's a `rendering-env` helper for this).
 
-=== Form Rendering via Multimethods (RAD V1.6+, 1.6.0-SNAPSHOT ALPHA SUBJECT TO CHANGE) [[MultimethodRender]]
+=== Form Rendering via Multimethods (RAD V1.6+, 1.6.0-SNAPSHOT) [[MultimethodRender]]
 
 The rendering system in RAD prefers to use maps to define plugins in order to avoid the use of multimethods. This choice
 was made for several reasons:
