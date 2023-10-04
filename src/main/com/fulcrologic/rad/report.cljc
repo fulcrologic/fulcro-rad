@@ -29,10 +29,12 @@
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fstate]
     [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.control :as control :refer [Control]]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
     [com.fulcrologic.rad.report-options :as ro]
+    [com.fulcrologic.rad.report-render :as rr]
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.type-support.date-time :as dt]
@@ -54,7 +56,7 @@
 ;; RENDERING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn render-layout [report-instance]
+(defn default-render-layout [report-instance]
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
         layout-style (or (some-> report-instance comp/component-options ::layout-style) :default)
         layout       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
@@ -64,7 +66,10 @@
         (log/error "No layout function found for form layout style" layout-style)
         nil))))
 
-(defn render-row [report-instance row-class row-props]
+(defn render-layout [report-instance]
+  (rr/render-report report-instance (rc/component-options report-instance)))
+
+(defn default-render-row [report-instance row-class row-props]
   (let [{::app/keys [runtime-atom]} (comp/any->app report-instance)
         layout-style (or (some-> report-instance comp/component-options ::row-style) :default)
         render       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::row-style->row-layout layout-style)]
@@ -73,6 +78,11 @@
       (do
         (log/error "No layout function found for form layout style" layout-style)
         nil))))
+
+(defn render-row
+  "Render a row of the report. Leverages report-render/render-row, whose default uses whatever UI plugin you have."
+  [report-instance row-class row-props]
+  (rr/render-row report-instance (rc/component-options report-instance) row-props))
 
 (defn control-renderer
   "Get the report controls renderer for the given report instance. Returns a `(fn [this])`."
@@ -90,7 +100,45 @@
   "Renders just the control section of the report. See also `control-renderer` if you desire rendering the controls in
    more than one place in the UI at once (e.g. top/bottom)."
   [report-instance]
-  ((control-renderer report-instance) report-instance))
+  (rr/render-controls report-instance (rc/component-options report-instance)))
+
+(defn column-heading-descriptors
+  "Returns a vector of maps describing what should be shown for column headings. Each
+   map may contain:
+
+   :label - The text label
+   :help - A string that could be shown as a longer description (e.g. on hover)
+   :column - The actual column attribute from the RAD model.
+   "
+  [report-instance report-options]
+  (let [{report-column-headings ::column-headings
+         report-column-infos    ::column-infos} report-options
+        columns (ro/columns report-options)]
+    (mapv (fn [{::keys      [column-heading column-info]
+                ::attr/keys [qualified-key] :as attr}]
+            {:column attr
+             :help   (or
+                       (?! (get report-column-infos qualified-key) report-instance)
+                       (?! column-info report-instance))
+             :label  (or
+                       (?! (get report-column-headings qualified-key) report-instance)
+                       (?! column-heading report-instance)
+                       (?! (ao/label attr) report-instance)
+                       (some-> qualified-key name str/capitalize)
+                       "")})
+      columns)))
+
+;; Multimethod rendering defaults
+(defmethod rr/render-row :default [report-instance options row-props]
+  (log/info "Default render-row")
+  (let [row-class (ro/BodyItem options)]
+    (default-render-row report-instance row-class row-props)))
+(defmethod rr/render-report :default [report-instance options]
+  (log/info "Default render-report")
+  (default-render-layout report-instance))
+(defmethod rr/render-controls :default [this options]
+  (log/info "Default render-controls")
+  ((control-renderer this) this))
 
 (def render-control
   "[report-instance control-key]

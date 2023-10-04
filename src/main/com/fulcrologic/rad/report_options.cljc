@@ -416,7 +416,7 @@
   :com.fulcrologic.rad.report/post-process)
 
 (def BodyItem
-  "The class that is used for rendering the rows of the report. If not supplied then one will be generated for you. This
+  "The class (or registry key) that is used for rendering the rows of the report. If not supplied then one will be generated for you. This
    key will be available on the resulting report, and can be used to obtain the row class for things like denormalizing
    row data.
 
