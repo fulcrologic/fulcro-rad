@@ -38,12 +38,12 @@
   If `:ref` is used as the type then the ultimate ID of the target entity should be listed in `m`
   under the ::target key.
   "
-  [kw type docstring? m]
-  [qualified-keyword? keyword? any? map? => ::attribute]
+  [kw type docstring m]
+  [qualified-keyword? keyword? (? string?) map? => ::attribute]
   (let [v (-> m
             (assoc ::type type)
             (assoc ::qualified-key kw)
-            (cond-> docstring? (assoc ::docstring docstring?)]
+            (cond-> docstring (assoc ::docstring docstring)))]
     (when (and (not= :ref type) (or (contains? m ::targets) (contains? m ::target)))
       (log/warn "NON-Reference attribute" kw "was given referential target(s). This could cause errors in code that generates code from the attribute."))
     (when (and (= :ref type) (not (contains? m ::targets)) (not (contains? m ::target)))
