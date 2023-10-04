@@ -38,18 +38,21 @@
   If `:ref` is used as the type then the ultimate ID of the target entity should be listed in `m`
   under the ::target key.
   "
-  [kw type docstring m]
-  [qualified-keyword? keyword? (? string?) map? => ::attribute]
-  (let [v (-> m
-            (assoc ::type type)
-            (assoc ::qualified-key kw)
-            (cond-> docstring (assoc ::docstring docstring)))]
-    (when (and (not= :ref type) (or (contains? m ::targets) (contains? m ::target)))
-      (log/warn "NON-Reference attribute" kw "was given referential target(s). This could cause errors in code that generates code from the attribute."))
-    (when (and (= :ref type) (not (contains? m ::targets)) (not (contains? m ::target)))
-      (log/warn "Reference attribute" kw "does not list target(s). Resolver generation will not be accurate."))
-    #?(:clj  (registered-map (or (-> m meta :registration-key) kw) v)
-       :cljs v)))
+  ([kw type m]
+   [qualified-keyword? keyword? map? => ::attribute]
+   (new-attribute kw type nil m))
+  ([kw type docstring m]
+   [qualified-keyword? keyword? (? string?) map? => ::attribute]
+   (let [v (-> m
+             (assoc ::type type)
+             (assoc ::qualified-key kw)
+             (cond-> docstring (assoc ::docstring docstring)))]
+     (when (and (not= :ref type) (or (contains? m ::targets) (contains? m ::target)))
+       (log/warn "NON-Reference attribute" kw "was given referential target(s). This could cause errors in code that generates code from the attribute."))
+     (when (and (= :ref type) (not (contains? m ::targets)) (not (contains? m ::target)))
+       (log/warn "Reference attribute" kw "does not list target(s). Resolver generation will not be accurate."))
+     #?(:clj  (registered-map (or (-> m meta :registration-key) kw) v)
+        :cljs v))))
 
 #?(:clj
    (defmacro ^{:arglists '[[symbol docstring? qualified-keyword data-type options-map]]} defattr
