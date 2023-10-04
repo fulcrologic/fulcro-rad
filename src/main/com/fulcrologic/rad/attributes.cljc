@@ -38,11 +38,12 @@
   If `:ref` is used as the type then the ultimate ID of the target entity should be listed in `m`
   under the ::target key.
   "
-  [kw type m]
-  [qualified-keyword? keyword? map? => ::attribute]
+  [kw type docstring? m]
+  [qualified-keyword? keyword? any? map? => ::attribute]
   (let [v (-> m
             (assoc ::type type)
-            (assoc ::qualified-key kw))]
+            (assoc ::qualified-key kw)
+            (cond-> docstring? (assoc ::docstring docstring?)]
     (when (and (not= :ref type) (or (contains? m ::targets) (contains? m ::target)))
       (log/warn "NON-Reference attribute" kw "was given referential target(s). This could cause errors in code that generates code from the attribute."))
     (when (and (= :ref type) (not (contains? m ::targets)) (not (contains? m ::target)))
@@ -86,10 +87,11 @@
      are defined by reports, forms, database adapters, and rendering plugins. Look for `*-options` namespaces in
      order to find vars with docstrings that describe the possible options."
      [sym & args]
-     (let [[k type m] (if (string? (first args)) (rest args) args)
+     (let [docstring (if (string? (first args)) (first args))
+           [k type m] (if (string? (first args)) (rest args) args)
            nspc (if (comp/cljs? &env) (-> &env :ns :name str) (name (ns-name *ns*)))
            fqkw (keyword (str nspc) (name sym))]
-       `(def ~sym (new-attribute ~k ~type (with-meta ~m {:registration-key ~fqkw}))))))
+       `(def ~sym (new-attribute ~k ~type ~docstring (with-meta ~m {:registration-key ~fqkw}))))))
 
 (>defn to-many?
   "Returns true if the attribute with the given key is a to-many."
