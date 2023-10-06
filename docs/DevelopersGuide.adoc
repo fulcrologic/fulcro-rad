@@ -2292,30 +2292,24 @@ Many of the helper functions in the RAD `form` namespace will accept this as a p
 
 === Form Rendering via Multimethods (RAD V1.6+, 1.6.0-SNAPSHOT) [[MultimethodRender]]
 
-The rendering system in RAD prefers to use maps to define plugins in order to avoid the use of multimethods. This choice
-was made for several reasons:
+The rendering system in RAD prefers to use maps to define plugins in order to avoid the use of multimethods.
+This choice was made for several reasons:
 
-* Multimethods have to be `required` to work, and once required cannot be dead code eliminated. If you're not using
-some subset of controls when using plain maps, you can remove them from the maps and they will dead code eliminate.
+* Multimethods have to be `required` to work, and once required cannot be dead code eliminated.
+If you're not using some subset of controls when using plain maps, you can remove them from the maps and they will dead code eliminate.
 * Multimethods in stack traces are harder to follow, so debugging them can be a hassle.
-* Hard to figure out which `defmethod` is being called for a particular bit of output, or even which file it is in. This
-can be problematic in large projects.
+* Hard to figure out which `defmethod` is being called for a particular bit of output, or even which file it is in.
+This can be problematic in large projects.
 
 However, after experiencing the map-based mechanism, it suffers from similar issues:
 
-* Still hard to trace the rendering to figure out what is generating output, though having a single map you can look
-at does make it a little easier to discover things, and navigate to them via IDE jump.
-* Dead code elimination tuning is probably not going to save you much, given that these renderers are few in number, and
-you can avoid requiring things you don't want in the first place.
+* Still hard to trace the rendering to figure out what is generating output, though having a single map you can look at does make it a little easier to discover things, and navigate to them via IDE jump.
+* Dead code elimination tuning is probably not going to save you much, given that these renderers are few in number, and you can avoid requiring things you don't want in the first place.
 
-So, in 1.6.0 it was decided that adding multimethods to the system would give extra flexibility and utility, and if the
-defaults just called the existing plugins, would neither break anything or really even add overhead if you don't want to
-use them.
+So, in 1.6.0 it was decided that adding multimethods to the system would give extra flexibility and utility, and if the defaults just called the existing plugins, would neither break anything or really even add overhead if you don't want to use them.
 
-The result seems pretty positive: It is much easier to use the multimethods to customize how things render, and the
-use of a predefined hierarchy (for multimethods) means you can add additional multimethods to customize how rendering
-should work in general. The new support defines a number of multimethods, but you can actually choose not to use
-some of them at all.
+The result seems pretty positive: It is much easier to use the multimethods to customize how things render, and the use of a predefined hierarchy (for multimethods) means you can add additional multimethods to customize how rendering should work in general.
+The new support defines a number of multimethods, but you can actually choose not to use some of them at all.
 
 This section of the manual will refer to the new namespaces:
 
@@ -2335,18 +2329,17 @@ The default implementation of this will do a legacy search of the control map in
 `com.fulcrologic.rad.form-render/render-field`, whose `:default` dispatch does the old behavior.
 You can redefine that dispatch to change the default.
 
-Technically, redefining the default dispatch (via defmethod) for those two will let you completely override how
-forms are rendered (just make sure you do that after you require the form ns).
+Technically, redefining the default dispatch (via defmethod) for those two will let you completely override how forms are rendered (just make sure you do that after you require the form ns).
 
 ==== Dispatch Hierarchy
 
-The multimethods in form-render all use the `form-render/render-hierarchy` (See Clojure Multimethods) and most of them
-dispatch on a vector (e.g. [type style] or [attribute-keyword style]). You can use the hierarchy to set up fall-through.
+The multimethods in form-render all use the `form-render/render-hierarchy` (See Clojure Multimethods) and most of them dispatch on a vector (e.g. [type style] or [attribute-keyword style]).
+You can use the hierarchy to set up fall-through.
 
-Unfortunately hierarchies differ slightly in CLJ vs CLJS. In CLJ the render-hierarchy is a plain var, but in CLJS
-it is an atom so that the hierarchy can be modified at runtime. This makes the usage of `derive`
-and `isa?` a little confusing so the form-render ns includes a CLJC version called `derive!` and and `isa?` that will
-work without having to think about it.
+Unfortunately hierarchies differ slightly in CLJ vs CLJS.
+In CLJ the render-hierarchy is a plain var, but in CLJS it is an atom so that the hierarchy can be modified at runtime.
+This makes the usage of `derive`
+and `isa?` a little confusing so the form-render ns includes a CLJC version called `derive!` and and `isa?` that will work without having to think about it.
 
 For example, say you want to use the same rendering code to render all kinds of numeric fields.
 The supplied `fr/render-field` dispatches on `[data-type style]` (where style is from form field-styles, attribute field-style, or attribute style).
@@ -2367,9 +2360,9 @@ You could indicate the relation of the numeric data types, and define two styles
   (dom/div ...))
 -----
 
-Another example is for relating types. Perhaps you have two different kinds of entities (let's say entities identified
-by :car/id and :vehicle/id) in your database that are very closely related and you can see how one render function
-could be used for rendering both kinds of forms. The `fr/render-form` method dispatches on id-keyword and style.
+Another example is for relating types.
+Perhaps you have two different kinds of entities (let's say entities identified by :car/id and :vehicle/id) in your database that are very closely related and you can see how one render function could be used for rendering both kinds of forms.
+The `fr/render-form` method dispatches on id-keyword and style.
 So, you could use derive to indicate this fall-through:
 
 [source]
@@ -2382,8 +2375,7 @@ So, you could use derive to indicate this fall-through:
   (dom/div ...))
 -----
 
-If you'd like the system to start out considering `:default` to be the parent of all attribute keywords (so that
-the vector dispatch supports :default within the vector), then you can call the helper:
+If you'd like the system to start out considering `:default` to be the parent of all attribute keywords (so that the vector dispatch supports :default within the vector), then you can call the helper:
 
 [source]
 -----
@@ -2400,42 +2392,40 @@ the vector dispatch supports :default within the vector), then you can call the 
 The multimethod rendering pre-defines:
 
 * `(render-form renv id-attribute)` - Intended to encapsulate the rendering of the entire form.
-Usually the definition of this would call the other multimethods like `render-header` and `render-fields`, but that
-is completely up to you. The global default calls the map-based default for the UI plugin.
-* `(render-header renv attr)` - Intended to render headers for things. This exists for your (optional) convenience, and
-your composition of this into your other calls will determine how it is used.
-* `(render-footer renv attr)` - Intended to render footers for things. Comments about this are the same as for header.
-* `(render-fields renv id-attr)` - Intended to act as the field layout. Optional and for your convenience.
-* `(render-field renv attr)` - Renders a usable form field. Dispatches on `[type style]`. The default falls back to the
-UI plugin map.
+Usually the definition of this would call the other multimethods like `render-header` and `render-fields`, but that is completely up to you.
+The global default calls the map-based default for the UI plugin.
+* `(render-header renv attr)` - Intended to render headers for things.
+This exists for your (optional) convenience, and your composition of this into your other calls will determine how it is used.
+* `(render-footer renv attr)` - Intended to render footers for things.
+Comments about this are the same as for header.
+* `(render-fields renv id-attr)` - Intended to act as the field layout.
+Optional and for your convenience.
+* `(render-field renv attr)` - Renders a usable form field.
+Dispatches on `[type style]`.
+The default falls back to the UI plugin map.
 
 but the mere existence of the multimethods does not mean they get called, since you have to write the
-`defmethod` for each dispatch value you plan to use, and *you* choose what to call from where (do you want a header
-for the given element style?).
+`defmethod` for each dispatch value you plan to use, and *you* choose what to call from where (do you want a header for the given element style?).
 
-For example, when rendering a to-many ref as a table clearly the header is the top of the table that lists things
-like column names, and that must be rendered in the context of the form that has the to-many ref, not in the
-context of each row (which are themselves forms that could have headers/footers, but in this case probably won't).
+For example, when rendering a to-many ref as a table clearly the header is the top of the table that lists things like column names, and that must be rendered in the context of the form that has the to-many ref, not in the context of each row (which are themselves forms that could have headers/footers, but in this case probably won't).
 
-IMPORTANT: ONLY `render-form` and `render-field` are used by default in order to maintain
-backward compatibility with the map-based rendering plugin.
+IMPORTANT: ONLY `render-form` and `render-field` are used by default in order to maintain backward compatibility with the map-based rendering plugin.
 The other methods are defined to establish possible useful patterns and are not used by base RAD.
 
-TIP: If you enable dev-time source line attribution in the compiler options you can at least see where a DOM element came from
-in the source. See the https://book.fulcrologic.com/#_shadow_cljs_build_tool_configuration[Fulcro Developer's Guide].
+TIP: If you enable dev-time source line attribution in the compiler options you can at least see where a DOM element came from in the source.
+See the https://book.fulcrologic.com/#_shadow_cljs_build_tool_configuration[Fulcro Developer's Guide].
 
 ==== Render Multimethod Dispatch
 
-The dispatch rules for the predefined rendering multimethods looks a bit complex at first, but in general they
-are meant to allow the least typing for the common case in options.
+The dispatch rules for the predefined rendering multimethods looks a bit complex at first, but in general they are meant to allow the least typing for the common case in options.
 
-The `fro/style` option is the fallback for pretty much everything. There are other style keys (e.g.
-`fro/header-style`) which are meant to *override* the general style of a form. For example, if you chose
-to render a subform with a `:table` style, you probably also need the header, fields, and footer to know that as well.
+The `fro/style` option is the fallback for pretty much everything.
+There are other style keys (e.g.
+`fro/header-style`) which are meant to *override* the general style of a form.
+For example, if you chose to render a subform with a `:table` style, you probably also need the header, fields, and footer to know that as well.
 So, it makes sense to use `fro/style` the fall-through.
 
-For fields there are already existing options for styles (`ao/style`, `fo/field-style`, and `fo/field-styles`), so it
-makes sense to honor those in the new method dispatch.
+For fields there are already existing options for styles (`ao/style`, `fo/field-style`, and `fo/field-styles`), so it makes sense to honor those in the new method dispatch.
 
 The complete rules of dispatch are:
 
@@ -2449,14 +2439,13 @@ The dispatch uses a vector of `[qualified-keyword style]`, where the `style` is 
 * finally will look on the attribute.
 * Otherwise it will use a style of `:default`
 +
-Note that the attribute in question will be the entity ID attribute. In the case of render-header/footer/fields you
-write the calling code and can choose the attribute to pass in.
+Note that the attribute in question will be the entity ID attribute.
+In the case of render-header/footer/fields you write the calling code and can choose the attribute to pass in.
 
 `render-fields`::
 
-The `render-fields` method dispatch is identical to `render-form` (`[id-key style]`), and this method is always
-intended to be called in the context of the currently-rendering form-instance with an id-attribute. The only
-difference is that it will first try to find `fro/fields-style`, and then fall back to `fro/style`.
+The `render-fields` method dispatch is identical to `render-form` (`[id-key style]`), and this method is always intended to be called in the context of the currently-rendering form-instance with an id-attribute.
+The only difference is that it will first try to find `fro/fields-style`, and then fall back to `fro/style`.
 
 `render-header`::
 +
@@ -2482,9 +2471,8 @@ Same as render-header, but replace `fro/header-style` with `fro/footer-style`.
 +
 Dispatches on `[field-data-type style]` where style is derived as follows:
 +
-* Look for `fro/style` on the subform options. This is for the case of ref attributes where the field render
-  (which might need to wrap a to-many collection) must know the context that the subform will be rendered in,
-  and that should be preferred.
+* Look for `fro/style` on the subform options.
+This is for the case of ref attributes where the field render (which might need to wrap a to-many collection) must know the context that the subform will be rendered in, and that should be preferred.
 * Then look in form `fo/field-styles` (map from k -> field style)
 * Then look for `fro/style` on the attribute
 * Then look for `fo/field-style` on the attribute
@@ -2493,15 +2481,12 @@ Dispatches on `[field-data-type style]` where style is derived as follows:
 
 ==== Example Setup
 
-Let's say you want to use the semantic UI rendering plugin to get the table support and predefined field renderers,
-but you want to also better leverage the new multimethods. The forms will already have set up a default
-render-field that uses the SUI controls, so there is nothing to do there; however, the render-form defaults
-to calling into the old plugin.
+Let's say you want to use the semantic UI rendering plugin to get the table support and predefined field renderers, but you want to also better leverage the new multimethods.
+The forms will already have set up a default render-field that uses the SUI controls, so there is nothing to do there; however, the render-form defaults to calling into the old plugin.
 
 Let's also assume you have Tailwind CSS (e.g. class "mt-12").
 
-The first thing is to make a function that can install the support under a well-known style key so
-we can opt into the new rendering (and let the SUI plugin take care of pre-existing code):
+The first thing is to make a function that can install the support under a well-known style key so we can opt into the new rendering (and let the SUI plugin take care of pre-existing code):
 
 [source]
 -----
@@ -2534,13 +2519,11 @@ we can opt into the new rendering (and let the SUI plugin take care of pre-exist
   (fr/install-as! app :multimethod))
 -----
 
-Calling `install!` on startup will make it so that any forms that set `fro/style :multimethod` will use the new
-rendering.
+Calling `install!` on startup will make it so that any forms that set `fro/style :multimethod` will use the new rendering.
 
-Next, we should set up some defaults so that selecting multimethod as the style does something. We'll leverage the
-plugin to provide those defaults, but split them out so we can customize them. Note that we have to supply a default
-for rendering `:ref` fields because once we're using the multimethods there is no special handling of refs like there
-is in the standard SUI plugin, but we can dispatch to the code that is in the plugin.
+Next, we should set up some defaults so that selecting multimethod as the style does something.
+We'll leverage the plugin to provide those defaults, but split them out so we can customize them.
+Note that we have to supply a default for rendering `:ref` fields because once we're using the multimethods there is no special handling of refs like there is in the standard SUI plugin, but we can dispatch to the code that is in the plugin.
 
 [source]
 -----
@@ -2630,9 +2613,8 @@ is in the standard SUI plugin, but we can dispatch to the code that is in the pl
 (defmethod fr/render-footer :default [renv attr])
 -----
 
-The plugin already has rendering for fields defined for a lot of types, and the multimethod for `render-field` has
-a default that uses the installed UI plugin's map. So there is nothing to do to get fields to render with
-multimethods, but if you do a `defmethod` on `fr/render-field` then that will take precedence:
+The plugin already has rendering for fields defined for a lot of types, and the multimethod for `render-field` has a default that uses the installed UI plugin's map.
+So there is nothing to do to get fields to render with multimethods, but if you do a `defmethod` on `fr/render-field` then that will take precedence:
 
 [source]
 -----
@@ -2640,11 +2622,11 @@ multimethods, but if you do a `defmethod` on `fr/render-field` then that will ta
 (defmethod fr/render-field [:string :default] ...)
 -----
 
-Finally, let's do something new! Let's say we want to-many subforms to render as a table, where the header of the
-table has the field labels, and the rows just show the inputs.
+Finally, let's do something new!
+Let's say we want to-many subforms to render as a table, where the header of the table has the field labels, and the rows just show the inputs.
 
-First, we define how to render a `:ref` field that uses a `:table` style. This will let us add `fro/style` to the
-subform options and get a table:
+First, we define how to render a `:ref` field that uses a `:table` style.
+This will let us add `fro/style` to the subform options and get a table:
 
 [source]
 -----
@@ -2666,8 +2648,8 @@ subform options and get a table:
 -----
 
 We need to use `render-subform` for each of the items, which in turn will hit `render-form` for each of them.
-We're also calling `render-header` and `render-footer`, so we should write those. Basically the header is going
-to be the field lables, and the footer is going to be the (optional) add button.
+We're also calling `render-header` and `render-footer`, so we should write those.
+Basically the header is going to be the field lables, and the footer is going to be the (optional) add button.
 
 [source]
 -----
@@ -2729,10 +2711,9 @@ See the `new-rendering` branch of the Fulcro Rad Demo to play with this exact co
 
 ===== Remember To Derive!
 
-For the vector-based entry of `:default` to act like you expect, all keywords that should fall through to that default
-must be "derived" using the `fr/derive!` function. So, for example if you want [:ref :table] to fall through to
-[:ref :default] (instead of the top level `:default`), then you must run `(fr/derive! :table :default)` before
-you render with that style.
+For the vector-based entry of `:default` to act like you expect, all keywords that should fall through to that default must be "derived" using the `fr/derive!` function.
+So, for example if you want [:ref :table] to fall through to
+[:ref :default] (instead of the top level `:default`), then you must run `(fr/derive! :table :default)` before you render with that style.
 
 This allows you to relate your styles:
 
@@ -3071,7 +3052,12 @@ For example, perhaps your report generates the number of hours an employee has w
   {:employee/hours-this-period (calculate-hours id)})
 -----
 
-== Customizing Report Layouts
+== Customizing Report Rendering
+
+There are two choices as of version 1.6 of RAD.
+One method uses maps of styles that can be selected as options (which are implements in the plugin like the Semantic UI plugin), and the other is to leverage multimethods (v1.6+).
+This section of the book covers the older map-based way.
+See the section on <<Report Rendering with Multimethods>> for the other.
 
 You will have to install UI renderers for reports to render at all.
 Your rendering plugin will come with a default layout and perhaps others.
@@ -3125,6 +3111,271 @@ Pagination is cheap, so it should never be the source of problems.
 
 Note also that filtering happens first, then sorting, then pagination.
 If you re-sort, then filtering will never be re-applied, but if you change the filters sorting will also happen (unless disabled).
+
+== Report Rendering with Multimethods
+
+This technique for working with report rendering was added in version 1.6. The initial implementation didn't use multimethods because they do not dead-code eliminate, and they are a bit hard to trace, but with the addition in Fulcro DOM of
+https://book.fulcrologic.com/#_shadow_cljs_build_tool_configuration[source code attribution in the DOM].
+Selecting things into a map at runtime ensures you only get what you intend, and the "extras" will dead-code eliminate.
+But just *requiring* multimethods gets you something that cannot be optimized away.
+However, you can manage which namespaces you want to require, so the benefits multimethods can bring were just to great to ignore.
+
+Report multimethod use is centered around these two namespaces:
+
+[source]
+-----
+[com.fulcrologic.rad.report-render :as rr]
+[com.fulcrologic.rad.report-render-options :as rro]
+-----
+
+The former defines some stock multimethods (you can, of course add your own), only *one* of which is called by RAD itself.
+
+=== The Rendering Multimethods
+
+RAD predefines a number of multimethods for rendering:
+
+`render-report`:: Entry point called from RAD.
+`render-controls`:: Meant to contain the code for rendering the controls that appear above a report.
+`render-body`::  Meant for rendering the report itself, and probably composes together the remaining three.
+`render-header`:: Meant to render the headings (i.e. table headers) of the report
+`render-row`:: Meant to be called once per row of the report.
+`render-footer`:: Meant to render the footer (duplicate controls?)
+
+and it defines defaults for three of them to do what the older
+versions of RAD already did (so you can fall back on those if desired):
+
+[source]
+-----
+(defmethod rr/render-row :default [report-instance options row-props]
+  (let [row-class (ro/BodyItem options)]
+    (default-render-row report-instance row-class row-props)))
+(defmethod rr/render-report :default [report-instance options]
+  (default-render-layout report-instance))
+(defmethod rr/render-controls :default [this options]
+  ((control-renderer this) this))
+-----
+
+other methods are defined because they seem like the generally useful set of methods you'd want, and if you had
+to define them yourself then library authors would not have much common ground to rely on.
+
+The multimethods use the *same* dispatch hierarchy as forms.
+So `fr/derive!` and `fr/isa?`  are what you would use to manage ad-hoc polymorphism.
+
+The multimethods dispatach on vectors.
+The data that will appear in the vector for each is the row's primary key keyword (e.g. the qualified keyword of the ro/row-pk option) and a style.
+Each of the different multimethods has a custom style option in the `report-render-options` namespace, but the style will always fall back to trying the value of `rro/style` if no specialized style is defined.
+
+All of these styles are meant to appear as top-level options on the report component itself:
+
+[source]
+-----
+(defsc-report People [this props]
+  {ro/row-pk person/id
+   rro/style  :compact/table
+   rro/header-style :foo
+   ...
+  })
+-----
+
+would try to invoke the `render-report` with a dispatch of `[:person/id :compact/table]`.
+This would resolve according to multimethod rules (isa? on each element of the vector) and fall
+back to the special value `:default` (not a vector) if none are found. All the multimethods would
+expect style `:compact/table` (dispatch uses rr/style as a fallback) except for headers,
+which stated an explicit header style of `rro/header-style :foo`.
+
+=== Example Setup
+
+The Fulcro RAD Demo `new-rendering` branch includes a running sample.
+The step to follow are:
+
+. Set up you hierarchy fall-through using the form rendering hierarchy (since it is shared).
+This involves calling things like `fr/allow-defaults!` and `fr/derive!`.
+. Define multimethods for your style(s)
+. Set the style option on one or more reports.
+
+==== Setting up the Hierarchy
+
+The first step is to decide where fall-through is desired.
+Say you want to specialize how reports render people and employees, but there are some similarities.
+
+[source]
+-----
+(fr/allow-defaults! r.model/all-sttributes) ; indicate that ANY RAD attribute will fall through to :default
+(fr/derive! :employee/id :person/id) ; indicate that an employee IS a kind of person
+(fr/derive! :compact/table :table) ; indicate that a compact table is a kind of table
+-----
+
+Now if a report for employee's is rendering as a compact table the dispatch [:employee/id :compact/table] can look for multimethods that accept [:employee/id :compact/table], [:person/id :compact/table], [:employee/id :table], etc.
+
+This means that you can define, say, a custom `render-body` for `[:default :compact/table]` that adds css classes to
+compress the table, but you can then let the other elements (header/footer/rows) fall all the way through to default,
+or be specialized on the data type.
+
+==== Define the Multimethods
+
+The `com.example.ui.report-rendering` of the
+https://github.com/fulcrologic/fulcro-rad-demo/blob/new-rendering/src/shared/com/example/ui/report_rendering.cljc[new-rendering branch]
+of the Fulcro RAD Demo is a runnable demo that sets things up as follows.
+
+First, it invents style name (`:multimethod`) for `render-report`, and provides
+a default for rendering controls and the report body. In those it calls some of
+the other multimethods:
+
+[source]
+-----
+
+(defmethod rr/render-report [:default :multimethod] [this options]
+  (dom/div :.ui.container nil
+    (rr/render-controls this options)
+    (rr/render-body this options)))
+
+(defmethod rr/render-controls [:default :multimethod] [report-instance options]
+  (let [controls (control/component-controls report-instance)
+        {:keys [::report/paginate?]} options
+        {::suo/keys [report-action-button-grouping]} (suo/get-rendering-options report-instance)
+        {:keys [input-layout action-layout]} (control/standard-control-layout report-instance)
+        {:com.fulcrologic.rad.container/keys [controlled?]} (comp/get-computed report-instance)]
+    (comp/fragment
+      (div {:className (or
+                         (?! (suo/get-rendering-options report-instance suo/controls-class))
+                         "ui basic segment")}
+        ;; CODE copied From Semantic UI Plugin to render controls
+        ))))
+
+(defmethod rr/render-body :default [this options]
+  (let [rows         (report/current-rows this)
+        selected-row (report/currently-selected-row this)]
+    (dom/table :.ui.compact.table {}
+      (rr/render-header this options)
+      (dom/tbody nil
+        (map-indexed
+          (fn [idx row] (rr/render-row this options
+                          (assoc row ::report/idx idx ::report/highlighted? (= idx selected-row))))
+          rows))
+      (rr/render-footer this options))))
+-----
+
+Next, it sets up a global fall-through default for table headers and footers (since there are none). Headers are
+somewhat complex because you often want to let the user click on a header to sort the table. The code for the headers was largely lifted
+from the SUI plugin:
+
+[source]
+-----
+(defmethod rr/render-header :default [this options]
+  (let [column-headings  (report/column-heading-descriptors this options)
+        props            (comp/props this)
+        sort-params      (-> props :ui/parameters ::report/sort)
+        {::report/keys [compare-rows]} options
+        sortable?        (if-not (boolean compare-rows)
+                           (constantly false)
+                           (if-let [sortable-columns (some-> sort-params :sortable-columns set)]
+                             (fn [{::attr/keys [qualified-key]}] (contains? sortable-columns qualified-key))
+                             (constantly true)))
+        sui-header-class (suo/get-rendering-options this suo/report-table-header-class)
+        ascending?       (and sortable? (:ascending? sort-params))
+        sorting-by       (and sortable? (:sort-by sort-params))]
+    (dom/thead nil
+      (dom/tr nil
+        (map-indexed (fn [idx {:keys [label help column]}]
+                       (let [alignment-class (sur/column-alignment-class this column)]
+                         (dom/th {:key     idx
+                                  :classes [alignment-class (?! sui-header-class this idx)]}
+                           (if (sortable? column)
+                             (dom/a {:onClick (fn [evt]
+                                                (evt/stop-propagation! evt)
+                                                (report/sort-rows! this column))}
+                               label
+                               (when (= sorting-by (::attr/qualified-key column))
+                                 (if ascending?
+                                   (dom/i :.angle.down.icon)
+                                   (dom/i :.angle.up.icon))))
+                             label)
+                           #?(:cljs
+                              (when help
+                                (ui-popup {:trigger (dom/i :.ui.circle.info.icon)}
+                                  (ui-popup-content {}
+                                    help)))))))
+          column-headings)))))
+
+(defmethod rr/render-footer :default [_ _]
+  (dom/tfoot nil
+    (dom/tr nil
+      (dom/td {:colSpan 3
+               :style   {:color    "lightgrey"
+                         :fontSize "8pt"}}
+        "Table by multimethods"))))
+-----
+
+Next we define a query-less component to wrap how we will render a row. We do this because `defsc` generates a pure
+component, which will avoid rendering if the props have not changed. This is important for a table, which might
+be trying to display a lot of DOM. Then a factory is generated and called from the multimethod.
+
+[source]
+-----
+(comp/defsc TableRowLayout [_ {:keys [report-instance props] :as rp}]
+  {}
+  (let [{::report/keys [columns link links on-select-row]} (comp/component-options report-instance)
+        links          (or links link)
+        action-buttons (sur/row-action-buttons report-instance props)
+        {::report/keys [idx highlighted?]} props
+        sui-cell-class (suo/get-rendering-options report-instance suo/report-table-cell-class)]
+    (dom/tr {:classes [(when highlighted? "active")]
+             :onClick (fn [evt]
+                        (evt/stop-propagation! evt)
+                        (when-not (false? (suo/get-rendering-options report-instance suo/selectable-table-rows?))
+                          (?! on-select-row report-instance props)
+                          (report/select-row! report-instance idx)))}
+      (map-indexed
+        (fn [idx {::attr/keys [qualified-key] :as column}]
+          (let [alignment-class (sur/column-alignment-class report-instance column)
+                column-classes  (str alignment-class " " (report/column-classes report-instance column))]
+            (dom/td {:key     (str "col-" qualified-key)
+                     :classes [(?! sui-cell-class report-instance idx) column-classes]}
+              (let [{:keys [edit-form entity-id]} (report/form-link report-instance props qualified-key)
+                    link-fn (get links qualified-key)
+                    label   (report/formatted-column-value report-instance props column)]
+                (cond
+                  edit-form (dom/a {:onClick (fn [evt]
+                                               (evt/stop-propagation! evt)
+                                               (form/edit! report-instance edit-form entity-id))} label)
+                  (fn? link-fn) (dom/a {:onClick (fn [evt]
+                                                   (evt/stop-propagation! evt)
+                                                   (link-fn report-instance props))} label)
+                  :else label)))))
+        columns)
+      (when action-buttons
+        (dom/td {:key       "actions"
+                 :className (or
+                              (?! sui-cell-class report-instance (count columns))
+                              "collapsing")}
+          action-buttons)))))
+
+(let [ui-table-row-layout (comp/factory TableRowLayout)]
+  (defn render-table-row [report-instance row-class row-props]
+    (ui-table-row-layout {:report-instance report-instance
+                          :row-class       row-class
+                          :props           row-props})))
+
+
+(defmethod rr/render-row [:default :multimethod] [this options row]
+  (render-table-row this (ro/BodyItem options) row))
+-----
+
+The render-row multimethod is called with the report instance, row class, and row props. Usually you won't need the
+row class (it established the query and normalization), but it is there just in case. The bulk of the logic in row
+rendering centers around the fact that a row can be "selected" and/or have form links. So, if you want to support those
+RAD options, you'll have to include logic to handle them.
+
+That's it! A full set of multimethods for rendering reports. All you have to do is add a style option and your report
+will switch to using the multimethods:
+
+[source]
+-----
+(defsc-report Report [this props]
+  {rro/style :multimethod
+   ...
+  })
+-----
 
 = Arbitrary Form and Report UI Composition
 
