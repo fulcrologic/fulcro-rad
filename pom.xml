@@ -123,7 +123,7 @@
         <dependency>
             <groupId>com.fulcrologic</groupId>
             <artifactId>fulcro</artifactId>
-            <version>3.6.10-SNAPSHOT</version>
+            <version>3.7.0-RC1</version>
         </dependency>
         <dependency>
             <groupId>com.taoensso</groupId>

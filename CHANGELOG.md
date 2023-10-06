@@ -13,3 +13,4 @@ This file is often not updated.
 - Added rendering hint to omit labels on form fields (for rendering things like tables). See `form/render-input`
 - Added rendering hierarchy so that rendering of some element type can leverage an existing definition
 - Can now place `fo/subform` on ref attributes instead of having to colocate them on the form
+- Added similar kinds of rendering support for reports
