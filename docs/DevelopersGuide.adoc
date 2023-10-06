@@ -2349,10 +2349,10 @@ You could indicate the relation of the numeric data types, and define two styles
 
 [source]
 -----
-(fr/derive! :number :int)
-(fr/derive! :number :long)
-(fr/derive! :number :double)
-(fr/derive! :number :decimal)
+(fr/derive! :int :number)
+(fr/derive! :long :number)
+(fr/derive! :double :number)
+(fr/derive! :decimal :number)
 
 (defmethod fr/render-field [:number :default] [renv attr]
   (dom/div ...))
@@ -2367,9 +2367,9 @@ So, you could use derive to indicate this fall-through:
 
 [source]
 -----
-(fr/derive! :vehicle/id :car/id)
-(fr/derive! :vehicle/id :truck/id)
-(fr/derive! :vehicle/id :plane/id)
+(fr/derive! :car/id :vehicle/id)
+(fr/derive! :truck/id :vehicle/id)
+(fr/derive! :plane/id :vehicle/id)
 
 (defmethod fr/render-form [:vehicle/id :default] [env id-attr]
   (dom/div ...))
