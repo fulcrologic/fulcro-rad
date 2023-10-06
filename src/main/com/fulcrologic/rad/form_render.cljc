@@ -214,7 +214,7 @@
   If you add your own multimethods you may choose to use `render-hierarchy `from this namespace to get all of these.
   e.g. `(defmulti sym (fn [] ...) :hierarchy gf/render-hierarchy) `. See Clojure documentation on multimethods
   and derive. "
-  [parent-keyword child-keyword]
+  [child-keyword parent-keyword]
   #?(:cljs (swap! render-hierarchy derive child-keyword parent-keyword)
      :clj  (alter-var-root #'render-hierarchy derive child-keyword parent-keyword)))
 
@@ -223,7 +223,7 @@
   rendering multimethods. "
   [all-attrs]
   (doseq [a all-attrs]
-    (derive! :default (ao/qualified-key a))))
+    (derive! (ao/qualified-key a) :default)))
 
 (defn isa?
   " Just like clojure.core/isa?, but uses the render-hierarchy. "
