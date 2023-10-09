@@ -130,14 +130,11 @@
 
 ;; Multimethod rendering defaults
 (defmethod rr/render-row :default [report-instance options row-props]
-  (log/info "Default render-row")
   (let [row-class (ro/BodyItem options)]
     (default-render-row report-instance row-class row-props)))
 (defmethod rr/render-report :default [report-instance options]
-  (log/info "Default render-report")
   (default-render-layout report-instance))
 (defmethod rr/render-controls :default [this options]
-  (log/info "Default render-controls")
   ((control-renderer this) this))
 
 (def render-control
