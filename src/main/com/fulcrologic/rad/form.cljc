@@ -134,7 +134,7 @@
    `element` must be one of :
 
    ```
-   #{:form-container :form-body-container}
+   #{:form-container :form-body-container :ref-container :async-abandon-modal}
    ```
   "
   [{::keys [form-instance] :as form-env} element]
@@ -533,7 +533,7 @@
                                                                          :else (some-> relative-root (comp/react-type) (comp/class->registry-key)))]
                                                              (uism/trigger!! this (comp/get-ident this)
                                                                :event/route-denied
-                                                               {:form                (some-> Form (comp/class->registry-key))
+                                                               {:form                (some-> (get-class) (comp/class->registry-key))
                                                                 :relative-root       rroot
                                                                 :route               proposed-route
                                                                 :timeouts-and-params timeouts-and-params})))}
@@ -1285,9 +1285,9 @@
         :event/route-denied
         {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
                           (let [{:keys [form relative-root route timeouts-and-params]} event-data
-                                Form         (comp/registry-key->class (log/spy :info form))
-                                Root         (comp/registry-key->class (log/spy :info relative-root))
-                                user-confirm (log/spy :info (comp/component-options Form fo/confirm))]
+                                Form         (comp/registry-key->class form)
+                                Root         (comp/registry-key->class relative-root)
+                                user-confirm (comp/component-options Form fo/confirm)]
                             (if (= :async user-confirm)
                               (-> env
                                 (uism/store :desired-route event-data)
@@ -1300,7 +1300,7 @@
 
         :event/continue-abandoned-route
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (let [{:keys [form relative-root route timeouts-and-params]} (log/spy :info (uism/retrieve env :desired-route))
+                          (let [{:keys [form relative-root route timeouts-and-params]} (uism/retrieve env :desired-route)
                                 form-instance (some->> form (comp/registry-key->class) (comp/class->any fulcro-app))
                                 Router        (comp/registry-key->class relative-root)]
                             (if (::replace-route? timeouts-and-params)
