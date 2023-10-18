@@ -1227,7 +1227,7 @@ The existence of a message on the form _overrides_ the message declared on the a
 ...
 
 (form/defsc-form ThingForm [this props]
-  {::form/validation-messages
+  {fo/validation-messages
    {:thing/age (fn [form-props k]
                  (str (get form-props k) " is an invalid age."))}
    ...})
@@ -1278,19 +1278,19 @@ A simple example of this would look as follows:
 [source]
 -----
 (form/defsc-form AddressForm [this props]
-  {::form/id                address/id
-   ::form/attributes        [address/street address/city address/state address/zip]
-   ::form/cancel-route      ["landing-page"]
-   ::form/route-prefix      "address"
-   ::form/title             "Edit Address"})
+  {fo/id                address/id
+   fo/attributes        [address/street address/city address/state address/zip]
+   fo/cancel-route      ["landing-page"]
+   fo/route-prefix      "address"
+   fo/title             "Edit Address"})
 
 (form/defsc-form AccountForm [this props]
-  {::form/id                  acct/id
-   ::form/attributes          [acct/name acct/email acct/active? acct/addresses]
-   ::form/cancel-route        ["landing-page"]
-   ::form/route-prefix        "account"
-   ::form/title               "Edit Account"
-   ::form/subforms            {:account/addresses {::form/ui              AddressForm}}})
+  {fo/id                  acct/id
+   fo/attributes          [acct/name acct/email acct/active? acct/addresses]
+   fo/cancel-route        ["landing-page"]
+   fo/route-prefix        "account"
+   fo/title               "Edit Account"
+   fo/subforms            {:account/addresses {fo/ui              AddressForm}}})
 
 (defrouter MainRouter [this props]
   {:router-targets [AccountForm AddressForm]})
@@ -1298,7 +1298,7 @@ A simple example of this would look as follows:
 
 In the above example the `AddressForm` is completely usable to edit an address (if you have an ID) or create one (if it makes sense to your application to create one in isolation).
 But it is also used as a subform through the
-`:account/addresses` attribute where the `::form/subforms` map is used to configure which form should be used for the items of the to-many relationship.
+`:account/addresses` attribute where the `fo/subforms` map is used to configure which form should be used for the items of the to-many relationship.
 Additional keys in the `subforms` map entries allow for specific behavioral support.
 
 == Default Values During Creation
@@ -1319,9 +1319,9 @@ The rules the built-in RAD form state machine uses:
 
 The attributes options for setting defaults when things are created are:
 
-`::form/default-value`:: Can be placed on an attribute to indicate a default value for this attribute.
+`fo/default-value`:: Can be placed on an attribute to indicate a default value for this attribute.
 
-`::form/default-values`:: A map from attribute name (as a keyword) to a default value.
+`fo/default-values`:: A map from attribute name (as a keyword) to a default value.
 Subform data can be placed in this tree.
 
 === Relationship Lifecycle
@@ -1456,7 +1456,7 @@ We can use `fo/field-styles`
 to indicate to RAD that a reference attribute will be rendered as a field.
 In this case the `:pick-one` field type will look in `field-options` for additional information.
 This field type, of course, could also just be set as
-`::form/field-style` on the attribute itself.
+`fo/field-style` on the attribute itself.
 
 The `fo/field-options` map should contain an entry for each `:pick-one` field style.
 The options are:
@@ -1510,10 +1510,10 @@ and the UI for an `AddressForm` might look like this:
 [source]
 -----
 (form/defsc-form AddressForm [this props]
-  {::form/id                address/id
-   ::form/attributes        [address/street address/city address/state address/zip]
-   ::form/cancel-route      ["landing-page"]
-   ::form/route-prefix      "address"})
+  {fo/id                address/id
+   fo/attributes        [address/street address/city address/state address/zip]
+   fo/cancel-route      ["landing-page"]
+   fo/route-prefix      "address"})
 -----
 
 The `AccountForm` would then simply use that `AddressForm` in a subform definition like so:
@@ -1521,21 +1521,21 @@ The `AccountForm` would then simply use that `AddressForm` in a subform definiti
 [source]
 -----
 (form/defsc-form AccountForm [this props]
-  {::form/id                  acct/id
-   ::form/attributes          [acct/name acct/addresses]
-   ::form/cancel-route        ["landing-page"]
-   ::form/route-prefix        "account"
-   ::form/subforms            {:account/addresses       {::form/ui              AddressForm
-                                                         ::form/can-delete-row? (fn [parent item] (< 1 (count (:account/addresses parent))))
-                                                         ::form/can-add-row?    (fn [parent] (< (count (:account/addresses parent)) 2))}}})
+  {fo/id                  acct/id
+   fo/attributes          [acct/name acct/addresses]
+   fo/cancel-route        ["landing-page"]
+   fo/route-prefix        "account"
+   fo/subforms            {:account/addresses       {fo/ui              AddressForm
+                                                         fo/can-delete-row? (fn [parent item] (< 1 (count (:account/addresses parent))))
+                                                         fo/can-add-row?    (fn [parent] (< (count (:account/addresses parent)) 2))}}})
 -----
 
 Here the subform information for the `:account/addresses` field indicates:
 
-* `::form/ui` - The UI component to use for editing the target(s).
-* `::form/can-delete-row?` - A lambda that receives the current parent (account) props and the a referred item.
+* `fo/ui` - The UI component to use for editing the target(s).
+* `fo/can-delete-row?` - A lambda that receives the current parent (account) props and the a referred item.
 If it returns true then that item should show a delete button.
-* `::form/can-add-row?` - A lambda that receives the current parent (account).
+* `fo/can-add-row?` - A lambda that receives the current parent (account).
 If it returns true then the UI should include some kind of add control for adding a new row (address).
 You can also return `:append` (default) or `:prepend` if you'd like the newly added item to appear first or last.
 
@@ -1588,9 +1588,9 @@ Each form can set up a derived field calculation by adding a `:derive-fields` tr
   (assoc item :line-item/subtotal (math/* quantity quoted-price)))
 
 (form/defsc-form LineItemForm [this props]
-  {::form/id            line-item/id
-   ::form/attributes    [line-item/item line-item/quantity line-item/quoted-price line-item/subtotal]
-   ::form/triggers      {:derive-fields (fn [new-form-tree] (add-subtotal* new-form-tree))}
+  {fo/id            line-item/id
+   fo/attributes    [line-item/item line-item/quantity line-item/quoted-price line-item/subtotal]
+   fo/triggers      {:derive-fields (fn [new-form-tree] (add-subtotal* new-form-tree))}
 -----
 
 A `derive-fields` trigger is a referentially-transparent function that will receive the *tree* of denormalized form props for the form, and must return an optionally-updated version of that same tree.
@@ -1620,11 +1620,11 @@ Therefore the invoice (which in this example is the master form) would look like
                    line-items)))
 
 (form/defsc-form InvoiceForm [this props]
-  {::form/id            invoice/id
-   ::form/attributes    [invoice/customer invoice/date invoice/line-items invoice/total]
+  {fo/id            invoice/id
+   fo/attributes    [invoice/customer invoice/date invoice/line-items invoice/total]
    ...
-   ::form/subforms      {:invoice/line-items {::form/ui            LineItemForm}}
-   ::form/triggers      {:derive-fields (fn [new-form-tree] (sum-subtotals* new-form-tree))}
+   fo/subforms      {:invoice/line-items {fo/ui            LineItemForm}}
+   fo/triggers      {:derive-fields (fn [new-form-tree] (sum-subtotals* new-form-tree))}
    ...})
 -----
 
@@ -1633,7 +1633,7 @@ Now an attribute change of the item on a line item will first trigger the derive
 WARNING: It may be tempting to use this mechanism to invent values that are unrelated to the form and put them into the state.
 This is legal, but placing data in Fulcro's state database does *not* guarantee they will show up in rendered props.
 Fulcro pulls props from the database according to the component's query, and forms only place the listed attributes in that query.
-This means if you put an arbitrary key into the state of your form it will not show up unless you also add it to the `::form/query-inclusion` of that form.
+This means if you put an arbitrary key into the state of your form it will not show up unless you also add it to the `fo/query-inclusion` of that form.
 Of course, auto-rendering will also know nothing about it unless it is listed as some kind of attribute.
 You can define a no-op attribute (at attribute with nothing more than a type) as a way to render such on-the-fly values, but you should also be careful about how such props might interact with form loads and saves.
 
@@ -2761,6 +2761,51 @@ Then you can select your custom control by setting the `fo/field-style` on an at
 
 There are also plugin points for the wrappers around the form body, subforms, and such.
 See the RAD Semantic UI plugin for example implementations of these.
+
+=== Form Abandonment
+
+When the user tries to route away from a form with unsaved changes the default is to show a `js/confirm` dialog and
+ask if the user intends to throw away changes. If they answer yes, then routing continues, otherwise they stay on the form.
+
+In the latest versions of RAD and the SUI plugin, you can choose an alternative that can be customized. To do so you
+specify the `fo/confirm` option. This option can be a synchronous function (e.g. `js/confirm`) that takes a message
+and returns a boolean. The reason for this is to make it compatible with native (non-web) environments.
+
+You can now also set it to the special keyword `:async`, which causes the form state machine to assume you have
+a rendering plugin that can support rendering some kind of modal for the user to interact with. The SUI plugin
+includes a default modal. So, the only thing you have to do is:
+
+[source]
+-----
+(defsc-form MyForm [this props]
+  {...
+   fo/confirm :async
+   ...})
+-----
+
+If you want to customize the modal, then look at the `all-controls` map in the
+`com.fulcrologic.rad.rendering.semantic-ui.semantic-ui-controls` namespace, and copy the implementation from the
+`:default` entry, and then assoc yours into the map in the location shown when you install all controls:
+
+[source]
+-----
+(def all-controls
+  {:com.fulcrologic.rad.form/element->style->layout
+   {
+    ...
+    :async-abandon-modal {:default sui-form/standard-abandon-modal
+                          :new-style your-custom-renderer-here}}
+-----
+
+With the SUI plugin you can select the abandon modal style via the form `fo/layout-styles` option:
+
+[source]
+-----
+(defsc-form MyForm [this props]
+  {fo/confirm :async
+   fo/layout-styles {:async-abandon-modal :new-style}
+   ...
+-----
 
 === Augmenting Form Behavior
 
