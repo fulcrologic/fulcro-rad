@@ -378,6 +378,7 @@
         query-with-scalars (into
                              [id-key
                               :ui/confirmation-message
+                              :ui/route-denied?
                               ::errors
                               [::picker-options/options-cache '_]
                               [:com.fulcrologic.fulcro.application/active-remotes '_]
@@ -526,10 +527,16 @@
                                      {::validator        (attr/make-attribute-validator (form-and-subform-attributes Form) true)
                                       ::control/controls standard-controls
                                       :route-denied      (fn [this relative-root proposed-route timeouts-and-params]
-                                                           #?(:cljs
-                                                              (when-let [confirm-fn (or (comp/component-options (get-class) ::confirm) js/confirm)]
-                                                                (when (confirm-fn "You will lose unsaved changes. Are you sure?")
-                                                                  (dr/retry-route! this relative-root proposed-route timeouts-and-params)))))}
+                                                           (let [rroot (cond
+                                                                         (comp/component-class? relative-root) (comp/class->registry-key relative-root)
+                                                                         (keyword? relative-root) relative-root
+                                                                         :else (some-> relative-root (comp/react-type) (comp/class->registry-key)))]
+                                                             (uism/trigger!! this (comp/get-ident this)
+                                                               :event/route-denied
+                                                               {:form                (some-> Form (comp/class->registry-key))
+                                                                :relative-root       rroot
+                                                                :route               proposed-route
+                                                                :timeouts-and-params timeouts-and-params})))}
                                      options
                                      (cond->
                                        {:ident               (fn [_ props] [id-key (get props id-key)])
@@ -1012,8 +1019,7 @@
                                               (start-edit env (::uism/event-data env)))))}
    :event/mark-complete {::uism/handler (fn [env]
                                           (let [form-ident (uism/actor->ident env :actor/form)]
-                                            (uism/apply-action env fs/mark-complete* form-ident)))}
-   :event/route-denied  {::uism/handler (fn [env] env)}})
+                                            (uism/apply-action env fs/mark-complete* form-ident)))}})
 
 (defn mark-all-complete! [master-form-instance]
   (uism/trigger! master-form-instance (comp/get-ident master-form-instance) :event/mark-complete))
@@ -1150,6 +1156,7 @@
 
    ::uism/aliases
    {:confirmation-message [:actor/form :ui/confirmation-message]
+    :route-denied?        [:actor/form :ui/route-denied?]
     :server-errors        [:actor/form ::errors]}
 
    ::uism/states
@@ -1274,6 +1281,40 @@
 
         :event/blur
         {::uism/handler (fn [env] env)}
+
+        :event/route-denied
+        {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
+                          (let [{:keys [form relative-root route timeouts-and-params]} event-data
+                                Form         (comp/registry-key->class (log/spy :info form))
+                                Root         (comp/registry-key->class (log/spy :info relative-root))
+                                user-confirm (log/spy :info (comp/component-options Form fo/confirm))]
+                            (if (= :async user-confirm)
+                              (-> env
+                                (uism/store :desired-route event-data)
+                                (uism/assoc-aliased :route-denied? true))
+                              (do
+                                (when-let [confirm-fn (or user-confirm #?(:cljs js/confirm))]
+                                  (when (confirm-fn "You will lose unsaved changes. Are you sure?")
+                                    (dr/retry-route! (comp/class->any fulcro-app Form) Root route timeouts-and-params)))
+                                env))))}
+
+        :event/continue-abandoned-route
+        {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
+                          (let [{:keys [form relative-root route timeouts-and-params]} (log/spy :info (uism/retrieve env :desired-route))
+                                form-instance (some->> form (comp/registry-key->class) (comp/class->any fulcro-app))
+                                Router        (comp/registry-key->class relative-root)]
+                            (if (::replace-route? timeouts-and-params)
+                              (history/replace-route! fulcro-app route timeouts-and-params)
+                              (history/push-route! fulcro-app route timeouts-and-params))
+                            (dr/retry-route! form-instance Router route timeouts-and-params)
+                            (-> env
+                              (uism/assoc-aliased :route-denied? false)
+                              (uism/apply-action fs/pristine->entity* (uism/actor->ident env :actor/form)))))}
+
+        :event/clear-route-denied
+        {::uism/handler (fn [env]
+                          (uism/assoc-aliased env :route-denied? false))}
+
 
         :event/add-row
         {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
@@ -2085,3 +2126,15 @@
    (trigger! form-instance (comp/get-ident master-form) event event-data))
   ([app-ish top-form-ident event event-data]
    (uism/trigger!! app-ish top-form-ident event event-data)))
+
+(defn clear-route-denied!
+  "Send an event to a form's state machine (this-form can be the this from the body of the rendered form). This will simply
+   change `:ui/route-denied?` to false."
+  ([this-form] (clear-route-denied! this-form (comp/get-ident this-form)))
+  ([app-ish form-ident] (uism/trigger! app-ish form-ident :event/clear-route-denied)))
+
+(defn continue-abandoned-route!
+  "Send an event to a form's state machine that indicates that the most previously denied route change attempt should be
+   continued, even though it will lose the unsaved changes."
+  ([this-form] (continue-abandoned-route! this-form (comp/get-ident this-form)))
+  ([app-ish form-ident] (uism/trigger! app-ish form-ident :event/continue-abandoned-route)))

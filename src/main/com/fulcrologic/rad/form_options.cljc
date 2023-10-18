@@ -428,6 +428,30 @@
    On a form, it must be a map from keywords to booleans or (fn [this attr] boolean). On
    an attribute it is just a boolean or the fn. ")
 
+(def confirm
+  "Form option.  Specifies the method of confirming an attempt to abandon unsaved changes.
+
+   It can EITHER be:
+
+   * A SYNCHRONOUS `(fn [msg] boolean?)` that, if defined, is called in order to decide if it is ok to abandon unsaved
+     changes.
+   * The keyword `:async`.
+
+   It defaults to js/confirm.
+
+
+   The `:async` case indicates that the state machine should set `:ui/route-denied?` to true in the form's props,
+   and your rendering code will then need to show the appropriate options.
+
+   You can then, at any point in the future, send one of two events to the state machine to proceed:
+
+   * :event/clear-route-denied will simply clear the flag.
+   * :event/continue-routing will abandon the unsaved form changes and do the routing operation away from the form.
+
+   Two helper functions exist for these two operations (clear-route-denied! and continue-routing!).
+  "
+  :com.fulcrologic.rad.form/confirm)
+
 (defn subform-options
   "Use form/subform-options instead."
   ([form-options]
