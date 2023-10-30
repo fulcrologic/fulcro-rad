@@ -505,7 +505,10 @@ The core predefined attribute types include (this list is not complete yet, but 
 `:string`:: A variable-length string.
 `:enum`:: An enumerated list of values.
 Support varies by db adapter.
-`:boolean`:: true/false `:int`:: A (typically 32-bit) integer `:long`:: A (typically 64-bit) integer `:decimal`:: An arbitrary-precision decimal number.
+`:boolean`:: true/false 
+`:int`:: A (typically 32-bit) integer 
+`:long`:: A (typically 64-bit) integer 
+`:decimal`:: An arbitrary-precision decimal number. 
 Stored precision is up to the db adapter.
 `:instant`:: A binary UTC timestamp.
 `:keyword`:: An EDN keyword `:symbol`:: An EDN symbol `:ref`:: A reference to another entity/table/document.
