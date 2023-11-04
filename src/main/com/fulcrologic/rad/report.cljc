@@ -750,7 +750,8 @@
                             (some-> value (name) str/capitalize)))}
      :enum    {:default (fn [_ value _ column-attribute]
                           (if-let [labels (::attr/enumerated-labels column-attribute)]
-                            (labels value) (str value)))}
+                            (?! (labels value))
+                            (str value)))}
      :int     {:default (fn [_ value] (str value))}
      :decimal {:default    (fn [_ value] (math/numeric->str value))
                :currency   (fn [_ value] (math/numeric->str (math/round value 2)))
