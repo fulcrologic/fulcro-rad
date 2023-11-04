@@ -37,7 +37,7 @@
   :com.fulcrologic.rad.attributes/enumerated-values)
 
 (def enumerated-labels
-  "RECOMMENDED For data type :enum. A map from enumeration keyword to string (or a `(fn [] string?)` that defines
+  "RECOMMENDED For data type :enum. A map from enumeration keyword to string (or a `(fn [value] string?)` that defines
    the label that should be used for the given enumeration (for example in dropdowns). See `enumerated-values`.
 
    Labels default to a capitalized version of their keyword name."
