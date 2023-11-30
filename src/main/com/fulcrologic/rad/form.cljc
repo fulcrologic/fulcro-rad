@@ -1296,6 +1296,9 @@
                               (do
                                 (when-let [confirm-fn (or user-confirm #?(:cljs js/confirm))]
                                   (when (confirm-fn "You will lose unsaved changes. Are you sure?")
+                                    (if (::replace-route? timeouts-and-params)
+                                     (history/replace-route! fulcro-app route timeouts-and-params)
+                                     (history/push-route! fulcro-app route timeouts-and-params))
                                     (dr/retry-route! (comp/class->any fulcro-app Form) Root route timeouts-and-params)))
                                 env))))}
 
