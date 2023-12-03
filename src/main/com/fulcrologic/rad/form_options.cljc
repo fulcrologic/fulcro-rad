@@ -181,11 +181,20 @@
 
 (def default-value
   "Attribute option. The default value for this attribute when created in a new
-  form. Can be a literal value or a `(fn [form-options attr] value)`. Placed on an attribute to specify a default value."
+  form. Can be a literal value or a `(fn [form-options attr] value)`. Placed on an attribute to specify a default value.
+
+   NOTE: For to-one :ref types there will be NO default unless you specify one. This is desirable because sometimes
+   you have a 0-or-1 relation. In order to ensure that a ref auto-creates a child with a tempid, add a `default-value`
+   of an empty map using `fo/default-value` on the attribute or `fo/default-values` on the form.
+  "
   :com.fulcrologic.rad.form/default-value)
 
 (def default-values
   "Form option. A map from qualified key to a value, or a `(fn [form-options attr] {k v})`.
+
+   NOTE: For to-one :ref types there will be NO default unless you specify one. This is desirable because sometimes
+   you have a 0-or-1 relation. In order to ensure that a ref auto-creates a child with a tempid, add a `default-value`
+   of an empty map using `fo/default-value` on the attribute or `fo/default-values` on the form.
 
    Overrides the ::form/default-value that can be placed on an attrubute."
   :com.fulcrologic.rad.form/default-values)
