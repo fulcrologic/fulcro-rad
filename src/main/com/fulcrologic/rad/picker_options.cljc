@@ -275,7 +275,7 @@
 (def quick-create
   "Picker option (e.g. for fo/field-options).
 
-   A `(fn [parent-instance parent-relation] entity-with-tempid)` that must return an entity that can be immediately saved to the server
+   A `(fn [user-typed-text] entity-with-tempid)` that must return an entity that can be immediately saved to the server
    via `form/save!`. You MUST give the entity a tempid.
 
    `po/form` is not required and is not used.
