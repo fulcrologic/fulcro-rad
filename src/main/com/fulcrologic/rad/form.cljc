@@ -1344,6 +1344,9 @@
                                                          (let [new-value (get-in (::uism/state-map env) target-path)]
                                                            (protected-on-change env on-change parent-ident parent-relation old-value new-value))
                                                          env))]
+                            (when-not relation-attr
+                              (log/error "Cannot add child because you forgot to put the attribute for" parent-relation
+                                "in the fo/attributes of " (comp/component-name parent)))
                             (-> env
                               (uism/apply-action
                                 (fn [s]
