@@ -65,7 +65,7 @@
       (map (fn [[k v]]
              (str (encode-uri-component (name k)) "=" (encode-uri-component (str v)))) string-key-values))))
 
-(>defn- route->url
+(>defn route->url
   "Construct URL from route and params"
   [route params hash-based?]
   [coll? (? map?) boolean? => string?]
@@ -111,11 +111,11 @@
       (f route (assoc params ::history/direction direction)))))
 
 (defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events? prefix recent-history default-route
-                         fulcro-app]
+                         fulcro-app route-to-url url-to-route]
   RouteHistory
   (-push-route! [this route params]
     #?(:cljs
-       (let [url (str prefix (route->url route params hash-based?))]
+       (let [url (str prefix (route-to-url route params hash-based?))]
          (log/spy :debug ["Pushing route" route params])
          (when all-events?
            (notify-listeners! this route params :push))
@@ -125,7 +125,7 @@
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
-       (let [url (str prefix (route->url route params hash-based?))]
+       (let [url (str prefix (route-to-url route params hash-based?))]
          (when all-events?
            (notify-listeners! this route params :replace))
          (log/spy :debug ["Replacing route" route params])
@@ -154,7 +154,7 @@
            :else (log/error "No prior route. Ignoring BACK request.")))))
   (-add-route-listener! [_ listener-key f] (swap! listeners assoc listener-key f))
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
-  (-current-route [_] (url->route hash-based? prefix)))
+  (-current-route [_] (url-to-route hash-based? prefix)))
 
 (defn new-html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
@@ -164,15 +164,23 @@
    `default-route` - A map of `{:route r :params p}` to use when there is no prior route, but the user tries to navigate to the prior screen.
    IF YOU PROVIDE default-route, THEN YOU MUST ALSO PROVIDE `app` for it to work.
    `app` - The Fulco application that is being served.
-   `prefix`      - Prepend prefix to all routes, in cases we are not running on root url (context-root)"
-  [{:keys [hash-based? all-events? prefix default-route app] :or {all-events? false, hash-based? false, prefix nil}}]
+   `prefix`      - Prepend prefix to all routes, in cases we are not running on root url (context-root)
+   `route->url` - Specify a function that can convert a given RAD route into a URL. Defaults to the function of this name in this ns.
+   `url->route` - Specify a function that can convert a URL into a RAD route. Defaults to the function of this name in this ns."
+  [{:keys [hash-based? all-events? prefix default-route app
+           route->url url->route] :or {all-events? false
+                                       hash-based? false
+                                       prefix      nil
+                                       route->url  route->url
+                                       url->route  url->route}}]
   (assert (or (not prefix)
             (and (str/starts-with? prefix "/")
               (not (str/ends-with? prefix "/"))))
     "Prefix must start with a slash, and not end with one.")
   #?(:cljs
      (try
-       (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix (atom []) default-route app)
+       (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix (atom []) default-route app
+                                  route->url url->route)
              pop-state-listener (fn [evt]
                                   (let [current-uid (-> history (:current-uid) deref)
                                         event-uid   (gobj/getValueByKeys evt "state" "uid")
