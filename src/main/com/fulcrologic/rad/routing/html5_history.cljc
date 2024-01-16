@@ -14,7 +14,8 @@
     [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.transit :refer [transit-clj->str transit-str->clj]]
     [clojure.spec.alpha :as s]
-    [taoensso.timbre :as log])
+    [taoensso.timbre :as log]
+    [clojure.core :as core])
   #?(:clj (:import (java.net URLDecoder URLEncoder)
                    (java.nio.charset StandardCharsets))))
 
@@ -35,75 +36,143 @@
      :cljs (js/encodeURIComponent v)))
 
 (>defn query-params
-  [raw-search-string]
-  [string? => map?]
-  (try
-    (let [param-string (str/replace raw-search-string #"^[?]" "")]
-      (reduce
-        (fn [result assignment]
-          (let [[k v] (str/split assignment #"=")]
-            (cond
-              (and k v (= k "_rp_")) (merge result (transit-str->clj (base64-decode (decode-uri-component v))))
-              (and k v) (assoc result (keyword (decode-uri-component k)) (decode-uri-component v))
-              :else result)))
-        {}
-        (str/split param-string #"&")))
-    (catch #?(:clj Exception :cljs :default) e
-      (log/error e "Cannot decode query param string")
-      {})))
+  "Decode a query string into a map of key/value pairs. The keys and values are decoded using decode-uri-component.
+   The query string should not include the leading '?' character. optpnal fn-kv is a function that can be used to transform the key and value."
+  ([qstr]
+   [string? => map?]
+   (query-params qstr (fn [k v] [(keyword (decode-uri-component k)) (decode-uri-component v)])))
+  ([qstr fn-kv]
+  [string?, fn? => map?]
+   (try
+     (reduce
+      (fn [result assignment]
+        (let [[k v] (str/split assignment #"=")]
+          (cond
+            (and k v (= k "_rp_")) (merge result (transit-str->clj (base64-decode (decode-uri-component v))))
+            (and k v) (apply assoc result (fn-kv k v))
+            :else result)))
+      {}
+      (str/split qstr #"&"))
+     (catch #?(:clj Exception :cljs :default) e
+       (log/error e "Cannot decode query param string")
+       {}))))
+
+(defn query-string*
+  "Convert a map to an encoded string that is acceptable on a URL.
+  The param-map allows any data type acceptable to transit. 
+  The additional key-values must all be strings, key must be a string and value must be a string. Value should uri-encoded"
+  [param-map string-key-values]
+  (let [pm? (seq param-map)
+        skv? (seq string-key-values)]
+    (if (or pm? skv?)
+      (str "?"
+           (str/join "&" (map (fn [[k v]] (str k "=" v)) string-key-values))
+           (when (and pm? skv?) "&")
+           (when pm?
+             (str "_rp_="
+                  (encode-uri-component (base64-encode (transit-clj->str param-map))))))
+      "")))
 
 (>defn query-string
   "Convert a map to an encoded string that is acceptable on a URL.
   The param-map allows any data type acceptable to transit. The additional key-values must all be strings
   (and will be coerced to string if not). "
-  [param-map & {:as string-key-values}]
-  [map? (s/* string?) => string?]
-  (str "?_rp_="
-    (encode-uri-component (base64-encode (transit-clj->str param-map)))
-    "&"
-    (str/join "&"
-      (map (fn [[k v]]
-             (str (encode-uri-component (name k)) "=" (encode-uri-component (str v)))) string-key-values))))
+  ([param-map]
+   [map? => string?]
+   (query-string param-map nil))
+  ([param-map string-key-values]
+   [map? (? string?) => string?] ; !!! this is not correct, how to specify optional map of strings 
+   (query-string* param-map
+                  (into {} (map (fn [[k v]]
+                                  [(encode-uri-component (name k)) (encode-uri-component (str v))]) string-key-values)))))
 
 (>defn route->url
-  "Construct URL from route and params"
-  [route params hash-based?]
-  [coll? (? map?) boolean? => string?]
-  (let [q (query-string (or params {}))]
-    (if hash-based?
-      (str q "#/" (str/join "/" (map str route)))
-      (str "/" (str/join "/" (map str route)) q))))
+  "Construct URL from route and query-string"
+  ([route qstr]
+   [coll? string? => string?]
+   (route->url route qstr false))
+  ([route qstr hash-based?]
+   [coll? string? boolean? => string?]
+   (let [path (str/join "/" (map str route))]
+     (if hash-based?
+       (str qstr "#/" path)
+       (str "/" path qstr)))))
+
+(defn browser-url-data
+  "Return tuple [path qstr] from browser. Prefix is removed from path.
+  !!!! Where is auotdetecting hash-based? ???? 
+   Parameter hash-based? specifies whether to expect hash based routing. If no
+   parameter is provided the mode is autodetected from presence of hash segment in URL.
+   "
+  [hash-based? prefix]
+  #?(:cljs
+     (let [path      (if hash-based?
+                       (str/replace (.. js/document -location -hash) #"^[#]" "")
+                       (.. js/document -location -pathname)) 
+           pcnt      (count prefix)
+           prefixed? (> pcnt 0)
+           path      (if (and prefixed? (str/starts-with? path prefix))
+                       (subs path pcnt)
+                       path)
+           search      (.. js/document -location -search)] 
+       ;; handle "bu%C4%8Da" & drop leading &
+       [(decode-uri-component path) (str/replace search #"^[?]" "")])))            
 
 (defn url->route
-  "Convert the current browser URL into a route path and parameter map. Returns:
+  "Convert URL (path and query-string) into a route path and parameter map.
+   See browser-url-data for more info about path and qstr.
+   Returns:
 
    ```
    {:route [\"path\" \"segment\"]
     :params {:param value}}
    ```
 
-   You can save this value and later use it with `apply-route!`.
+   You can save this value and later use it with `apply-route!`. "
+  ([path qstr]
+   (url->route path qstr query-params))
+  ([path qstr decode-query-string]
+   {:route (vec (drop 1 (str/split path #"/")))
+    :params (or (some-> qstr (decode-query-string)) {})}))
 
-   Parameter hash-based? specifies whether to expect hash based routing. If no
-   parameter is provided the mode is autodetected from presence of hash segment in URL.
-  "
-  ([] (url->route #?(:clj  false
-                     :cljs (some? (seq (.. js/document -location -hash)))) nil))
-  ([hash-based?] (url->route hash-based? nil))
-  ([hash-based? prefix]
-   #?(:cljs
-      (let [path      (if hash-based?
-                        (str/replace (.. js/document -location -hash) #"^[#]" "")
-                        (.. js/document -location -pathname))
-            pcnt      (count prefix)
-            prefixed? (> pcnt 0)
-            path      (if (and prefixed? (str/starts-with? path prefix))
-                        (subs path pcnt)
-                        path)
-            route     (vec (drop 1 (str/split path #"/")))
-            params    (or (some-> (.. js/document -location -search) (query-params)) {})]
-        {:route  route
-         :params params}))))
+(comment
+
+  (route->url ["a" "b"] {} false)
+  (route->url ["a" "b"] {} true)
+  (route->url ["a" "b"] {:a 1} false)
+  (route->url ["a" "b"] {:a 1} true)
+
+  (route->url ["a" "b"] {} true)
+  (route->url ["a" "b"] {:a 1} true)
+  (route->url ["a" "b"] {:a 1} true)
+
+  (query-string {} {})
+  (query-string {} {"a" 1})
+  (query-string {:c 3} {"a" 1 :b "test"})
+
+  (query-string* {:a 1 :b 2} {"c" "3"})
+  (query-string* {:a 1 :b 2} {"c" "3"} (fn [k v] [(clojure.string/upper-case  ( str k)) (str v)]))
+  (query-string* nil {:c "3"})
+  (query-string nil {:c "3"})
+  (query-string {} )
+  (query-string {} {})
+  (query-string {} {:c "3"})
+  (url->route "/bu%C4%8Da/11/events-and-speed"
+              "from=2024-01-12T21:39:47.85&client-id=11&until=2024-01-21T00:00:00")
+
+  (query-params "from=2024-01-12T21:39:47.85&client-id=11&until=2024-01-21T00:00:00")
+  (route->url ["buča" "11" "events-and-speed"]
+              {:from "2024-01-12T21:39:47.85"
+               :client-id "11"
+               :until "2024-01-21T00:00:00"}
+              false)
+  (url->route "/buča/11/events-and-speed"
+              "a=1&_rp_=WyJeICIsIn46ZnJvbSIsIjIwMjQtMDEtMTJUMjE6Mzk6NDcuODUiLCJ%2BOmNsaWVudC1pZCIsIjExIiwifjp1bnRpbCIsIjIwMjQtMDEtMjFUMDA6MDA6MDAiXQ%3D%3D")
+  (query-params "a=1&_rp_=WyJeICIsIn46ZnJvbSIsIjIwMjQtMDEtMTJUMjE6Mzk6NDcuODUiLCJ%2BOmNsaWVudC1pZCIsIjExIiwifjp1bnRpbCIsIjIwMjQtMDEtMjFUMDA6MDA6MDAiXQ%3D%3D")
+  (browser-url-data false "")
+  
+  )
+
 
 (defn- notify-listeners! [history route params direction]
   (let [listeners (some-> history :listeners deref vals)]
@@ -111,12 +180,12 @@
       (f route (assoc params ::history/direction direction)))))
 
 (defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events? prefix recent-history default-route
-                         fulcro-app route-to-url url-to-route]
+                         fulcro-app encode-query-params decode-query-string]
   RouteHistory
   (-push-route! [this route params]
     #?(:cljs
-       (let [url (str prefix (route-to-url route params hash-based?))]
-         (log/spy :debug ["Pushing route" route params])
+       (let [url (str prefix (route->url route (encode-query-params params) hash-based?))]
+         (log/spy :debug ["Pushing route" route params "->" url])
          (when all-events?
            (notify-listeners! this route params :push))
          (reset! current-uid (swap! generator inc))
@@ -125,7 +194,7 @@
          (.pushState js/history #js {"uid" @current-uid} "" url))))
   (-replace-route! [this route params]
     #?(:cljs
-       (let [url (str prefix (route-to-url route params hash-based?))]
+       (let [url (str prefix (route->url route (encode-query-params params) hash-based?))]
          (when all-events?
            (notify-listeners! this route params :replace))
          (log/spy :debug ["Replacing route" route params])
@@ -154,7 +223,8 @@
            :else (log/error "No prior route. Ignoring BACK request.")))))
   (-add-route-listener! [_ listener-key f] (swap! listeners assoc listener-key f))
   (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
-  (-current-route [_] (url-to-route hash-based? prefix)))
+  (-current-route [_] (let [[path qstr] (browser-url-data hash-based? prefix)]
+                        (log/spy (url->route path qstr decode-query-string)))))
 
 (defn new-html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
@@ -164,15 +234,15 @@
    `default-route` - A map of `{:route r :params p}` to use when there is no prior route, but the user tries to navigate to the prior screen.
    IF YOU PROVIDE default-route, THEN YOU MUST ALSO PROVIDE `app` for it to work.
    `app` - The Fulco application that is being served.
-   `prefix`      - Prepend prefix to all routes, in cases we are not running on root url (context-root)
-   `route->url` - Specify a function that can convert a given RAD route into a URL. Defaults to the function of this name in this ns.
-   `url->route` - Specify a function that can convert a URL into a RAD route. Defaults to the function of this name in this ns."
+   `prefix` - Prepend prefix to all routes, in cases we are not running on root url (context-root)
+   `encode-query-params` - Specify a function that can convert a params into query-streng. Defaults to the function query-params in this ns.
+   `decode-query-string` - Specify a function that can convert a query-string params mao in Defaults to the function query-string in this ns."
   [{:keys [hash-based? all-events? prefix default-route app
-           route->url url->route] :or {all-events? false
+           encode-query-params decode-query-string] :or {all-events? false
                                        hash-based? false
                                        prefix      nil
-                                       route->url  route->url
-                                       url->route  url->route}}]
+                                       encode-query-params query-string
+                                       decode-query-string query-params}}]
   (assert (or (not prefix)
             (and (str/starts-with? prefix "/")
               (not (str/ends-with? prefix "/"))))
@@ -180,7 +250,7 @@
   #?(:cljs
      (try
        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix (atom []) default-route app
-                                  route->url url->route)
+                                               encode-query-params decode-query-string)
              pop-state-listener (fn [evt]
                                   (let [current-uid (-> history (:current-uid) deref)
                                         event-uid   (gobj/getValueByKeys evt "state" "uid")
