@@ -385,7 +385,8 @@
                               [::uism/asm-id '_]
                               fs/form-config-join]
                              (map ::attr/qualified-key)
-                             scalars)
+                             ;; Make sure id isn't included twice, if it is also to be displayed in the for
+                             (remove #{id-attr} scalars))
         full-query         (into query-with-scalars
                              (mapcat (fn [{::attr/keys [qualified-key] :as attr}]
                                        (if-let [subform (subform-ui form-options attr)]
