@@ -3025,7 +3025,6 @@ A sample report might look like this:
                                                           :label "Show Past Employees?"}}
    ro/initial-parameters       (fn [report-env] {:include-disabled? false})
    ro/run-on-mount?            true
-   ro/run-on-parameter-change? true
    :route-segment ["employee-list"]})
 -----
 
@@ -3048,9 +3047,6 @@ The type/label options are used to generate a query toolbar.
 May also be a lambda to generate the map.
 `ro/run-on-mount?`:: Boolean.
 If true it causes the report to auto-run when mounted.
-`ro/run-on-parameter-change?`:: Boolean.
-If true it causes the report to auto-run when a parameter is changed.
-Auto-debounced.
 
 == Handling Report Queries
 
