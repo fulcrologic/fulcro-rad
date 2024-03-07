@@ -180,18 +180,25 @@
   #?(:cljs
      (try
        (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix (atom []) default-route app
-                                  route->url url->route)
-             pop-state-listener (fn [evt]
-                                  (let [current-uid (-> history (:current-uid) deref)
-                                        event-uid   (gobj/getValueByKeys evt "state" "uid")
-                                        forward?    (< event-uid current-uid)
-                                        {:keys [route params]} (history/-current-route history)
-                                        listeners   (some-> history :listeners deref vals)]
-                                    (log/debug "Got pop state event." evt)
-                                    (doseq [f listeners]
-                                      (f route (assoc params ::history/direction (if forward? :forward :back))))
-                                    (swap! (:recent-history history) rest)
-                                    (reset! (:prior-route history) (history/-current-route history))))]
+                                               route->url url->route)
+             pop-state-listener
+             (fn [evt]
+               ;; The first event (at least in Chrome), is neither a
+               ;; forward or backward event but rather an
+               ;; initialization event. It doesn't have an event-uid, so we
+               ;; can distinguish it and discard it here because it is
+               ;; not a state change.
+               (when (gobj/getValueByKeys evt "state")
+                 (let [current-uid (-> history (:current-uid) deref)
+                       event-uid   (gobj/getValueByKeys evt "state" "uid")
+                       forward?    (< event-uid current-uid)
+                       {:keys [route params]} (history/-current-route history)
+                       listeners   (some-> history :listeners deref vals)]
+                   (log/debug "Got pop state event." evt)
+                   (doseq [f listeners]
+                     (f route (assoc params ::history/direction (if forward? :forward :back))))
+                   (swap! (:recent-history history) rest)
+                   (reset! (:prior-route history) (history/-current-route history)))))]
          (.addEventListener js/window "popstate" pop-state-listener)
          history)
        (catch :default e
