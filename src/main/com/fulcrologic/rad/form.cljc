@@ -38,6 +38,8 @@
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.rad.routing.history :as history]))
 
+(def ^:dynamic *default-save-form-mutation* `save-form)
+
 (def view-action "view")
 (def create-action "create")
 (def edit-action "edit")
@@ -1211,10 +1213,12 @@
        {:event/save-failed
         {::uism/handler (fn [env]
                           (let [{:keys [on-save-failed]} (uism/retrieve env :options)
-                                errors     (some-> env ::uism/event-data ::uism/mutation-result :body (get `save-form) ::errors)
-                                form-ident (uism/actor->ident env :actor/form)
-                                Form       (uism/actor-class env :actor/form)
-                                {{:keys [save-failed]} ::triggers} (some-> Form (comp/component-options))]
+                                Form          (uism/actor-class env :actor/form)
+                                {::keys                [save-mutation]
+                                 {:keys [save-failed]} ::triggers} (comp/component-options Form)
+                                save-mutation (or save-mutation *default-save-form-mutation*)
+                                errors        (some-> env ::uism/event-data ::uism/mutation-result :body (get save-mutation) ::errors)
+                                form-ident    (uism/actor->ident env :actor/form)]
                             (cond-> (uism/activate env :state/editing)
                               (seq errors) (uism/assoc-aliased :server-errors errors)
                               save-failed (save-failed form-ident)
@@ -1396,7 +1400,7 @@
                             (if (valid? form-class proposed-form-props)
                               (let [data-to-save  (calc-diff env)
                                     params        (merge event-data data-to-save)
-                                    save-mutation (or save-mutation `save-form)]
+                                    save-mutation (or save-mutation *default-save-form-mutation*)]
                                 (-> env
                                   (clear-server-errors)
                                   (uism/trigger-remote-mutation :actor/form save-mutation
