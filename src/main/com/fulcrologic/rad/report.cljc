@@ -621,7 +621,7 @@
          [generated-row-sym (symbol (str (name sym) "-Row"))
           {::control/keys [controls]
            ::keys [BodyItem edit-form columns row-pk form-links query-inclusions
-                   row-query-inclusion denormalize? row-actions route] :as options} options
+                   row-query-inclusion denormalize? row-actions route initialize-ui-props] :as options} options
           _                 (when edit-form (throw (ana/error &env "::edit-form is no longer supported. Use ::form-links instead.")))
           normalize?        (not denormalize?)
           ItemClass         (or BodyItem generated-row-sym)
@@ -656,7 +656,8 @@
                                                           :ui/current-page 1
                                                           :ui/page-count   1
                                                           :ui/current-rows []}
-                                                   (contains? ~'params ::id) (assoc ::id (::id ~'params))))
+                                                         (contains? ~'params ::id) (assoc ::id (::id ~'params))
+                                                         (seq (?! ~initialize-ui-props ~sym ~'params)) (merge (?! ~initialize-ui-props ~sym ~'params))))
                                :ident         (list 'fn [] [::id `(or (::id ~props-sym) ~fqkw)])})
           body              (if (seq (rest args))
                               (rest args)
@@ -968,7 +969,7 @@
    (assert (keyword? (options ::source-attribute)))
    (let [generated-row-key (keyword (namespace registry-key) (str (name registry-key) "-Row"))
          {::control/keys [controls]
-          ::keys         [BodyItem query-inclusions route]} options
+          ::keys         [BodyItem query-inclusions route initialize-ui-props]} options
          constructor       (comp/react-constructor (:initLocalState options))
          generated-class   (volatile! nil)
          get-class         (fn [] @generated-class)
@@ -999,15 +1000,17 @@
                               ::BodyItem     ItemClass
                               :query         (fn [] query)
                               :initial-state (fn [params]
-                                               (cond-> {:ui/parameters   {}
-                                                        :ui/cache        {}
-                                                        :ui/controls     (mapv #(select-keys % #{::control/id})
-                                                                           (remove :local? (control/control-map->controls controls)))
-                                                        :ui/busy?        false
-                                                        :ui/current-page 1
-                                                        :ui/page-count   1
-                                                        :ui/current-rows []}
-                                                 (contains? params ::id) (assoc ::id (::id params))))
+                                               (let [user-initial-state  (?! initialize-ui-props (get-class) params)]
+                                                 (cond-> {:ui/parameters   {}
+                                                          :ui/cache        {}
+                                                          :ui/controls     (mapv #(select-keys % #{::control/id})
+                                                                             (remove :local? (control/control-map->controls controls)))
+                                                          :ui/busy?        false
+                                                          :ui/current-page 1
+                                                          :ui/page-count   1
+                                                          :ui/current-rows []}
+                                                   (contains? params ::id) (assoc ::id (::id params))
+                                                   (seq user-initial-state) (merge user-initial-state))))
                               :ident         (fn [this props] [::id (or (::id props) registry-key)])})
          cls               (comp/sc registry-key options render)]
      (vreset! generated-class cls)
