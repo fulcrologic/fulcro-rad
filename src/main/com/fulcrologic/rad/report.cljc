@@ -648,16 +648,17 @@
                                ::BodyItem     ItemClass
                                :query         query
                                :initial-state (list 'fn ['params]
-                                                `(cond-> {:ui/parameters   {}
-                                                          :ui/cache        {}
-                                                          :ui/controls     (mapv #(select-keys % #{::control/id})
-                                                                             (remove :local? (control/control-map->controls ~controls)))
-                                                          :ui/busy?        false
-                                                          :ui/current-page 1
-                                                          :ui/page-count   1
-                                                          :ui/current-rows []}
-                                                         (contains? ~'params ::id) (assoc ::id (::id ~'params))
-                                                         (seq (?! ~initialize-ui-props ~sym ~'params)) (merge (?! ~initialize-ui-props ~sym ~'params))))
+                                                `(let [user-ui-props# (?! ~initialize-ui-props ~sym ~'params)]
+                                                   (cond-> {:ui/parameters   {}
+                                                            :ui/cache        {}
+                                                            :ui/controls     (mapv #(select-keys % #{::control/id})
+                                                                               (remove :local? (control/control-map->controls ~controls)))
+                                                            :ui/busy?        false
+                                                            :ui/current-page 1
+                                                            :ui/page-count   1
+                                                            :ui/current-rows []}
+                                                     (contains? ~'params ::id) (assoc ::id (::id ~'params))
+                                                     (seq user-ui-props#) (merge user-ui-props#))))
                                :ident         (list 'fn [] [::id `(or (::id ~props-sym) ~fqkw)])})
           body              (if (seq (rest args))
                               (rest args)
@@ -1000,7 +1001,7 @@
                               ::BodyItem     ItemClass
                               :query         (fn [] query)
                               :initial-state (fn [params]
-                                               (let [user-initial-state  (?! initialize-ui-props (get-class) params)]
+                                               (let [user-initial-state (?! initialize-ui-props (get-class) params)]
                                                  (cond-> {:ui/parameters   {}
                                                           :ui/cache        {}
                                                           :ui/controls     (mapv #(select-keys % #{::control/id})

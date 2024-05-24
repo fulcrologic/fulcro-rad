@@ -574,8 +574,8 @@
   "Report-only option, meant for setting up additinal component state (particularly `:ui/???` props that were added
    in a query inclusion) when the report is created or loaded.
 
-   Either a map or a `(fn [ReportClass props] props)` that, when present, is called when an instance of this
-   report is either loaded or created. 
+   Either a map or a `(fn [ReportClass initial-state-params] props)` that, when present, is called when an instance of this
+   report is either loaded or created.
 
    NOTE: It is possible for this function to be called more than once on a given report, so it should not side-effect.
 
