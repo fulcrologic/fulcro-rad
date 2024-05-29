@@ -1551,7 +1551,13 @@
         (?! read-only? form-instance attr)
         computed-value
         (let [read-only-fields (?! read-only-fields form-instance)]
-          (and (set? read-only-fields) (contains? read-only-fields qualified-key)))))))
+          (and (set? read-only-fields) (contains? read-only-fields qualified-key)))
+        (= view-action (-> (comp/props form-instance {})
+                         (::uism/asm-id)
+                         (get (comp/get-ident form-instance))
+                         ::uism/local-storage
+                         :options
+                         :action))))))
 
 (defn field-visible?
   "Should the `attr` on the given `form-instance` be visible? This is controlled:
