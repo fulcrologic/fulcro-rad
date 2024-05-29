@@ -45,6 +45,14 @@
 (def edit-action "edit")
 (declare form-machine valid? invalid? cancel! undo-all! save! render-field rendering-env)
 
+(defn view-action? [form-instance]
+  (= view-action (-> (comp/props form-instance {})
+                     (::uism/asm-id)
+                     (get (comp/get-ident form-instance))
+                     ::uism/local-storage
+                     :option
+                     :action)))
+
 (def standard-action-buttons
   "The standard ::form/action-buttons button layout. Requires you include stardard-controls in your ::control/controls key."
   [::done ::undo ::save])
@@ -70,6 +78,7 @@
                               read-only-form? (?! (comp/component-options this ::read-only?) this)
                               dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                           (not dirty?)))
+           :visible?  (fn [this] (not (view-action? this))) 
            :label     (fn [_] (tr "Undo"))
            :action    (fn [this] (undo-all! {::master-form this}))}
    ::save {:type      :button
@@ -80,6 +89,7 @@
                               remote-busy?    (seq (:com.fulcrologic.fulcro.application/active-remotes props))
                               dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                           (or (not dirty?) remote-busy?)))
+           :visible?  (fn [this] (not (view-action? this))) 
            :label     (fn [_] (tr "Save"))
            :class     (fn [this]
                         (let [props        (comp/props this)
@@ -1552,12 +1562,7 @@
         computed-value
         (let [read-only-fields (?! read-only-fields form-instance)]
           (and (set? read-only-fields) (contains? read-only-fields qualified-key)))
-        (= view-action (-> (comp/props form-instance {})
-                         (::uism/asm-id)
-                         (get (comp/get-ident form-instance))
-                         ::uism/local-storage
-                         :options
-                         :action))))))
+        (view-action? form-instance)))))
 
 (defn field-visible?
   "Should the `attr` on the given `form-instance` be visible? This is controlled:
