@@ -83,7 +83,7 @@
                               read-only-form? (?! (comp/component-options this ::read-only?) this)
                               dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                           (not dirty?)))
-           :visible?  (fn [this] (not (view-mode? this))) 
+           :visible?  (fn [this] (not (view-mode? this)))
            :label     (fn [_] (tr "Undo"))
            :action    (fn [this] (undo-all! {::master-form this}))}
    ::save {:type      :button
@@ -94,7 +94,7 @@
                               remote-busy?    (seq (:com.fulcrologic.fulcro.application/active-remotes props))
                               dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                           (or (not dirty?) remote-busy?)))
-           :visible?  (fn [this] (not (view-mode? this))) 
+           :visible?  (fn [this] (not (view-mode? this)))
            :label     (fn [_] (tr "Save"))
            :class     (fn [this]
                         (let [props        (comp/props this)
@@ -694,7 +694,7 @@
 (def pathom2-server-save-form-mutation
   {:com.wsscode.pathom.connect/mutate (fn [env params] (save-form* env params))
    :com.wsscode.pathom.connect/sym    `save-form
-   :com.wsscode.pathom.connect/params #{::id ::master-pk ::delta}})
+   :com.wsscode.pathom.connect/params [::id ::master-pk ::delta]})
 
 (def pathom2-server-save-as-form-mutation
   (assoc pathom2-server-save-form-mutation
