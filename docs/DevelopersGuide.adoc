@@ -505,10 +505,10 @@ The core predefined attribute types include (this list is not complete yet, but 
 `:string`:: A variable-length string.
 `:enum`:: An enumerated list of values.
 Support varies by db adapter.
-`:boolean`:: true/false 
-`:int`:: A (typically 32-bit) integer 
-`:long`:: A (typically 64-bit) integer 
-`:decimal`:: An arbitrary-precision decimal number. 
+`:boolean`:: true/false
+`:int`:: A (typically 32-bit) integer
+`:long`:: A (typically 64-bit) integer
+`:decimal`:: An arbitrary-precision decimal number.
 Stored precision is up to the db adapter.
 `:instant`:: A binary UTC timestamp.
 `:keyword`:: An EDN keyword `:symbol`:: An EDN symbol `:ref`:: A reference to another entity/table/document.
@@ -2515,18 +2515,19 @@ The first thing is to make a function that can install the support under a well-
   "Install multimethod rendering such that:
 
    * All keywords in the RAD model will derive from :default.
-   * A form can use `fro/style :multimethod` to switch from the built-in plugin rendering to multimethod rendering.
   "
   [app attrs]
-  (fr/allow-defaults! attrs)
-  (fr/install-as! app :multimethod))
+  (fr/allow-defaults! attrs))
 -----
 
-Calling `install!` on startup will make it so that any forms that set `fro/style :multimethod` will use the new rendering.
+Calling `install!` on startup will make it so that any RAD registered keywords will derive from :default.
 
-Next, we should set up some defaults so that selecting multimethod as the style does something.
-We'll leverage the plugin to provide those defaults, but split them out so we can customize them.
-Note that we have to supply a default for rendering `:ref` fields because once we're using the multimethods there is no special handling of refs like there is in the standard SUI plugin, but we can dispatch to the code that is in the plugin.
+The RAD rendering uses the multimethods for all rendering already, but installs `:default` handlers that call the
+old code by default, so that fall-through will hit any plugin.
+
+For our demo we will choose to use a style named `:multimethod`. I.e. forms that set `fro/style :multimethod` will use the new rendering.
+
+Next, we should set up some defaults so that selecting multimethod as the style does something. We'll leverage the plugin to provide those defaults, but split them out so we can customize them. Note that we have to supply a default for rendering `:ref` fields because once we're using the multimethods there is no special handling of refs like there is in the standard SUI plugin, but we can dispatch to the code that is in the plugin.
 
 [source]
 -----
