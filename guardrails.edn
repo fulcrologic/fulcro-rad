@@ -1,5 +1,8 @@
 {:defn-macro nil
  :throw?     false
  :emit-spec? true
+ :guardrails/mcps 20
+ :guardrails/compact? true
+ :guardrails/stack-trace :prune
  :expound    {:show-valid-values? true
               :print-specs?       true}}

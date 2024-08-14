@@ -71,7 +71,8 @@
   (component "Normal mode"
     (assertions
       "gives a string version of a number"
-      (math/numeric->str (math/numeric "1.334")) => "1.334"))
+      (math/numeric->str (math/numeric "1.334")) => "1.334"
+      (math/numeric->str (math/numeric 1.334)) => "1.334"))
   (component "Primitive mode"
     (math/with-primitive-ops
       (assertions

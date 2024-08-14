@@ -12,7 +12,6 @@
                [cljs.reader :as reader]
                [com.cognitect.transit.types :as ty]])
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn >defn- => ?]]
     [cognitect.transit :as ct]
     [clojure.string :as str]
     [taoensso.timbre :as log])
@@ -38,7 +37,6 @@
   "Predicate for clj(s) dynamic number (n or bigdecimal). Returns true if the given value is a numeric
   in the current computing context (primitive or BigDecimal)."
   [v]
-  [any? => boolean?]
   (if *primitive*
     (number? v)
     (bigdecimal? v)))
@@ -74,10 +72,9 @@
              (str/replace #"^0+([1-9].*)$" "$1")
              (str/replace #"^0*([.].*)$" "0$1"))))
 
-(>defn numeric->str
+(defn numeric->str
   "Convert a math number to a string."
   [bd]
-  [(? ::numeric) => string?]
   (if bd
     #?(:cljs (if (ct/bigdec? bd)
                (or (some-> ^js bd .-rep) "0")
@@ -88,7 +85,6 @@
 (defn numeric
   "Coerce to a numeric from an arbitrary type (number, string, or numeric)."
   [s]
-  [any? => ::numeric]
   (cond
     (nil? s) (numeric 0.0)
     (and *primitive* (bigdecimal? s)) #?(:cljs (js/parseFloat (.-rep ^js s)) :clj (Double/parseDouble (str s)))
@@ -102,13 +98,11 @@
 (defn positive?
   "Predicate for clj(s) positive bigdecimal"
   [v]
-  [any? => boolean?]
   (< 0 (numeric v)))
 
 (defn negative?
   "Predicate for clj(s) negative bigdecimal"
   [v]
-  [any? => boolean?]
   (< (numeric v) 0))
 
 (defn numeric->currency-str
