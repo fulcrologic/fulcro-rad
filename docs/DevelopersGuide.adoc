@@ -2263,6 +2263,14 @@ Here are some ideas for middleware that we've found useful:
 * Check the ownership on every entity (by ident) in the database as a security measure for writing to them.
 * Make sure the diff doesn't contain other security violations (such as changing the ownership of an entity).
 
+==== Autojoin Middleware
+
+In RAD 1.6.5 another middleware was introduced: autojoin. This middleware is used in the case where you
+want to create or edit an entity that MUST have a parent, but you simply want to specify the parent
+on form start instead of having to make the parent form with subforms in order to work with the children.
+
+See the `com.fulcrologic.rad.middleware.autojoin` namespace docstring for details and an example.
+
 === Delete Middleware
 
 Delete middleware is similar to save middleware, but quite a bit simpler.
