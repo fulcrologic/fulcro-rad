@@ -49,14 +49,14 @@
   "Returns true if the main form was started in view mode. `form-instance` can be from main form or any subform."
   [form-instance]
   (let [master-form (or (::master-form (comp/get-computed form-instance))
-                        form-instance)]
+                      form-instance)]
     (= view-action (-> master-form
-                       comp/props
-                       ::uism/asm-id
-                       (get (comp/get-ident master-form))
-                       ::uism/local-storage
-                       :options
-                       :action))))
+                     comp/props
+                     ::uism/asm-id
+                     (get (comp/get-ident master-form))
+                     ::uism/local-storage
+                     :options
+                     :action))))
 
 (def standard-action-buttons
   "The standard ::form/action-buttons button layout. Requires you include stardard-controls in your ::control/controls key."
@@ -1168,6 +1168,15 @@
     (catch #?(:cljs :default :clj Throwable) e
       (log/error e "Could not run the on-saved transaction"))))
 
+(defn undo-all
+  "UISM helper within form state machines that clears server errors, and then resets all fields back to their
+   last-saved (original) values. Returns an updated uism-env which will affect that change."
+  [uism-env]
+  (let [form-ident (uism/actor->ident uism-env :actor/form)]
+    (-> uism-env
+      (clear-server-errors)
+      (uism/apply-action fs/pristine->entity* form-ident))))
+
 (defstatemachine form-machine
   {::uism/actors
    #{:actor/form}
@@ -1306,20 +1315,17 @@
         {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
                           (let [{:keys [form relative-root route timeouts-and-params]} event-data
                                 Form         (comp/registry-key->class form)
-                                Root         (comp/registry-key->class relative-root)
                                 user-confirm (comp/component-options Form fo/confirm)]
                             (if (= :async user-confirm)
                               (-> env
                                 (uism/store :desired-route event-data)
                                 (uism/assoc-aliased :route-denied? true))
                               (do
-                                (when-let [confirm-fn (or user-confirm #?(:cljs js/confirm))]
-                                  (when (confirm-fn "You will lose unsaved changes. Are you sure?")
-                                    (if (::replace-route? timeouts-and-params)
-                                     (history/replace-route! fulcro-app route timeouts-and-params)
-                                     (history/push-route! fulcro-app route timeouts-and-params))
-                                    (dr/retry-route! (comp/class->any fulcro-app Form) Root route timeouts-and-params)))
-                                env))))}
+                                (if-let [confirm-fn (or user-confirm #?(:cljs js/confirm))]
+                                  (if (confirm-fn "You will lose unsaved changes. Are you sure?")
+                                    (leave-form env)
+                                    env)
+                                  env)))))}
 
         :event/continue-abandoned-route
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
@@ -1431,11 +1437,7 @@
                                 (uism/activate :state/editing)))))}
 
         :event/reset
-        {::uism/handler (fn [env]
-                          (let [form-ident (uism/actor->ident env :actor/form)]
-                            (-> env
-                              (clear-server-errors)
-                              (uism/apply-action fs/pristine->entity* form-ident))))}
+        {::uism/handler (fn [env] (undo-all env))}
 
         :event/cancel
         {::uism/handler leave-form}})}}})
