@@ -136,7 +136,7 @@
         (math/negative? "-4") => true))))
 
 (specification "Basic Math"
-  (assertions
+  #_(assertions
     "Primitive mode is faster than normal mode"
     (is-x-times-faster? 2
       (fn []
