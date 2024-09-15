@@ -56,6 +56,7 @@
            input        (or (get style->input input-style) (get style->input :default))]
        (if input
          (input {:instance    owner
+                 :key         (str control-key)
                  :control     control
                  :control-key control-key})
          (when (and (not= input-type :none) #?(:cljs goog.DEBUG :clj true))
