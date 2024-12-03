@@ -478,8 +478,6 @@
         silent-abandon? (?! (comp/component-options this ::silent-abandon?) this)
         machine         (get-in state-map [::uism/asm-id form-ident])]
     (when machine
-      (when silent-abandon?
-        (abandon-form! this form-ident))
       (uism/trigger! master-form form-ident :event/exit {}))
     true))
 
