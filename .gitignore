@@ -27,4 +27,5 @@ docs/.asciidoctor
 .guardrails-pro
 assets
 lsp
+.lsp
 .clj-kondo
