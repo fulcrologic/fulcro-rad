@@ -1015,8 +1015,7 @@
                               :ident         (fn [this props] [::id (or (::id props) registry-key)])})
          cls               (comp/sc registry-key options render)]
      (vreset! generated-class cls)
-     cls)
-   ))
+     cls)))
 
 (def ^:deprecated generated-row-class "Accidental duplication. Use genrow instead" genrow)
 (def ^:deprecated sc-report "Accidental duplication. Use `report` instead." report)
