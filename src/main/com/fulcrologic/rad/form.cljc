@@ -572,8 +572,6 @@
                                                                                      (form-will-enter app route-params (get-class))))})))
         attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
         inclusions                 (set/union attribute-query-inclusions (set query-inclusion))]
-    (when (and #?(:cljs goog.DEBUG :clj true) (not (string? route-prefix)))
-      (warn-once! "NOTE: " location " does not have a route prefix and will only be usable as a sub-form."))
     (when (and #?(:cljs goog.DEBUG :clj true) will-enter (not route-prefix))
       (warn-once! "NOTE: There's a :will-enter option in form/defsc-form" location "that will be ignored because ::report/route-prefix is not specified"))
     (assoc base-options :query (fn [_] (cond-> (form-options->form-query base-options)
