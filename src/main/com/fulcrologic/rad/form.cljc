@@ -635,17 +635,17 @@
    (defmacro defsc-form
      "Create a UISM-managed RAD form. The interactions are tunable by redefining the state machine using the
       `fo/machine` option, and the rendering can either be generated (if you specify no body and have a UI
-      plguin), or can be hand-coded as the body. See `render-layout` and `render-field`.
+      plugin), or can be hand-coded as the body. See `render-layout` and `render-field`.
 
       This macro supports most of the same options as the normal `defsc` macro (you can use component lifecycle, hooks,
-      etc), BUT it generates the query/ident/initial state for you.
+      etc.), BUT it generates the query/ident/initial state for you.
 
       If you do specify a `fo/route-prefix` then it also generate dynamic routing configuration, of which
       you may ONLY override :route-denied to supply a more appropriate
       UI interaction for notifying the user there are unsaved changes, but all other dynamic routing options
       will be defined by the macro. If you do not specify a route-prefix then you MAY supply dynamic routing options, but
       you should understand how they are meant to interact by reading the state machine definition (see form-machine
-      source code in this namesapce).
+      source code in this namespace).
 
       In general if you want to augment the form I/O then you should override `fo/machine` and integrate your logic into there.
       "
