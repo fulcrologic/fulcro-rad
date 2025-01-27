@@ -181,16 +181,17 @@
                                                ::keys             [file-sha]
                                                ::attr/keys        [qualified-key]
                                                ::file-upload/keys [files]}]
-                                           (let [file (-> files first :tempfile)]
+                                           (let [{file :tempfile filename :filename} (-> files first)]
                                              (cond
                                                (nil? file) (log/error "No file was attached. Perhaps you forgot to install file upload middleware?")
                                                (nil? temporary-store) (log/error "No blob storage. Perhaps you forgot to add ::blob/temporary-storage to your pathom env")
                                                :else (with-open [in (jio/input-stream file)]
                                                        (storage/save-blob! temporary-store file-sha in)
                                                        (if (eql/ident? file-ident)
-                                                         {(first file-ident)      (second file-ident)
-                                                          qualified-key           file-sha
-                                                          (url-key qualified-key) (storage/blob-url temporary-store file-sha)}
+                                                         {(first file-ident)           (second file-ident)
+                                                          qualified-key                file-sha
+                                                          (filename-key qualified-key) filename
+                                                          (url-key qualified-key)      (storage/blob-url temporary-store file-sha)}
                                                          {})))))}))
 
 #?(:clj
