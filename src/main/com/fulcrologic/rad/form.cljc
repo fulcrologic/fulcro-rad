@@ -400,6 +400,7 @@
                               [::picker-options/options-cache '_]
                               [:com.fulcrologic.fulcro.application/active-remotes '_]
                               [::uism/asm-id '_]
+                              {[:com.fulcrologic.statecharts/session-id '_] [:com.fulcrologic.statecharts.integration.fulcro.ui-routes/session]}
                               fs/form-config-join]
                              (map ::attr/qualified-key)
                              ;; Make sure id isn't included twice, if it is also to be displayed in the for
