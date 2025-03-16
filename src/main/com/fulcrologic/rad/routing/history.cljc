@@ -12,7 +12,7 @@
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.rad.routing.base :as rbase]
     [taoensso.timbre :as log]))
 
 (defprotocol RouteHistory
@@ -73,15 +73,16 @@
   ([app history route-predicate]
    [(s/keys :req [::app/runtime-atom]) ::RouteHistory fn? => any?]
    (swap! (::app/runtime-atom app) assoc ::history history)
-   (add-route-listener! app ::rad-route-control
-     (fn [route params]
-       (let [direction (:com.fulcrologic.rad.routing.history/direction params)]
-         (when (#{:forward :back} direction)                ; ONLY route if the user caused it with back/forward browser button!!!
-           (if (route-predicate app route params)
-             (dr/change-route! app route params)
-             (do
-               (log/warn "Browser routing event was denied.")
-               (undo! app route params))))))))
+   (when (rbase/dynamic-routing? app)
+     (add-route-listener! app ::rad-route-control
+       (fn [route params]
+         (let [direction (:com.fulcrologic.rad.routing.history/direction params)]
+           (when (#{:forward :back} direction)              ; ONLY route if the user caused it with back/forward browser button!!!
+             (if (route-predicate app route params)
+               (dr/change-route! app route params)
+               (do
+                 (log/warn "Browser routing event was denied.")
+                 (undo! app route params)))))))))
   ([app history]
    [(s/keys :req [::app/runtime-atom]) ::RouteHistory => any?]
    (install-route-history! app history (fn [app _ _]

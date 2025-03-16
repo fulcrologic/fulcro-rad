@@ -1331,7 +1331,8 @@
                             (if (::replace-route? timeouts-and-params)
                               (history/replace-route! fulcro-app route timeouts-and-params)
                               (history/push-route! fulcro-app route timeouts-and-params))
-                            (dr/retry-route! form-instance Router route timeouts-and-params)
+                            (when Router
+                              (dr/retry-route! form-instance Router route timeouts-and-params))
                             (-> env
                               (uism/assoc-aliased :route-denied? false)
                               (uism/apply-action fs/pristine->entity* (uism/actor->ident env :actor/form)))))}
