@@ -587,6 +587,7 @@
 
 (defn report-will-enter [app route-params report-class]
   (let [report-ident (comp/get-ident report-class {})]
+    ;; TASK: uncouple dr from RAD
     (dr/route-deferred report-ident
       (fn []
         (start-report! app report-class {:route-params route-params})

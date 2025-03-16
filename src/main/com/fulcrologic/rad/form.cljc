@@ -452,6 +452,7 @@
        {:actor/form (uism/with-actor-class form-ident form-class)}
        (merge params {::create? new?})))))
 
+; TASK: deferred routing entangled with form
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter dynamic routing hook."
   [app {:keys [action id] :as route-params} form-class]
@@ -921,6 +922,7 @@
       ;; The merge is so that `initialize-ui-props` cannot possibly harm keys that are initialized by defaults
       (merge (?! initialize-ui-props FormClass entity) entity))))
 
+; TASK: deferred routing entangled with form
 (defn route-target-ready
   "Same as dynamic routing target-ready, but works in UISM via env."
   [{::uism/keys [state-map] :as env} target]
@@ -962,6 +964,7 @@
         FormClass        (uism/actor-class uism-env :actor/form)
         form-ident       (uism/actor->ident uism-env :actor/form)
         routeable?       (boolean (get (comp/component-options FormClass) ::route-prefix))
+        ;; TASK: uncouple from dr? Perhaps this is ok, since it'll return nil
         route-pending?   (and routeable? (some? (dr/router-for-pending-target state-map form-ident)))
         id               (second form-ident)
         initial-state    (merge (default-state FormClass id) form-overrides)
@@ -990,6 +993,7 @@
                            (map? cancel-route) (let [{:keys [route target params]} cancel-route]
                                                  (cond
                                                    (comp/component-class? target) (rad-routing/route-to! fulcro-app target (or params {}))
+                                                   ;; TASK: Should not assume dr here. changing the route should be protocol based
                                                    (every? string? route) (dr/change-route! fulcro-app route params)
                                                    :else (do
                                                            (error! "did not return a valid route.")
@@ -998,6 +1002,7 @@
                            (= :back cancel-route) (if (history/history-support? fulcro-app)
                                                     (if-not embedded? (history/back! fulcro-app))
                                                     (error! "Back not supported. No history installed."))
+                           ;; TASK: Should not assume dr here. changing the route should be protocol based
                            (and (seq cancel-route) (every? string? cancel-route)) (dr/change-route! fulcro-app cancel-route)
                            (comp/component-class? cancel-route) (rad-routing/route-to! fulcro-app cancel-route {})
                            use-history (history/back! fulcro-app)))]
@@ -1205,6 +1210,7 @@
            (let [FormClass      (uism/actor-class env :actor/form)
                  form-ident     (uism/actor->ident env :actor/form)
                  routeable?     (boolean (get (comp/component-options FormClass) ::route-prefix))
+                 ; TASK: deferred routing entangled with form
                  route-pending? (and routeable? (some? (dr/router-for-pending-target state-map form-ident)))]
              (-> env
                (clear-server-errors)
@@ -1212,6 +1218,7 @@
                (handle-user-ui-props FormClass form-ident)
                (uism/apply-action fs/add-form-config* FormClass form-ident {:destructive? true})
                (uism/apply-action fs/mark-complete* form-ident)
+               ; TASK: deferred routing entangled with form
                (cond-> route-pending? (route-target-ready form-ident))
                (uism/activate :state/editing))))}
         :event/failed
@@ -1332,6 +1339,7 @@
                               (history/replace-route! fulcro-app route timeouts-and-params)
                               (history/push-route! fulcro-app route timeouts-and-params))
                             (when Router
+                              ; TASK: deferred routing entangled with form
                               (dr/retry-route! form-instance Router route timeouts-and-params))
                             (-> env
                               (uism/assoc-aliased :route-denied? false)
