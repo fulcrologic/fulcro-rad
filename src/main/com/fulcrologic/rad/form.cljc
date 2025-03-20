@@ -2069,6 +2069,27 @@
   [{::keys [master-form] :as _rendering-env}]
   (uism/trigger! master-form (comp/get-ident master-form) :event/reload))
 
+(defn ident-from-props* [id-keys props]
+  "Using known id-keys, construct an ident from props"
+  (some
+    (fn [k]
+      (let [id (get props k)]
+        (when (or (uuid? id) (int? id) (tempid/tempid? id))
+          [k id])))
+    id-keys))
+
+(defn active-rad-form-in-union*
+  "Finds the RAD form that has ident-k as the qualified form id
+
+  Returns [ident-k form-class]"
+  [RADForms ident-k]
+  (some
+    (fn [c]
+      (let [ck (-> c comp/component-options fo/id ao/qualified-key)]
+        (when (= ck ident-k)
+          [ident-k c])))
+    RADForms))
+
 #?(:clj
    (defmacro defunion
      "Create a union component out of two or more RAD forms. Such a union can be the target of to-one or to-many refs
@@ -2079,26 +2100,20 @@
      (let [id-keys     `(mapv (comp ao/qualified-key fo/id comp/component-options) [~@RADForms])
            nspc        (if (comp/cljs? &env) (-> &env :ns :name str) (name (ns-name *ns*)))
            union-key   (keyword (str nspc) (name sym))
-           ident-fn    `(fn [_# props#]
-                          (some
-                            (fn [k#]
-                              (let [id# (get props# k#)]
-                                (when (or (uuid? id#) (int? id#) (tempid/tempid? id#))
-                                  [k# id#])))
-                            ~id-keys))
+           ident-fn    `(fn [_# props#] (ident-from-props* ~id-keys props#))
            options-map {:query         `(fn [_#] (zipmap ~id-keys (map comp/get-query [~@RADForms])))
                         :ident         ident-fn
                         :componentName sym
+                        :RADFormLookup `(fn [props#]
+                                          (let [[k# _id#] (ident-from-props* ~id-keys props#)]
+                                            (active-rad-form-in-union* [~@RADForms] k#)))
                         :render        `(fn [this#]
                                           (comp/wrapped-render this#
                                             (fn []
-                                              (enc/when-let [props#   (comp/props this#)
-                                                             [k#] (comp/get-ident this#)
-                                                             factory# (some (fn [c#]
-                                                                              (let [ck# (-> c# comp/component-options fo/id ao/qualified-key)]
-                                                                                (when (= ck# k#)
-                                                                                  (comp/computed-factory c# {:keyfn ck#}))))
-                                                                        [~@RADForms])]
+                                              (enc/when-let [props#    (comp/props this#)
+                                                             [k#]      (comp/get-ident this#)
+                                                             [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
+                                                             factory#  (comp/computed-factory c# {:keyfn k#})]
                                                 (factory# props#)))))}]
        (if (comp/cljs? &env)
          `(do
@@ -2112,6 +2127,14 @@
             (let [options# ~options-map]
               (def ~(vary-meta sym assoc :once true)
                 (com.fulcrologic.fulcro.components/configure-component! ~(str sym) ~union-key options#))))))))
+
+(defn rad-form-of-union-from-props
+  "Finds the RAD form in union-class that matches props
+
+  Returns a vector: [ident-k form-class]"
+  [union-class props]
+  (when-let [lookup-fn (:RADFormLookup (comp/component-options union-class))]
+    (lookup-fn props)))
 
 (defn subform-rendering-env [parent-form-instance relation-key]
   (let [renv (rendering-env parent-form-instance)]
