@@ -12,25 +12,11 @@
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.routing.base :as rbase]
-    [com.fulcrologic.rad.routing.history :as history]))
-
-(deftype RADDynamicRouter []
-  rbase/RADRouter
-  (-route-to! [_this app options]
-    (dr/route-to! app (assoc options :before-change (fn [app {:keys [path route-params]}]
-                                                      (if (::replace-route? route-params)
-                                                        (history/replace-route! app path route-params)
-                                                        (history/push-route! app path route-params))))))
-  (-route-to! [this appish RouteTarget route-params]
-    (rbase/-route-to! this appish {:target RouteTarget :route-params route-params})))
-
-(defonce default-router (->RADDynamicRouter))
+    [com.fulcrologic.rad.routing.history :as history]
+    [taoensso.timbre :as log]))
 
 (defn absolute-path
-  "NOT RECOMMENDED. Statically tied to Dynamic Router.
-
-   Get the absolute path for the given route target. NOTE: Using a route target in multiple paths of your application
+  "Get the absolute path for the given route target. NOTE: Using a route target in multiple paths of your application
    can lead to ambiguity and failure of general routing, since this will then return an unpredictable result."
   [app-ish RouteTarget route-params]
   (let [app       (comp/any->app app-ish)
@@ -40,7 +26,6 @@
       (dr/resolve-path app-root RouteTarget route-params))))
 
 (defn can-change-route?
-  "NOT RECOMMENDED. Statically tied to Dynamic Router (inflexible)."
   [app-or-component new-route]
   (let [app            (rc/any->app app-or-component)
         root           (app/root-class app)
@@ -67,25 +52,16 @@
   You may include `::rad-routing/replace-route? true` in route-params as a hint to the history that you'd prefer to
   replace the top history element instead of pushing a new one.
 
-  `options` is a map. If using Dynamic Router then it is the same as `dr/route-to!`, and supports things like `:route-params`, `:target`,
-  and dynamic route injection/loading. See your installed router docs for other possibilities."
+  `options` is a map that is the same as `dr/route-to!`, and supports things like `:route-params`, `:target`,
+  and dynamic route injection/loading."
   ([app options]
-   (let [app            (comp/any->app app)
-         routing-system (or
-                          (some-> app ::app/runtime-atom deref ::routing)
-                          default-router)]
-     (rbase/-route-to! routing-system app options)))
+   (dr/route-to! app (assoc options :before-change (fn [app {:keys [path route-params]}]
+                                                     (if (::replace-route? route-params)
+                                                       (history/replace-route! app path route-params)
+                                                       (history/push-route! app path route-params))))))
   ([app-or-component RouteTarget route-params]
-   (let [app            (comp/any->app app-or-component)
-         routing-system (or
-                          (some-> app ::app/runtime-atom deref ::routing)
-                          default-router)]
-     (rbase/-route-to! routing-system app RouteTarget route-params))))
-
-(defn install-routing!
-  "Install an alternate routing system (default is Dynamic Router)."
-  [app routing]
-  (swap! (::app/runtime-atom app) assoc ::routing routing))
+   (route-to! app-or-component {:target       RouteTarget
+                                :route-params route-params})))
 
 (defn back!
   "Attempt to navigate back to the last point in history. Returns true if there is history support, false if
