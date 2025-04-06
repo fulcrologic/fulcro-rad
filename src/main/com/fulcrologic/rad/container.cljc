@@ -125,7 +125,6 @@
   (let [container-ident (comp/get-ident container-class {})]
     (uism/begin! app container-machine container-ident {:actor/container container-class} options)))
 
-; TASK: deferred routing entangled
 (defn container-will-enter [app route-params container-class]
   (let [container-ident (comp/get-ident container-class {})]
     (dr/route-deferred container-ident

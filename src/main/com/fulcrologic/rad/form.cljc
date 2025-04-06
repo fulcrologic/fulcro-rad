@@ -452,7 +452,6 @@
        {:actor/form (uism/with-actor-class form-ident form-class)}
        (merge params {::create? new?})))))
 
-; TASK: deferred routing entangled with form
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter dynamic routing hook."
   [app {:keys [action id] :as route-params} form-class]

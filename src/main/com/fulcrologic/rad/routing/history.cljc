@@ -79,6 +79,7 @@
          (let [direction (:com.fulcrologic.rad.routing.history/direction params)]
            (when (#{:forward :back} direction)              ; ONLY route if the user caused it with back/forward browser button!!!
              (if (route-predicate app route params)
+               ; TASK: Should not assume DR!!!
                (dr/change-route! app route params)
                (do
                  (log/warn "Browser routing event was denied.")
