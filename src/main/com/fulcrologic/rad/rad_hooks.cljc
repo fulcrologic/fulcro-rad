@@ -81,10 +81,8 @@
          [report-factory] (hooks/use-state (fn [] (comp/computed-factory Report {:keyfn id-key})))
          active-state (get-in report-props [::uism/asm-id report-ident ::uism/active-state])]
      (hooks/use-lifecycle
-       (fn [] (report/start-report! app Report (assoc options :embedded? true)))
-       (fn [] (when-not keep-existing? (uism/remove-uism! app report-ident))))
-     {:report-factory (fn [props]
-                        (when (map? props)
-                          (report-factory props)))
+      (fn [] (report/start-report! app Report (assoc options :embedded? true)))
+      (fn [] (when-not keep-existing? (uism/remove-uism! app report-ident))))
+     {:report-factory report-factory
       :report-props   report-props
       :report-state   active-state})))
