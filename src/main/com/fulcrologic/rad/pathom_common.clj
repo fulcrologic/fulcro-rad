@@ -1,17 +1,15 @@
 (ns com.fulcrologic.rad.pathom-common
   "Helper functions that are used by both Pathom 2 and 3 support."
   (:require
-    [clojure.pprint :refer [pprint]]
-    [clojure.walk :as walk]
-    [com.fulcrologic.rad.attributes :as attr]
-    [edn-query-language.core :as eql]
-    [taoensso.timbre :as log]))
+   [clojure.walk :as walk]
+   [taoensso.timbre :as log]))
 
 (defn remove-omissions
   "Replaces black-listed keys from tx with :com.fulcrologic.rad.pathom/omitted, meant for logging tx's
   without logging sensitive details like passwords."
   [config tx]
-  (let [sensitive-keys (get-in config [:com.fulcrologic.rad.pathom/config :sensitive-keys] #{})]
+  (let [sensitive-keys (conj (:sensitive-keys config #{})
+                             :com.wsscode.pathom/trace)]
     (walk/postwalk
       (fn [x]
         (if (and (vector? x) (= 2 (count x)) (contains? sensitive-keys (first x)))
@@ -32,20 +30,13 @@
             "<failed to serialize>"))))))
 
 (defn log-request! [{:keys [env tx] :as req}]
-  (let [config         (:config env)
-        sensitive-keys (conj
-                         (get-in config [:com.fulcrologic.rad.pathom/config :sensitive-keys] #{})
-                         :com.wsscode.pathom/trace)]
-    (log! env "Request: " (remove-omissions sensitive-keys tx))
-    req))
+  (log! env "Request: " tx)
+  req)
 
 (defn log-response!
-  [{:keys [config] :as env} response]
-  (let [sensitive-keys (conj
-                         (get-in config [:com.fulcrologic.rad.pathom/config :sensitive-keys] #{})
-                         :com.wsscode.pathom/trace)]
-    (log! env "Response: " (remove-omissions sensitive-keys response))
-    response))
+  [env response]
+  (log! env "Response: " response)
+  response)
 
 (defn process-error
   "If there were any exceptions in the parser that cause complete failure we

@@ -4,14 +4,12 @@
    Plugins and a default generated parser for working with RAD applications. You may use the source of this namespace
    as reference for making your own custom parser, or simply start with the `new-parser` function."
   (:require
-    [clojure.pprint :refer [pprint]]
-    [clojure.walk :as walk]
-    [com.wsscode.common.async-clj :refer [let-chan]]
-    [com.wsscode.pathom.connect :as pc]
-    [com.wsscode.pathom.core :as p]
-    [edn-query-language.core :as eql]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.rad.attributes :as attr]))
+   [com.fulcrologic.rad.pathom-common :as rpc]
+   [com.wsscode.common.async-clj :refer [let-chan]]
+   [com.wsscode.pathom.connect :as pc]
+   [com.wsscode.pathom.core :as p]
+   [edn-query-language.core :as eql]
+   [taoensso.timbre :as log]))
 
 (defn preprocess-parser-plugin
   "Helper to create a plugin that can view/modify the env/tx of a top-level request.
@@ -28,43 +26,14 @@
            (parser env tx)
            {}))))})
 
-(defn remove-omissions
+(def remove-omissions
   "Replaces black-listed keys from tx with ::omitted, meant for logging tx's
   without logging sensitive details like passwords."
-  [config tx]
-  (let [sensitive-keys (get-in config [::config :sensitive-keys] #{})]
-    (walk/postwalk
-      (fn [x]
-        (if (and (vector? x) (= 2 (count x)) (contains? sensitive-keys (first x)))
-          [(first x) ::omitted]
-          x))
-      tx)))
+  rpc/remove-omissions)
 
-(defn- log! [env msg value]
-  (binding [*print-level* 8 *print-length* 8]
-    (let [{:keys [config]} env]
-      (log/info msg
-        (try
-          (pr-str (remove-omissions config value))
-          (catch Throwable e
-            (log/error (.getMessage e))
-            "<failed to serialize>"))))))
+(def log-request! rpc/log-request!)
 
-(defn log-request! [{:keys [env tx] :as req}]
-  (let [config         (:config env)
-        sensitive-keys (conj
-                         (get-in config [::config :sensitive-keys] #{})
-                         :com.wsscode.pathom/trace)]
-    (log! env "transaction: " (remove-omissions sensitive-keys tx))
-    req))
-
-(defn log-response!
-  [{:keys [config] :as env} response]
-  (let [sensitive-keys (conj
-                         (get-in config [::config :sensitive-keys] #{})
-                         :com.wsscode.pathom/trace)]
-    (log! env "response: " (remove-omissions sensitive-keys response))
-    response))
+(def log-response! rpc/log-response!)
 
 (defn process-error
   "If there were any exceptions in the parser that cause complete failure we
@@ -122,7 +91,7 @@
              env          (assoc env :query-params query-params)]
          (parser env tx))))})
 
-(defn parser-args [{{:keys [trace? log-requests? log-responses?]} ::config} plugins resolvers]
+(defn parser-args [{{:keys [trace? log-requests? log-responses?] :as config} ::config} plugins resolvers]
   {::p/mutate  pc/mutate
    ::p/env     {::p/reader                 [p/map-reader pc/reader2 pc/index-reader
                                             pc/open-ident-reader p/env-placeholder-reader]
@@ -134,12 +103,13 @@
                      [(pc/connect-plugin {::pc/register resolvers})]
                      plugins
                      [(p/env-plugin {::p/process-error process-error})
-                      (when log-requests? (preprocess-parser-plugin log-request!))
+                      (when log-requests? (preprocess-parser-plugin rpc/log-request!))
                       ;; TODO: Do we need this, and if so, we need to pass the attribute map
                       ;(p/post-process-parser-plugin add-empty-vectors)
                       (p/post-process-parser-plugin p/elide-not-found)
                       (p/post-process-parser-plugin elide-reader-errors)
-                      (when log-responses? (post-process-parser-plugin-with-env log-response!))
+                      (when log-responses? (post-process-parser-plugin-with-env rpc/log-response!))
+                      (p/env-plugin {:config config})
                       query-params-to-env-plugin
                       p/error-handler-plugin
                       (when trace? p/trace-plugin)])))})
