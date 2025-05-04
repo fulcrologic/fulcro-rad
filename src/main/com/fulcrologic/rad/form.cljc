@@ -1213,6 +1213,7 @@
                (uism/apply-action fs/add-form-config* FormClass form-ident {:destructive? true})
                (uism/apply-action fs/mark-complete* form-ident)
                (cond-> route-pending? (route-target-ready form-ident))
+               (apply-derived-calculations)
                (uism/activate :state/editing))))}
         :event/failed
         {::uism/handler
