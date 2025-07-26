@@ -294,6 +294,8 @@
    When supplied the report will automatically use this predicate to filter the rows that are visible to the user. This
    function is supplied with the current value of the report parameters (defined by `controls`)
 
+   Note that if using `server-paginated-report`, this option is ignored as the server is responsbile for filtering.
+
    See `controls`."
   :com.fulcrologic.rad.report/row-visible?)
 
