@@ -1194,7 +1194,8 @@ Attribute-level validation checks can be specified with a predicate:
 [source]
 ----
 (defattr name :account/name :string
-  {ao/valid? (fn [nm] (boolean (seq nm)))})
+  {ao/valid? (fn [value _props _qualified-key]
+               (boolean (seq value)))})
 ----
 
 Custom validations are defined at the form level with the `::form/validator` key.
