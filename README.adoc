@@ -6,7 +6,8 @@ desktop applications with a rich (and potentially federated) data model quickly.
 == Usage
 
 image:https://img.shields.io/clojars/v/com.fulcrologic/fulcro-rad.svg[link=https://clojars.org/com.fulcrologic/fulcro-rad]
-image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/develop.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/main"]
+image:https://circleci.com/gh/fulcrologic/fulcro-rad/tree/main.svg?style=svg["CircleCI", link="https://circleci.com/gh/fulcrologic/fulcro-rad/tree/main"]
+
 
 NOTE: The latest version requires at least Fulcro 3.5.1.
 
