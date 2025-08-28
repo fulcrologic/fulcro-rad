@@ -663,13 +663,19 @@
           body              (if (seq (rest args))
                               (rest args)
                               [`(render-layout ~this-sym)])
-          row-query         (list 'fn [] `(let [forms#    ~(::form-links options)
-                                                id-attrs# (keep #(comp/component-options % ::form/id) (vals forms#))]
+          row-query         (list 'fn [] `(let [forms#         ~(::form-links options)
+                                                eql-overrides# (comp/component-options ~sym ro/columns-EQL)
+                                                id-attrs#      (keep #(comp/component-options % ::form/id) (vals forms#))]
                                             (vec
                                               (into #{~@row-query-inclusion}
-                                                (map (fn [attr#] (or
-                                                                   (::column-EQL attr#)
-                                                                   (::attr/qualified-key attr#))) (conj (set (concat id-attrs# ~columns)) ~row-pk))))))
+                                                (map (fn [attr#]
+                                                       (let [qk#  (ao/qualified-key attr#)
+                                                             EQL# (when-let [subquery# (get eql-overrides# qk#)]
+                                                                    {qk# subquery#})]
+                                                         (or
+                                                           EQL#
+                                                           (::column-EQL attr#)
+                                                           (::attr/qualified-key attr#)))) (conj (set (concat id-attrs# ~columns)) ~row-pk))))))
           props-sym         (gensym "props")
           row-ident         (list 'fn []
                               `(let [k# (::attr/qualified-key ~row-pk)]
@@ -687,6 +693,7 @@
                                `(comp/defsc ~sym ~arglist ~options ~@body)]
                               [`(comp/defsc ~sym ~arglist ~options ~@body)])]
          `(do
+            (declare ~sym)
             ~@defs)))))
 
 #?(:clj (s/fdef defsc-report :args ::comp/args))

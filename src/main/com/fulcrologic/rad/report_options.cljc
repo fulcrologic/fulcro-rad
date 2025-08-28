@@ -11,7 +11,9 @@
 
   NOTE to maintainers and Plugin authors: These files must be CLJC to make sure the symbols are resolvable
   at *compile* time. No dynamic tricks please. The form and report macros must be able to resolve the option
-  symbols during evaluation.")
+  symbols during evaluation."
+  (:require
+    [com.fulcrologic.rad.options-util :refer [defoption]]))
 
 (def row-pk
   "An *attribute* that will serve as each row's primary key. May be a virtual attribute that is not actually stored
@@ -473,6 +475,26 @@
                                              :location/name
                                              :inventory/quantity
                                              :inventory/unit-cost]}
+   ```"
+  :com.fulcrologic.rad.report/column-EQL)
+
+(defoption columns-EQL
+  "Report option. A map from qualified keywords to the EQL expression to use for that column. This is the report
+   version of column-EQL. Think of this map as a generation of EQL joins, and as such what you are specifying here
+   are the subqueries for the columns.
+
+   E.g.
+
+   ```
+   {:product/owner     [:owner/name]
+    :product/inventory [:location/name
+                        :inventory/quantity
+                        :inventory/unit-cost]}
+   ```
+
+   would replace the simple keywords for those two columns with the proper joins.
+
+   See ro/column-EQL for further notes on normalization of joined items.
    ```"
   :com.fulcrologic.rad.report/column-EQL)
 
