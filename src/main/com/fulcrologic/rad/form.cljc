@@ -481,15 +481,17 @@
       (uism/trigger! master-form form-ident :event/exit {}))
     true))
 
-(defn form-allow-route-change [this]
+(defn form-allow-route-change
   "Used as a form route target's :allow-route-change?"
-  (let [id              (comp/get-ident this)
-        form-props      (comp/props this)
-        read-only?      (?! (comp/component-options this ::read-only?) this)
+  [this]
+  (let [id (comp/get-ident this)
+        current-state (raw.app/current-state this)
+        ;; Get props directly from state instead of using comp/props to avoid React 19 timing issues
+        form-props (get-in current-state id)
+        read-only? (?! (comp/component-options this ::read-only?) this)
         silent-abandon? (?! (comp/component-options this ::silent-abandon?) this)
-        current-state   (raw.app/current-state this)
-        abandoned?      (get-in current-state [::uism/asm-id id ::uism/local-storage :abandoned?] false)
-        dirty?          (and (not abandoned?) (fs/dirty? form-props))]
+        abandoned? (get-in current-state [::uism/asm-id id ::uism/local-storage :abandoned?] false)
+        dirty? (and (not abandoned?) (fs/dirty? form-props))]
     (or silent-abandon? read-only? (not dirty?))))
 
 (defn form-pre-merge
