@@ -1,6 +1,5 @@
 (ns com.fulcrologic.rad.application
   (:require
-    [com.fulcrologic.fulcro.rendering.multiple-roots-renderer :as mroot]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.fulcro.application :as app]
@@ -98,8 +97,7 @@
                        js/fulcro_network_csrf_token)]
            {:remotes {:remote (net/fulcro-http-remote {:url                "/api"
                                                        :request-middleware (secured-request-middleware {:csrf-token token})})}}))
-      {:global-eql-transform (global-eql-transform (elision-predicate default-network-blacklist))
-       :optimized-render!    mroot/render!}
+      {:global-eql-transform (global-eql-transform (elision-predicate default-network-blacklist))}
       options
       {:remote-error? (fn [result]
                         (or
