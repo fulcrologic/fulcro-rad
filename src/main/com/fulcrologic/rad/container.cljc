@@ -2,30 +2,27 @@
   "A RAD container is a component for grouping together reports.
    They allow you pull up controls to the container level to coordinate reports so that one set of controls is shared among them.
 
+   NOTE: statecharts RAD does NOT support containers.
+
    Reports may keep controls local to themselves by adding `:local?` to a control; otherwise, all of the controls
    from all nested reports will be pulled up to the container level and will be unified when their names match. The
    container itself will then be responsible for asking the children to refresh (though technically you can add a local
    control to any child to make such a control available for a particular child)."
-  #?(:cljs
-     (:require-macros com.fulcrologic.rad.container))
+  #?(:cljs (:require-macros com.fulcrologic.rad.container))
   (:require
-    [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.fulcro.mutations :refer [defmutation]]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
+    #?@(:clj [[cljs.analyzer :as ana]])
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.routing.history :as history]
-    [com.fulcrologic.rad.control :as control :refer [Control]]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
-    #?@(:clj
-        [[cljs.analyzer :as ana]])
+    [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.data-fetch :as df]
-    [taoensso.timbre :as log]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
+    [com.fulcrologic.rad.control :as control :refer [Control]]
+    [com.fulcrologic.rad.options-util :as opts :refer [?!]]
+    [com.fulcrologic.rad.report :as report]
+    [com.fulcrologic.rad.routing.history :as history]
     [taoensso.encore :as enc]
-    [clojure.spec.alpha :as s]))
+    [taoensso.timbre :as log]))
 
 (defn id-child-pairs
   "Returns a sequence of [id cls] pairs for each child (i.e. the seq of the children setting)"

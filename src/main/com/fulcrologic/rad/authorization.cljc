@@ -1,13 +1,10 @@
-(ns com.fulcrologic.rad.authorization
-  "Authentication and Authorization Support.
+(ns ^:deprecated com.fulcrologic.rad.authorization
+  "
+  DO NOT USE. This namespace was an experiment around generalizing auth. I've since decided that such
+  a concern is just too big with too many options to bother generalizing. There are no plans
+  to finish this.
 
-  WARNING: This part of RAD will not be standardized for some time. You will need to roll your own particular auth
-  system, which can easily plug into the various hooks in Forms and Reports (e.g. field formatters, read-only checks, etc).
-  If necessary you can simply make new wrapper macros around these if/when boilerplate becomes an issue. After all, forms
-  and reports are just very thin macros around Fulcro's `defsc` that pre-fill component options for you.
-  We hope the community will provide plugins for this, but generalized Auth is simply beyond the scope of RAD at this time due
-  to time/resource constraints. Community members are highly encouraged to write their own auth plugin libraries for
-  RAD, and we'll be glad to link to them on the main project pages.
+  Authentication and Authorization Support.
 
   The implementation in this namespace is only partially written, and can satisfy some simple needs. The original idea
   was that each attribute would be under some authority (the owner of that data). These would be identified by

@@ -1,6 +1,8 @@
 (ns com.fulcrologic.rad.routing.history
   "Generic history protocol and support.
 
+  Cannot be used with statecharts-based RAD.
+
   In order to use history, you must install an implementation on your Fulcro app at application start-time that
   is compatible with your runtime environment (browser, native mobile, etc.) via `install-route-history!`. Once
   you've done that, then the non-protocol methods in this namespace can be used against the app to update the *history*,
@@ -8,11 +10,10 @@
   `com.fulcrologic.rad.routing` namespace functions, which will keep track of history if it is installed."
   (:require
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.guardrails.core :refer [=> >defn ?]]
     [taoensso.timbre :as log]))
 
 (defprotocol RouteHistory

@@ -2,41 +2,41 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.form]))
   (:refer-clojure :exclude [parse-long])
   (:require
-    [clojure.spec.alpha :as s]
+    #?@(:clj [[cljs.analyzer :as ana]])
     [clojure.set :as set]
+    [clojure.spec.alpha :as s]
     [clojure.string :as str]
-    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
-    [com.fulcrologic.fulcro.raw.application :as raw.app]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.algorithms.scheduling :as sched]
+    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.mutations :as m]
+    [com.fulcrologic.fulcro.raw.application :as raw.app]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
-    [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
+    [com.fulcrologic.guardrails.core :refer [=> >def >defn]]
     [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.control :as control]
-    [com.fulcrologic.rad.errors :refer [required! warn-once!]]
+    [com.fulcrologic.rad.application :as rapp]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
-    [com.fulcrologic.rad.application :as rapp]
+    [com.fulcrologic.rad.control :as control]
+    [com.fulcrologic.rad.errors :refer [required! warn-once!]]
+    [com.fulcrologic.rad.form-options :as fo]
+    [com.fulcrologic.rad.form-render :as fr]
     [com.fulcrologic.rad.form-render-options :as fro]
     [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
+    [com.fulcrologic.rad.options-util :as opts :refer [?!]]
+    [com.fulcrologic.rad.picker-options :as picker-options]
+    [com.fulcrologic.rad.routing :as rad-routing]
+    [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.type-support.integer :as int]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
-    [taoensso.timbre :as log]
-    #?@(:clj [[cljs.analyzer :as ana]])
-    [com.fulcrologic.rad.options-util :as opts :refer [?!]]
-    [com.fulcrologic.rad.picker-options :as picker-options]
-    [com.fulcrologic.rad.form-options :as fo]
-    [com.fulcrologic.rad.form-render :as fr]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
-    [com.fulcrologic.rad.routing.history :as history]))
+    [taoensso.timbre :as log]))
 
 (def ^:dynamic *default-save-form-mutation* `save-form)
 
@@ -443,6 +443,7 @@
   "
   ([app id form-class] (start-form! app id form-class {}))
   ([app id form-class params]
+   ;; TASK: Generalize so that we can use UISM or statecharts
    (let [{::attr/keys [qualified-key]} (comp/component-options form-class ::id)
          machine    (or (comp/component-options form-class ::machine) form-machine)
          new?       (tempid/tempid? id)
@@ -452,6 +453,7 @@
        {:actor/form (uism/with-actor-class form-ident form-class)}
        (merge params {::create? new?})))))
 
+;; TASK: Do NOT embed for statechart system
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter dynamic routing hook."
   [app {:keys [action id] :as route-params} form-class]
@@ -2110,10 +2112,10 @@
                         :render        `(fn [this#]
                                           (comp/wrapped-render this#
                                             (fn []
-                                              (enc/when-let [props#    (comp/props this#)
-                                                             [k#]      (comp/get-ident this#)
+                                              (enc/when-let [props#   (comp/props this#)
+                                                             [k#] (comp/get-ident this#)
                                                              [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
-                                                             factory#  (comp/computed-factory c# {:keyfn k#})]
+                                                             factory# (comp/computed-factory c# {:keyfn k#})]
                                                 (factory# props#)))))}]
        (if (comp/cljs? &env)
          `(do

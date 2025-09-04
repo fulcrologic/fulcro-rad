@@ -1,4 +1,6 @@
 (ns com.fulcrologic.rad.dynamic.generator
+  "Generate forms and reports directly from the RAD model. Alpha. Only works with UISM-based systems
+   that use dynamic routing."
   (:require
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.report :as report]

@@ -16,24 +16,22 @@
   ** ::blob/store to indicate the identifer of an implementation of blob-storage/Storage. "
   #?(:cljs (:require-macros com.fulcrologic.rad.blob))
   (:require
-    [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.options-util :refer [narrow-keyword]]
-    [edn-query-language.core :as eql]
-    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
-    [com.fulcrologic.fulcro.raw.components :as rc]
-    [com.fulcrologic.fulcro.mutations :as m :refer [defmutation]]
-    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
-    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
-    [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
-    [clojure.core.async :as async]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.fulcro.networking.file-upload :as file-upload]
     #?@(:cljs [[goog.crypt :as crypt]
                [com.fulcrologic.fulcro.networking.http-remote :as net]]
         :clj  [[com.fulcrologic.rad.blob-storage :as storage]
-               [clojure.pprint :refer [pprint]]
                [clojure.java.io :as jio]])
-    [clojure.string :as str])
+    [clojure.core.async :as async]
+    [clojure.string :as str]
+    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
+    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
+    [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
+    [com.fulcrologic.fulcro.mutations :as m]
+    [com.fulcrologic.fulcro.networking.file-upload :as file-upload]
+    [com.fulcrologic.fulcro.raw.components :as rc]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.options-util :refer [narrow-keyword]]
+    [edn-query-language.core :as eql]
+    [taoensso.timbre :as log])
   (:import
     #?(:clj  (org.apache.commons.codec.digest DigestUtils)
        :cljs [goog.crypt Sha256])))

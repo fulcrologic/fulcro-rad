@@ -20,16 +20,15 @@
   (:refer-clojure :exclude [run!])
   (:require
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.mutations :refer [defmutation]]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.raw.application :as raw.app]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.errors :refer [warn-once!]]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce child-classes]]
+    [com.fulcrologic.fulcro.ui-state-machines :as uism]
+    [com.fulcrologic.guardrails.core :refer [=> >def >defn]]
     [com.fulcrologic.rad :as rad]
-    [taoensso.encore :as enc]
+    [com.fulcrologic.rad.errors :refer [warn-once!]]
+    [com.fulcrologic.rad.options-util :refer [?! child-classes debounce]]
+    [com.fulcrologic.rad.routing :as rad-routing]
     [taoensso.timbre :as log]))
 
 (defsc Control
@@ -69,6 +68,7 @@
    Run the controlled content with the current values of the controlled parameters."
   (debounce
     (fn [instance]
+      ;; TASK: Generalize
       (uism/trigger! instance (comp/get-ident instance) :event/run))
     100))
 
@@ -81,6 +81,7 @@
           path          (if local? (conj ref :ui/parameters k) [::id k ::value])]
       (when-not (false? track-in-url?)
         (if local?
+          ;; TASK: Generalize
           (rad-routing/update-route-params! component assoc-in [id k] value)
           (rad-routing/update-route-params! component assoc k value)))
       (swap! state assoc-in path value))))

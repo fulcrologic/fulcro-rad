@@ -1,7 +1,9 @@
 (ns com.fulcrologic.rad.routing.html5-history
   "An implementation of RAD's RouteHistory protocol, wrapping a browser's location and History API. This implementation
    will put an string-valued route parameters onto the query parameter section of the URI when a route is pushed or replaced,
-   and will merge the current URL's query parameters with returned route params."
+   and will merge the current URL's query parameters with returned route params.
+
+   Cannot be used with statecharts-based RAD."
   (:require
     #?(:cljs [goog.object :as gobj])
     [com.fulcrologic.fulcro.raw.components :as rc]
