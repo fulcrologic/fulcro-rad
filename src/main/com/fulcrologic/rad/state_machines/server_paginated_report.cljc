@@ -76,12 +76,10 @@
     [com.fulcrologic.fulcro.raw.application :as app]
     [com.fulcrologic.fulcro.raw.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
+    [com.fulcrologic.fulcro.routing.system :as rsys]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.report-options :as ro]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [taoensso.timbre :as log]))
 
@@ -180,7 +178,7 @@
         {::keys [point-in-time-view?]} (report/report-options env)
         start-time   (when point-in-time-view? (dt/now))
         page-path    (report/route-params-path env ::current-page)
-        desired-page (-> (history/current-route fulcro-app)
+        desired-page (-> (rsys/current-route fulcro-app)
                        :params
                        (get-in page-path))]
     (-> env
@@ -258,7 +256,7 @@
                                                  (let [row               (:row event-data)
                                                        selected-row-path (report/route-params-path env ::selected-row)]
                                                    (when (nat-int? row)
-                                                     (rad-routing/update-route-params! app assoc-in selected-row-path row))
+                                                     (rsys/update-route-params! app assoc-in selected-row-path row))
                                                    (uism/assoc-aliased env :selected-row row)))}
 
       :event/sort              {::uism/handler (fn [{::uism/keys [app event-data] :as env}]
@@ -269,7 +267,7 @@
                                                          ascending? (if (= qualified-key sort-by)
                                                                       (not ascending?)
                                                                       true)]
-                                                     (rad-routing/update-route-params! app update-in sort-path merge
+                                                     (rsys/update-route-params! app update-in sort-path merge
                                                        {:ascending? ascending?
                                                         :sort-by    qualified-key})
                                                      (-> env

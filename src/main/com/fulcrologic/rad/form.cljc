@@ -17,6 +17,7 @@
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.raw.application :as raw.app]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.fulcro.routing.system :as rsys]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [=> >def >defn]]
     [com.fulcrologic.rad :as rad]
@@ -31,8 +32,6 @@
     [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
     [com.fulcrologic.rad.options-util :as opts :refer [?!]]
     [com.fulcrologic.rad.picker-options :as picker-options]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.type-support.integer :as int]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
@@ -443,7 +442,6 @@
   "
   ([app id form-class] (start-form! app id form-class {}))
   ([app id form-class params]
-   ;; TASK: Generalize so that we can use UISM or statecharts
    (let [{::attr/keys [qualified-key]} (comp/component-options form-class ::id)
          machine    (or (comp/component-options form-class ::machine) form-machine)
          new?       (tempid/tempid? id)
@@ -453,7 +451,6 @@
        {:actor/form (uism/with-actor-class form-ident form-class)}
        (merge params {::create? new?})))))
 
-;; TASK: Do NOT embed for statechart system
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter dynamic routing hook."
   [app {:keys [action id] :as route-params} form-class]
@@ -985,24 +982,33 @@
         state-map      (raw.app/current-state fulcro-app)
         cancel-route   (?! (some-> Form comp/component-options ::cancel-route) fulcro-app (fns/ui->props state-map Form form-ident))
         {:keys [on-cancel embedded?]} (uism/retrieve uism-env :options)
-        use-history    (and (not embedded?) (history/history-support? fulcro-app))
+        use-history    (not embedded?)
         error!         (fn [msg] (log/error "The cancel-route option of" (comp/component-name Form) (str "(" cancel-route ")") msg))
         routing-action (fn []
                          (cond
                            (map? cancel-route) (let [{:keys [route target params]} cancel-route]
                                                  (cond
-                                                   (comp/component-class? target) (rad-routing/route-to! fulcro-app target (or params {}))
-                                                   (every? string? route) (dr/change-route! fulcro-app route params)
+                                                   (comp/component-class? target) (rsys/route-to! fulcro-app {:target target
+                                                                                                              :force? true
+                                                                                                              :params (or params {})})
+                                                   (every? string? route) (rsys/route-to! fulcro-app {:route  route
+                                                                                                      :force? true
+                                                                                                      :params params})
                                                    :else (do
                                                            (error! "did not return a valid route.")
                                                            :back)))
                            (= :none cancel-route) nil
-                           (= :back cancel-route) (if (history/history-support? fulcro-app)
-                                                    (if-not embedded? (history/back! fulcro-app))
-                                                    (error! "Back not supported. No history installed."))
-                           (and (seq cancel-route) (every? string? cancel-route)) (dr/change-route! fulcro-app cancel-route)
-                           (comp/component-class? cancel-route) (rad-routing/route-to! fulcro-app cancel-route {})
-                           use-history (history/back! fulcro-app)))]
+                           (= :back cancel-route) (rsys/back! fulcro-app)
+                           (and (seq cancel-route) (every? string? cancel-route)) (rsys/route-to! fulcro-app {:route  cancel-route
+                                                                                                              :force? true
+                                                                                                              :params {}})
+                           (or
+                             (qualified-keyword? cancel-route)
+                             (qualified-symbol? cancel-route)
+                             (comp/component-class? cancel-route)) (rsys/route-to! fulcro-app {:target cancel-route
+                                                                                               :force? true
+                                                                                               :params {}})
+                           use-history (rsys/back! fulcro-app true)))]
     (sched/defer routing-action 100)
     (-> uism-env
       (cond->
@@ -1252,11 +1258,12 @@
                                 Form        (uism/actor-class env :actor/form)
                                 {{:keys [saved]} ::triggers} (some-> Form (comp/component-options))
                                 {:keys [embedded?]} (uism/retrieve env :options)
-                                use-history (and (not embedded?) (history/history-support? fulcro-app))]
+                                use-history (not embedded?)]
                             (when use-history
-                              (let [{:keys [route params]} (history/current-route fulcro-app)
+                              (let [{:keys [route params]} (rsys/current-route fulcro-app)
                                     new-route (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
-                                (history/replace-route! fulcro-app new-route params)))
+                                (rsys/replace-route! fulcro-app {:route  new-route
+                                                                 :params params})))
                             (-> env
                               (cond->
                                 saved (saved form-ident))
@@ -1328,13 +1335,10 @@
 
         :event/continue-abandoned-route
         {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (let [{:keys [form relative-root route timeouts-and-params]} (uism/retrieve env :desired-route)
-                                form-instance (some->> form (comp/registry-key->class) (comp/class->any fulcro-app))
-                                Router        (comp/registry-key->class relative-root)]
-                            (if (::replace-route? timeouts-and-params)
-                              (history/replace-route! fulcro-app route timeouts-and-params)
-                              (history/push-route! fulcro-app route timeouts-and-params))
-                            (dr/retry-route! form-instance Router route timeouts-and-params)
+                          (let [{:keys [route timeouts-and-params]} (uism/retrieve env :desired-route)]
+                            (rsys/route-to! fulcro-app {:route  route
+                                                        :force? true
+                                                        :params timeouts-and-params})
                             (-> env
                               (uism/assoc-aliased :route-denied? false)
                               (uism/apply-action fs/pristine->entity* (uism/actor->ident env :actor/form)))))}
@@ -1611,38 +1615,42 @@
 (defn view!
   "Route to the given form in read-only mode."
   ([this form-class entity-id]
-   (rad-routing/route-to! this form-class {:action view-action
-                                           :id     entity-id}))
+   (rsys/route-to! this {:target form-class
+                         :params {:action view-action
+                                  :id     entity-id}}))
   ([this form-class entity-id extra-params]
-   (rad-routing/route-to! this form-class (merge extra-params
-                                            {:action view-action
-                                             :id     entity-id})))
+   (rsys/route-to! this {:target form-class
+                         :params (merge extra-params
+                                   {:action view-action
+                                    :id     entity-id})}))
   ([this form-class entity-id extra-params dynamic-routing-options]
-   (rad-routing/route-to! this (merge
-                                 dynamic-routing-options
-                                 {:target       form-class
-                                  :route-params (merge extra-params
-                                                  {:action view-action
-                                                   :id     entity-id})}))))
+   (rsys/route-to! this (merge
+                          dynamic-routing-options
+                          {:target form-class
+                           :params (merge extra-params
+                                     {:action view-action
+                                      :id     entity-id})}))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID.
 
    `dynamic-routing-options` - can be used for dr/route-to! dynamic route injection support (:target will be auto-filled)."
   ([this form-class entity-id]
-   (rad-routing/route-to! this form-class {:action edit-action
-                                           :id     entity-id}))
+   (rsys/route-to! this {:target form-class
+                         :params {:action edit-action
+                                  :id     entity-id}}))
   ([this form-class entity-id extra-params]
-   (rad-routing/route-to! this form-class (merge extra-params
-                                            {:action edit-action
-                                             :id     entity-id})))
+   (rsys/route-to! this {:target form-class
+                         :params (merge extra-params
+                                   {:action edit-action
+                                    :id     entity-id})}))
   ([this form-class entity-id extra-params dynamic-routing-options]
-   (rad-routing/route-to! this (merge
-                                 dynamic-routing-options
-                                 {:target       form-class
-                                  :route-params (merge extra-params
-                                                  {:action edit-action
-                                                   :id     entity-id})}))))
+   (rsys/route-to! this (merge
+                          dynamic-routing-options
+                          {:target form-class
+                           :params (merge extra-params
+                                     {:action edit-action
+                                      :id     entity-id})}))))
 
 (defn create!
   "Create a new instance of the given form-class using the provided `entity-id` and then route
@@ -1663,20 +1671,22 @@
   ([app-ish form-class]
    ;; This function uses UUIDs for all ID types, since they will end up being tempids
    ;; which are UUID-based.
-   (rad-routing/route-to! app-ish form-class {:action create-action
-                                              :id     (str (new-uuid))}))
+   (rsys/route-to! app-ish {:target form-class
+                            :params {:action create-action
+                                     :id     (str (new-uuid))}}))
   ([app-ish form-class options]
-   (rad-routing/route-to! app-ish form-class (merge options
-                                               {:action create-action
-                                                :id     (str (new-uuid))})))
+   (rsys/route-to! app-ish {:target form-class
+                            :params (merge options
+                                      {:action create-action
+                                       :id     (str (new-uuid))})}))
   ([app-ish form-class options dynamic-routing-options]
-   (rad-routing/route-to! app-ish (merge
-                                    dynamic-routing-options
-                                    {:target       form-class
-                                     :route-params (merge
-                                                     options
-                                                     {:action create-action
-                                                      :id     (str (new-uuid))})}))))
+   (rsys/route-to! app-ish (merge
+                             dynamic-routing-options
+                             {:target form-class
+                              :params (merge
+                                        options
+                                        {:action create-action
+                                         :id     (str (new-uuid))})}))))
 
 (def pathom2-server-delete-entity-mutation
   {:com.wsscode.pathom.connect/sym    `delete-entity

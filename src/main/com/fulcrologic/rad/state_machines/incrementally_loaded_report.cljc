@@ -16,14 +16,12 @@
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.raw.application :as app]
     [com.fulcrologic.fulcro.raw.components :as comp]
+    [com.fulcrologic.fulcro.routing.system :as rsys]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.routing.history :as history]
-    [com.fulcrologic.rad.type-support.date-time :as dt]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.rad.type-support.date-time :as dt]))
 
 (defn start-load [env]
   (let [Report         (uism/actor-class env :actor/report)
@@ -122,7 +120,7 @@
   (let [{::uism/keys [fulcro-app event-data]} env
         {::report/keys [run-on-mount?]} (report/report-options env)
         page-path    (report/route-params-path env ::current-page)
-        desired-page (-> (history/current-route fulcro-app)
+        desired-page (-> (rsys/current-route fulcro-app)
                        :params
                        (get-in page-path))
         run-now?     (or desired-page run-on-mount?)]

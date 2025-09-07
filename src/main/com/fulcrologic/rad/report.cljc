@@ -28,6 +28,7 @@
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fstate]
+    [com.fulcrologic.fulcro.routing.system :as rsys]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.control :as control :refer [Control]]
@@ -36,7 +37,6 @@
     [com.fulcrologic.rad.report-options :as ro]
     [com.fulcrologic.rad.report-render :as rr]
     [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [com.fulcrologic.rad.type-support.decimal :as math]
     [com.fulcrologic.rad.picker-options :as picker-options]
@@ -176,7 +176,7 @@
         path               (conj report-ident :ui/parameters)
         {:keys  [params]
          ::keys [externally-controlled?]} event-data
-        {history-params :params} (history/current-route app)
+        {history-params :params} (rsys/current-route app)
         sort-path          (route-params-path env ::sort)
         selected-row       (get-in history-params (route-params-path env ::selected-row))
         current-page       (get-in history-params (route-params-path env ::current-page) 1)
@@ -444,7 +444,7 @@
                       (let [{::uism/keys [fulcro-app event-data]} env
                             {::keys [run-on-mount?]} (report-options env)
                             page-path    (route-params-path env ::current-page)
-                            desired-page (-> (history/current-route fulcro-app)
+                            desired-page (-> (rsys/current-route fulcro-app)
                                            :params
                                            (get-in page-path))
                             run-now?     (or desired-page run-on-mount?)]

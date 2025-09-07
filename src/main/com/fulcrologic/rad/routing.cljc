@@ -1,22 +1,18 @@
 (ns com.fulcrologic.rad.routing
-  "A support layer for application-level routing. RAD supports the idea of an *application-level* history. This
-  allows it to abstract over the concepts of relative navigation since it can be used
-  on many platforms (like React Native or Electron) where no natural browser history API exists.
+  "A wrapper for Fulcro's routing system. This is a historical compatiblity ns, and should not be used in new applications.
 
-  History support in RAD requires that you install an implementation of RouteHistory at application start time. See
-  `com.fulcrologic.rad.routing.history` and associated namespaces.
-
-  Functions in this namespace that do relative routing will silently fail if no such history support is installed."
+   Use Fulcro's routing systems instead."
   (:require
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.routing.history :as history]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.fulcro.routing.system :as rsys]))
 
-(defn absolute-path
-  "Get the absolute path for the given route target. NOTE: Using a route target in multiple paths of your application
+(defn ^:deprecated absolute-path
+  "Use Fulcro's routing system instead. This method will fail on non dr routing systems.
+
+   Get the absolute path for the given route target. NOTE: Using a route target in multiple paths of your application
    can lead to ambiguity and failure of general routing, since this will then return an unpredictable result."
   [app-ish RouteTarget route-params]
   (let [app       (comp/any->app app-ish)
@@ -25,18 +21,15 @@
     (binding [rc/*query-state* state-map]
       (dr/resolve-path app-root RouteTarget route-params))))
 
-(defn can-change-route?
+(defn ^:deprecated can-change-route?
+  "Use Fulcro's routing system instead"
   [app-or-component new-route]
-  (let [app            (rc/any->app app-or-component)
-        root           (app/root-class app)
-        [relative-class-or-instance _] (dr/evaluate-relative-path root new-route)
-        relative-class (if (rc/component? relative-class-or-instance)
-                         (comp/react-type relative-class-or-instance)
-                         relative-class-or-instance)]
-    (dr/can-change-route? app relative-class)))
+  (not (rsys/current-route-busy? app-or-component)))
 
-(defn route-to!
-  "Change the UI to display the route to the specified class, with the additional parameter map as route params. If
+(defn ^:deprecated route-to!
+  "Use Fulcro's routing system instead.
+
+  Change the UI to display the route to the specified class, with the additional parameter map as route params. If
   route history is installed, then it will be notified of the change. This function is also integrated into the RAD
   authorization system.
 
@@ -54,31 +47,25 @@
 
   `options` is a map that is the same as `dr/route-to!`, and supports things like `:route-params`, `:target`,
   and dynamic route injection/loading."
-  ([app options]
-   (dr/route-to! app (assoc options :before-change (fn [app {:keys [path route-params]}]
-                                                     (if (::replace-route? route-params)
-                                                       (history/replace-route! app path route-params)
-                                                       (history/push-route! app path route-params))))))
+  ([app options] (rsys/route-to! app options))
   ([app-or-component RouteTarget route-params]
-   (route-to! app-or-component {:target       RouteTarget
-                                :route-params route-params})))
+   (route-to! app-or-component {:target RouteTarget
+                                :params route-params})))
 
-(defn back!
-  "Attempt to navigate back to the last point in history. Returns true if there is history support, false if
+(defn ^:deprecate back!
+  "Use Fulcro's routing system instead.
+
+   Attempt to navigate back to the last point in history. Returns true if there is history support, false if
    it is impossible to even try to go back."
   [app-or-component]
-  (if (history/history-support? app-or-component)
-    (do
-      (history/back! app-or-component)
-      true)
-    false))
+  (rsys/back! app-or-component)
+  true)
 
 (defn update-route-params!
-  "Like `clojure.core/update`. Has no effect if history support isn't installed.
+  "Like `clojure.core/update`. Has no effect if a routing system isn't properly installed.
 
-  Run `(apply f current-route-params args)` and store those as the current route params."
+  Just delegates to Fulcro's routing system.
+
+  Run's `(apply f current-route-params args)` and store those as the current route params."
   [app-or-component f & args]
-  (when (history/history-support? app-or-component)
-    (let [{:keys [route params]} (history/current-route app-or-component)
-          new-params (apply f params args)]
-      (history/replace-route! app-or-component route new-params))))
+  (apply rsys/update-route-params! app-or-component f args))

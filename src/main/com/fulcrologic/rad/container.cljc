@@ -12,6 +12,7 @@
   (:require
     #?@(:clj [[cljs.analyzer :as ana]])
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
+    [com.fulcrologic.fulcro.routing.system :as rsys]
     [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.data-fetch :as df]
@@ -20,7 +21,6 @@
     [com.fulcrologic.rad.control :as control :refer [Control]]
     [com.fulcrologic.rad.options-util :as opts :refer [?!]]
     [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.routing.history :as history]
     [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
@@ -62,7 +62,7 @@
   (apply comp/component-options (uism/actor-class uism-env :actor/container) k-or-ks))
 
 (defn- initialize-parameters [{::uism/keys [app event-data] :as env}]
-  (let [{history-params :params} (history/current-route app)
+  (let [{history-params :params} (rsys/current-route app)
         {:keys [route-params]} event-data
         controls (control/component-controls (uism/actor-class env :actor/container))]
     (reduce-kv

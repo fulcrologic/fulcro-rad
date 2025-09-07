@@ -68,7 +68,6 @@
    Run the controlled content with the current values of the controlled parameters."
   (debounce
     (fn [instance]
-      ;; TASK: Generalize
       (uism/trigger! instance (comp/get-ident instance) :event/run))
     100))
 
@@ -81,7 +80,6 @@
           path          (if local? (conj ref :ui/parameters k) [::id k ::value])]
       (when-not (false? track-in-url?)
         (if local?
-          ;; TASK: Generalize
           (rad-routing/update-route-params! component assoc-in [id k] value)
           (rad-routing/update-route-params! component assoc k value)))
       (swap! state assoc-in path value))))
