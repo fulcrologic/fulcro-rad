@@ -1,18 +1,17 @@
 (ns com.fulcrologic.rad.routing.html5-history
-  "An implementation of RAD's RouteHistory protocol, wrapping a browser's location and History API. This implementation
+  "Use Fulcro's new Routing System instead.
+   An implementation of RAD's RouteHistory protocol, wrapping a browser's location and History API. This implementation
    will put an string-valued route parameters onto the query parameter section of the URI when a route is pushed or replaced,
    and will merge the current URL's query parameters with returned route params.
 
    Cannot be used with statecharts-based RAD."
   (:require
     #?(:cljs [goog.object :as gobj])
-    [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.guardrails.core :refer [>defn >defn- => ?]]
-    [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.rad.routing :as routing]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [base64-encode base64-decode]]
-    [com.fulcrologic.rad.routing.history :as history :refer [RouteHistory]]
+    [com.fulcrologic.fulcro.routing.system :as rsys]
+    [com.fulcrologic.fulcro.routing.dynamic-routing-browser-system :refer [current-url->route]]
     [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.transit :refer [transit-clj->str transit-str->clj]]
     [clojure.spec.alpha :as s]
@@ -107,57 +106,6 @@
         {:route  route
          :params params}))))
 
-(defn- notify-listeners! [history route params direction]
-  (let [listeners (some-> history :listeners deref vals)]
-    (doseq [f listeners]
-      (f route (assoc params ::history/direction direction)))))
-
-(defrecord HTML5History [hash-based? listeners generator current-uid prior-route all-events? prefix recent-history default-route
-                         fulcro-app route-to-url url-to-route]
-  RouteHistory
-  (-push-route! [this route params]
-    #?(:cljs
-       (let [url (str prefix (route-to-url route params hash-based?))]
-         (log/spy :debug ["Pushing route" route params])
-         (when all-events?
-           (notify-listeners! this route params :push))
-         (reset! current-uid (swap! generator inc))
-         (reset! prior-route {:route route :params params})
-         (swap! recent-history #(cons {:route route :params params} %))
-         (.pushState js/history #js {"uid" @current-uid} "" url))))
-  (-replace-route! [this route params]
-    #?(:cljs
-       (let [url (str prefix (route-to-url route params hash-based?))]
-         (when all-events?
-           (notify-listeners! this route params :replace))
-         (log/spy :debug ["Replacing route" route params])
-         (reset! prior-route {:route route :params params})
-         (swap! recent-history (fn [h] (->> h (rest) (cons {:route route :params params}))))
-         (.replaceState js/history #js {"uid" @current-uid} "" url))))
-  (-undo! [this _ {::history/keys [direction]}]
-    (log/debug "Attempting to UNDO a routing request from the browser")
-    (when-let [{:keys [route params]} @prior-route]
-      (reset! prior-route nil)
-      (if (= :forward direction)
-        (history/-replace-route! this route params)
-        (history/-push-route! this route params))))
-  (-back! [this]
-    #?(:cljs
-       (do
-         (cond
-           (> (count @recent-history) 1) (do
-                                           (log/debug "Back to prior route" (some-> prior-route deref))
-                                           (.back js/history))
-           (:route default-route) (let [{:keys [route params]
-                                         :or   {params {}}} default-route]
-                                    (log/debug "No prior route. Using default route")
-                                    (when (= :routing (dr/change-route! fulcro-app route params))
-                                      (history/-push-route! this route params)))
-           :else (log/error "No prior route. Ignoring BACK request.")))))
-  (-add-route-listener! [_ listener-key f] (swap! listeners assoc listener-key f))
-  (-remove-route-listener! [_ listener-key] (swap! listeners dissoc listener-key))
-  (-current-route [_] (url-to-route hash-based? prefix)))
-
 (defn new-html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
 
@@ -175,36 +123,7 @@
                                        prefix      nil
                                        route->url  route->url
                                        url->route  url->route}}]
-  (assert (or (not prefix)
-            (and (str/starts-with? prefix "/")
-              (not (str/ends-with? prefix "/"))))
-    "Prefix must start with a slash, and not end with one.")
-  #?(:cljs
-     (try
-       (let [history            (HTML5History. hash-based? (atom {}) (atom 1) (atom 1) (atom nil) all-events? prefix (atom []) default-route app
-                                               route->url url->route)
-             pop-state-listener
-             (fn [evt]
-               ;; The first event (at least in Chrome), is neither a
-               ;; forward or backward event but rather an
-               ;; initialization event. It doesn't have an event-uid, so we
-               ;; can distinguish it and discard it here because it is
-               ;; not a state change.
-               (when (gobj/getValueByKeys evt "state")
-                 (let [current-uid (-> history (:current-uid) deref)
-                       event-uid   (gobj/getValueByKeys evt "state" "uid")
-                       forward?    (< event-uid current-uid)
-                       {:keys [route params]} (history/-current-route history)
-                       listeners   (some-> history :listeners deref vals)]
-                   (log/debug "Got pop state event." evt)
-                   (doseq [f listeners]
-                     (f route (assoc params ::history/direction (if forward? :forward :back))))
-                   (swap! (:recent-history history) rest)
-                   (reset! (:prior-route history) (history/-current-route history)))))]
-         (.addEventListener js/window "popstate" pop-state-listener)
-         history)
-       (catch :default e
-         (log/error e "Unable to create HTML5 history.")))))
+  (log/error "HTML5 History in RAD has been removed. Use Fulcro's new routing systems."))
 
 (defn html5-history
   "Create a new instance of a RouteHistory object that is properly configured against the browser's HTML5 History API.
@@ -217,37 +136,22 @@
   ([hash-based?] (new-html5-history {:hash-based? hash-based?}))
   ([hash-based? all-events?] (new-html5-history {:hash-based? hash-based? :all-events? all-events?})))
 
-(defn apply-route!
-  "Apply the given route and params to the URL and routing system. `saved-route` is in the format of
+(defn ^:deprecated apply-route!
+  "Use Fulcro's routing sytem instead.
+
+   Apply the given route and params to the URL and routing system. `saved-route` is in the format of
    the return value of `url->route`. Returns true if it is able to route there."
   [app {:keys [route params] :as saved-route}]
-  (if-let [target (dr/resolve-target app route)]
-    (let [app-root        (app/root-class app)
-          raw-path        (binding [rc/*query-state* (app/current-state app)]
-                            (dr/resolve-path app-root target params))
-          embedded-params (reduce
-                            (fn [m [raw resolved]]
-                              (if (keyword? raw)
-                                (assoc m raw resolved)
-                                m))
-                            {}
-                            (mapv vector raw-path route))
-          params          (merge embedded-params params)]
-      (routing/route-to! app target params)
-      true)
-    (do
-      (log/error "Saved route did not resolve to a UI target" saved-route)
-      false)))
+  (rsys/route-to! app saved-route))
 
-(defn restore-route!
-  "Attempt to restore the route given in the URL. If that fails, simply route to the default given (a class and map).
+(defn ^:deprecated restore-route!
+  "Use Fulcro's routing system instead. This will ONLY work if you're using dynamic routing.
 
-   WARNING: This should not be called until the HTML5 history is installed in your app, and any module that might be
-   needed is loaded."
+   Attempt to restore the route given in the URL. If that fails, simply route to the default given (a class and map)."
   [app default-page default-params]
-  (let [this      (history/active-history app)
-        url-route (history/-current-route this)]
-    (if (and this (seq (:route url-route)))
-      (when-not (apply-route! app url-route)
-        (routing/route-to! app default-page default-params))
-      (routing/route-to! app default-page default-params))))
+  (let [url-route (current-url->route)]
+    (if (:route url-route)
+      (rsys/replace-route! app url-route)
+      (rsys/replace-route! app {:route  (dr/absolute-path app default-page default-params)
+                                :params default-params}))))
+

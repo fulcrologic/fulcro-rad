@@ -10,8 +10,7 @@
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.form-options :as fo]
-    [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.report-options :as ro]))
+    [com.fulcrologic.rad.report :as report]))
 
 (defn use-form
   "React hook. Use a RAD form.
@@ -65,9 +64,9 @@
             :on-cancel     [(cancel-mutation (or cancel-mutation-params {:ident form-ident}))]
             ::form/create? (tempid/tempid? id)}))
        (fn [] (uism/remove-uism! app form-ident)))
-     {:form-factory (fn [props]
+     {:form-factory (fn [& [props & _ :as args]]
                       (when (and (map? props) (contains? props id-key))
-                        (form-factory props)))
+                        (apply form-factory args)))
       :form-props   (get container-props :ui/form)
       :form-state   active-state})))
 
@@ -81,8 +80,10 @@
          [report-factory] (hooks/use-state (fn [] (comp/computed-factory Report {:keyfn id-key})))
          active-state (get-in report-props [::uism/asm-id report-ident ::uism/active-state])]
      (hooks/use-lifecycle
-      (fn [] (report/start-report! app Report (assoc options :embedded? true)))
-      (fn [] (when-not keep-existing? (uism/remove-uism! app report-ident))))
-     {:report-factory report-factory
+       (fn [] (report/start-report! app Report (assoc options :embedded? true)))
+       (fn [] (when-not keep-existing? (uism/remove-uism! app report-ident))))
+     {:report-factory (fn [& [props & _ :as args]]
+                        (when (map? props)
+                          (apply report-factory args)))
       :report-props   report-props
       :report-state   active-state})))
