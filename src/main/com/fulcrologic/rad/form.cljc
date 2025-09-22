@@ -72,8 +72,9 @@
                            dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                        (if dirty? (tr "Cancel") (tr "Done"))))
            :class  (fn [this]
-                     (let [props  (comp/props this)
-                           dirty? (or (:ui/new? props) (fs/dirty? props))]
+                     (let [props           (comp/props this)
+                           read-only-form? (?! (comp/component-options this ::read-only?) this)
+                           dirty?          (if read-only-form? false  (or (:ui/new? props) (fs/dirty? props)))]
                        (if dirty? "ui tiny primary button negative" "ui tiny primary button positive")))
            :action (fn [this] (cancel! {::master-form this}))}
    ::undo {:type      :button
