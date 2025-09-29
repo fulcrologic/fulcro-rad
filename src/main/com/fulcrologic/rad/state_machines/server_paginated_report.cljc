@@ -18,7 +18,7 @@
    * Subsets: A multiselect control can send a set of values. This filter parameter should use an extended
      keyword with `status` as the name. E.g. :invoice/status -> :invoice.status/subset.
 
-   Additionally the special key `:indexed-access/options` must be supported, and must allow for a map with the following
+   Additionally, the special key `:indexed-access/options` must be supported, and must allow for a map with the following
    keys:
 
    * `:include-total?` - (OPTIONAL SUPPORT) A boolean to indicate that the server should include the total number of
@@ -62,6 +62,29 @@
    is positive) or reverse (if offset > 0). You can still *resume* the machine on a given page, though that may result
    in an empty page if the server has removed enough data for it to be invalid.
 
+   ## Single-row View
+
+   Standard RAD reports use `ro/row-visible?` to filter rows, allowing for easy selection of a single row. The indexed-based
+   resolvers that are typically involved in server-paginated reports are designed to get pages of results on filters,
+   and may not easily support such a query in the filters; however, if you want to have a filter in the controls that
+   allows the user to select a single row to display (e.g. via a dropdown that does autocomplete against the server),
+   then the state machine in this ns supports the overall case in a trivial way:
+
+   1. You add a control in `ro/controls` whose id (key in the controls map) IS the qualified keyword of the row
+   primary key (which in turn should be an `ao/identity? true` attribute).
+     * Typically you'll use an entity picker that autocompletes for the ID of the row you want.
+     * When selected, simply does `control/run!` to refresh the report.
+   2. WHEN that control is non-nil:
+     * The report loads that one row using the row ident + Row query. This ensures
+       the single-item load works the same as the paginated load in terms of facts returned.
+     * The report shows that single loaded item as the only row.
+
+   You MAY want to make all other controls invisible when doing a single-entity view, since the other filters in
+   that case will not make any sense. See `showing-single-row?` for a helper that can be used in control's
+   `:visible?` predicate.
+
+   Such a control on the report will work properly with routing, initial params, bookmarks, etc.
+
    ## Consistent View
 
    Since the report is working in a distributed fashion the state machine will send a timestamp (instant) with each
@@ -77,7 +100,9 @@
     [com.fulcrologic.fulcro.raw.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.control :as control]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.report :as report]
     [com.fulcrologic.rad.report-options :as ro]
     [com.fulcrologic.rad.routing :as rad-routing]
@@ -85,38 +110,70 @@
     [com.fulcrologic.rad.type-support.date-time :as dt]
     [taoensso.timbre :as log]))
 
+(defn single-row-selected-ident
+  "When the report has a control that selects a SINGLE row, then this function returns the ident of that row; otherwise,
+   returns nil."
+  [env]
+  (let [row-id-key       (ao/qualified-key (ro/row-pk (report/report-options env)))
+        single-row-value (get (report/current-control-parameters env) row-id-key)]
+    (when single-row-value
+      [row-id-key single-row-value])))
+
+(defn load-single-row [{::uism/keys [state-map] :as env}]
+  (let [row-ident (single-row-selected-ident env)
+        Row       (ro/BodyItem (report/report-options env))]
+    (uism/load env row-ident Row
+      {::uism/ok-event    :event/single-item-loaded
+       ::uism/error-event :event/failed})))
+
+(defn showing-single-row?
+  "Report instance helper function. Returns true when the report has a control that has picked a single row. Can
+   be used to disable/hide other controls to indicate they are not used.
+
+   Returns false if `this` is a component class. If `this` is the report runtime instance, then returns true if the
+   current value of the controls indicates a single row has been selected by the report controls."
+  [this]
+  (if (comp/component-class? this)
+    false
+    (let [row-id-key       (some-> this (comp/component-options) (ro/row-pk) (ao/qualified-key))
+          single-row-value (when row-id-key (control/current-value this row-id-key))]
+      (some? single-row-value))))
+
 (defn start-load
   "Starts a load of `current-page`."
   [env]
-  (let [Report         (uism/actor-class env :actor/report)
-        report-ident   (uism/actor->ident env :actor/report)
-        point-in-time  (uism/retrieve env :point-in-time)
+  (let [Report            (uism/actor-class env :actor/report)
+        report-ident      (uism/actor->ident env :actor/report)
+        point-in-time     (uism/retrieve env :point-in-time)
         {:keys [sort-by ascending? current-page total-results]} (uism/aliased-data env)
         {::report/keys [source-attribute load-options page-size BodyItem]
          ::keys        [direct-page-access?]
          :or           {direct-page-access? true}} (comp/component-options Report)
-        page-size      (or (?! page-size env) 20)
-        load-options   (?! load-options env)
-        PageQuery      (comp/nc [:total
-                                 {:results (comp/get-query BodyItem)}]
-                         {:componentName (keyword (str (comp/component-name Report) "-pagequery"))})
-        current-params (assoc (report/current-control-parameters env)
-                         :indexed-access/options (cond-> {:limit  page-size
-                                                          :offset (* (max 0 (dec current-page)) page-size)}
-                                                   (and (not total-results) direct-page-access?) (assoc :include-total? true)
-                                                   (keyword? sort-by) (assoc :sort-column sort-by)
-                                                   (false? ascending?) (assoc :reverse? true)
-                                                   (inst? point-in-time) (assoc :point-in-time point-in-time)))
-        page-path      (uism/resolve-alias env :loaded-page)]
+        page-size         (or (?! page-size env) 20)
+        load-options      (?! load-options env)
+        PageQuery         (comp/nc [:total
+                                    {:results (comp/get-query BodyItem)}]
+                            {:componentName (keyword (str (comp/component-name Report) "-pagequery"))})
+        current-params    (assoc (report/current-control-parameters env)
+                            :indexed-access/options (cond-> {:limit  page-size
+                                                             :offset (* (max 0 (dec current-page)) page-size)}
+                                                      (and (not total-results) direct-page-access?) (assoc :include-total? true)
+                                                      (keyword? sort-by) (assoc :sort-column sort-by)
+                                                      (false? ascending?) (assoc :reverse? true)
+                                                      (inst? point-in-time) (assoc :point-in-time point-in-time)))
+        page-path         (uism/resolve-alias env :loaded-page)
+        single-item-ident (single-row-selected-ident env)]
     (-> env
       (uism/assoc-aliased :raw-rows [])
-      (uism/load source-attribute PageQuery (merge
-                                              {:params            current-params
-                                               ::uism/ok-event    :event/page-loaded
-                                               ::uism/error-event :event/failed
-                                               :marker            report-ident
-                                               :target            page-path}
-                                              load-options))
+      (cond->
+        single-item-ident (load-single-row)
+        (not single-item-ident) (uism/load source-attribute PageQuery (merge
+                                                                        {:params            current-params
+                                                                         ::uism/ok-event    :event/page-loaded
+                                                                         ::uism/error-event :event/failed
+                                                                         :marker            report-ident
+                                                                         :target            page-path}
+                                                                        load-options)))
       (uism/activate :state/loading))))
 
 (defn populate-current-page [{::uism/keys [state-map] :as env}]
@@ -173,7 +230,7 @@
       (cond-> report-loaded report-loaded))))
 
 (defn handle-resume-report
-  "Internal state machine implementation. Called on :event/resumt to do the steps to resume an already running report
+  "Internal state machine implementation. Called on :event/resume to do the steps to resume an already running report
    that has just been re-mounted."
   [env]
   (let [{::uism/keys [fulcro-app event-data]} env
@@ -205,11 +262,20 @@
         run-on-mount? (start-load)
         (not run-on-mount?) (uism/activate :state/gathering-parameters)))))
 
-(defn refresh [env]
+(defn refresh [{::uism/keys [state-map] :as env}]
   (-> env
+    (uism/assoc-aliased :current-page 1)
     (uism/dissoc-aliased :page-cache :total-results)
     (uism/assoc-aliased :point-in-time (dt/now))
     (start-load)))
+
+(defn process-loaded-item [{::uism/keys [state-map] :as env}]
+  (let [ident  (single-row-selected-ident env)
+        value? (when ident (seq (get-in state-map ident)))]
+    (-> env
+      (uism/assoc-aliased :page-count 1)
+      (uism/assoc-aliased :current-rows (if value? [ident] []))
+      (uism/activate :state/gathering-parameters))))
 
 (defstatemachine machine
   {::uism/actors
@@ -237,9 +303,10 @@
 
     :state/loading
     {::uism/events
-     {:event/page-loaded {::uism/handler process-loaded-page}
-      :event/failed      {::uism/handler (fn [env] (log/error "Report failed to load.")
-                                           (uism/activate env :state/gathering-parameters))}}}
+     {:event/page-loaded        {::uism/handler process-loaded-page}
+      :event/single-item-loaded {::uism/handler process-loaded-item}
+      :event/failed             {::uism/handler (fn [env] (log/error "Report failed to load.")
+                                                  (uism/activate env :state/gathering-parameters))}}}
 
     :state/gathering-parameters
     {::uism/events
