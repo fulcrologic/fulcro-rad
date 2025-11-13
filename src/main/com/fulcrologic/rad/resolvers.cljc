@@ -16,7 +16,6 @@
   You may also, of course, define resolvers using `defresolver` and other pathom functions, but you must install those
   separately."
   (:require
-    [clojure.spec.alpha :as s]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.resolvers-common :as resolvers-common]
     [taoensso.encore :as enc]
@@ -35,9 +34,9 @@
   "Generate a resolver for an attribute that specifies a :com.wsscode.pathom.connect/resolve key. Returns a resolver
   or nil."
   [attr]
-  (enc/when-let [resolver        (:com.wsscode.pathom.connect/resolve attr)
-                 k               (::attr/qualified-key attr)
-                 output          [k]]
+  (enc/when-let [resolver (:com.wsscode.pathom.connect/resolve attr)
+                 k        (::attr/qualified-key attr)
+                 output   [k]]
     (log/info "Building attribute resolver for" (::attr/qualified-key attr))
     (let [transform (:com.wsscode.pathom.connect/transform attr)]
       (cond-> (merge

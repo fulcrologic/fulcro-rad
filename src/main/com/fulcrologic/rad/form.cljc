@@ -5,6 +5,7 @@
     [clojure.spec.alpha :as s]
     [clojure.set :as set]
     [clojure.string :as str]
+    [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
     [com.fulcrologic.fulcro.raw.application :as raw.app]
@@ -74,7 +75,7 @@
            :class  (fn [this]
                      (let [props           (comp/props this)
                            read-only-form? (?! (comp/component-options this ::read-only?) this)
-                           dirty?          (if read-only-form? false  (or (:ui/new? props) (fs/dirty? props)))]
+                           dirty?          (if read-only-form? false (or (:ui/new? props) (fs/dirty? props)))]
                        (if dirty? "ui tiny primary button negative" "ui tiny primary button positive")))
            :action (fn [this] (cancel! {::master-form this}))}
    ::undo {:type      :button
@@ -102,7 +103,6 @@
                               remote-busy? (seq (:com.fulcrologic.fulcro.application/active-remotes props))]
                           (when remote-busy? "ui tiny primary button loading")))
            :action    (fn [this] (save! {::master-form this}))}})
-
 
 (>def ::form-env map?)
 
@@ -276,7 +276,7 @@
 (defn default-render-field [env attr]
   (let [render (attr->renderer env attr)]
     (if render
-      (render env attr)
+      ((->arity-tolerant render) env attr)
       (do
         (log/error "No renderer installed to support attribute" attr)
         nil))))
@@ -324,7 +324,7 @@
   (let [env    (rendering-env form-instance props)
         render (form-layout-renderer env)]
     (if render
-      (render env)
+      ((->arity-tolerant render) env)
       nil)))
 
 (defn default-render-layout [form-instance props]
@@ -333,7 +333,7 @@
   (let [env    (rendering-env form-instance props)
         render (form-container-renderer env)]
     (if render
-      (render env)
+      ((->arity-tolerant render) env)
       nil)))
 
 (defn render-layout
@@ -348,7 +348,7 @@
 
 (defmethod fr/render-form :default [renv id-attr]
   (when-let [render (form-container-renderer renv)]
-    (render renv)))
+    ((->arity-tolerant render) renv)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Form creation/logic
@@ -1135,7 +1135,7 @@
 
 (defn protected-on-change
   [env on-change form-ident qualified-key old-value value]
-  (let [new-env (on-change env form-ident qualified-key old-value value)]
+  (let [new-env ((->arity-tolerant on-change) env form-ident qualified-key old-value value)]
     (if (or (nil? new-env) (contains? new-env ::uism/state-map))
       new-env
       (do
@@ -1341,7 +1341,6 @@
         :event/clear-route-denied
         {::uism/handler (fn [env]
                           (uism/assoc-aliased env :route-denied? false))}
-
 
         :event/add-row
         {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
@@ -1779,7 +1778,7 @@
      (invalid? form-instance props)))
   ([form-class-or-instance props]
    (let [{::keys [validator]} (comp/component-options form-class-or-instance)]
-     (and validator (= :invalid (validator props))))))
+     (and validator (= :invalid ((->arity-tolerant validator) props))))))
 
 (defn valid?
   "Returns true if the validator on the form in `env` indicates that all of the form fields are valid. Note that a
@@ -1809,11 +1808,11 @@
        all-required-present?
        (or
          (not validator)
-         (and validator (= :valid (validator props))))))))
+         (and validator (= :valid ((->arity-tolerant validator) props))))))))
 
 (>defn field-style-config
   "Get the value of an overridable field-style-config option. If both the form and attribute set these
-  then the result will be a deep merge of the two (with form winning)."
+then the result will be a deep merge of the two (with form winning)."
   [{::keys [form-instance]} attribute config-key]
   [::form-env ::attr/attribute keyword? => any?]
   (let [{::attr/keys [qualified-key field-style-config]} attribute
@@ -1893,7 +1892,7 @@
         invalid?       (or
                          (and checked? required? (or (nil? value) (and (string? value) (empty? value))))
                          (and checked? (not form-validator) (not (attr/valid-value? attribute value props k)))
-                         (and form-validator (= :invalid (form-validator props k))))]
+                         (and form-validator (= :invalid ((->arity-tolerant form-validator) props k))))]
     invalid?))
 
 (defn validation-error-message
@@ -2111,10 +2110,10 @@
                         :render        `(fn [this#]
                                           (comp/wrapped-render this#
                                             (fn []
-                                              (enc/when-let [props#    (comp/props this#)
-                                                             [k#]      (comp/get-ident this#)
+                                              (enc/when-let [props#   (comp/props this#)
+                                                             [k#] (comp/get-ident this#)
                                                              [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
-                                                             factory#  (comp/computed-factory c# {:keyfn k#})]
+                                                             factory# (comp/computed-factory c# {:keyfn k#})]
                                                 (factory# props#)))))}]
        (if (comp/cljs? &env)
          `(do

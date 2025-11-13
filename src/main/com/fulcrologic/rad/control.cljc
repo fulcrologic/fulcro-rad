@@ -20,16 +20,16 @@
   (:refer-clojure :exclude [run!])
   (:require
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
+    [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.mutations :refer [defmutation]]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism]
     [com.fulcrologic.fulcro.raw.application :as raw.app]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.rad.errors :refer [warn-once!]]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce child-classes]]
+    [com.fulcrologic.fulcro.ui-state-machines :as uism]
+    [com.fulcrologic.guardrails.core :refer [=> >def >defn]]
     [com.fulcrologic.rad :as rad]
-    [taoensso.encore :as enc]
+    [com.fulcrologic.rad.errors :refer [warn-once!]]
+    [com.fulcrologic.rad.options-util :refer [?! child-classes debounce]]
+    [com.fulcrologic.rad.routing :as rad-routing]
     [taoensso.timbre :as log]))
 
 (defsc Control
@@ -55,10 +55,10 @@
            style->input (some-> runtime-atom deref ::rad/controls ::type->style->control (get input-type))
            input        (or (get style->input input-style) (get style->input :default))]
        (if input
-         (input {:instance    owner
-                 :key         (str control-key)
-                 :control     control
-                 :control-key control-key})
+         ((->arity-tolerant input) {:instance    owner
+                                    :key         (str control-key)
+                                    :control     control
+                                    :control-key control-key})
          (when (and (not= input-type :none) #?(:cljs goog.DEBUG :clj true))
            (warn-once! "NOTE: No renderer is installed to support control " control-key "with type/style" input-type input-style)
            nil))))))
@@ -146,11 +146,11 @@
 (>defn standard-control-layout
   "Returns a map of:
 
-  * `:action-layout`: a simple vector of keywords for the order buttons should appear. The default is the order they
-    are returned from the control map (which is stable, but not necessarily the order of appearance in the map).
-  * `:input-layout`: a nested vector of keywords that represents the preferred layout of the controls
-     on `class-or-instance`. This layout can be declared on the class-or-instance, or will default to a
-     single-row layout based on the entry order in the control map (stable but undefined)."
+* `:action-layout`: a simple vector of keywords for the order buttons should appear. The default is the order they
+are returned from the control map (which is stable, but not necessarily the order of appearance in the map).
+* `:input-layout`: a nested vector of keywords that represents the preferred layout of the controls
+on `class-or-instance`. This layout can be declared on the class-or-instance, or will default to a
+single-row layout based on the entry order in the control map (stable but undefined)."
   [class-or-instance]
   [(s/or :cls comp/component-class? :inst comp/component?) => (s/keys :req-un [::action-layout ::input-layout])]
   (let [{::keys [control-layout]} (comp/component-options class-or-instance)

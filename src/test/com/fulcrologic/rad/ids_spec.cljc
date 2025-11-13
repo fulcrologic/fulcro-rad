@@ -1,7 +1,7 @@
 (ns com.fulcrologic.rad.ids-spec
   (:require
     [com.fulcrologic.rad.ids :as ids]
-    [fulcro-spec.core :refer [assertions specification behavior component =>]]))
+    [fulcro-spec.core :refer [=> assertions behavior specification]]))
 
 (defn less-than [x y & more]
   (if (< (compare x y) 0)

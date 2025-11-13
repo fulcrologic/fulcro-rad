@@ -4,8 +4,8 @@
   if/when the form that refers to the file is saved.  Of course, storage can be persistent and just skip the
   transient bits if you don't need to track the files in some other kind of database."
   (:require [clojure.java.io :as jio]
-            [taoensso.timbre :as log]
-            [com.fulcrologic.rad.type-support.date-time :as dt])
+            [com.fulcrologic.rad.type-support.date-time :as dt]
+            [taoensso.timbre :as log])
   (:import
     (java.io File)))
 

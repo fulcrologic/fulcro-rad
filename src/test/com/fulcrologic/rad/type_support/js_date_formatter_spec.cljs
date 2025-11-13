@@ -1,7 +1,7 @@
 (ns com.fulcrologic.rad.type-support.js-date-formatter-spec
   (:require
     [com.fulcrologic.rad.type-support.js-date-formatter :as jdf]
-    [fulcro-spec.core :refer [assertions specification behavior =>]]))
+    [fulcro-spec.core :refer [=> assertions behavior specification]]))
 
 (specification "tokenization"
   (assertions

@@ -4,12 +4,12 @@
    Plugins and a default generated parser for working with RAD applications. You may use the source of this namespace
    as reference for making your own custom parser, or simply start with the `new-parser` function."
   (:require
-   [com.fulcrologic.rad.pathom-common :as rpc]
-   [com.wsscode.common.async-clj :refer [let-chan]]
-   [com.wsscode.pathom.connect :as pc]
-   [com.wsscode.pathom.core :as p]
-   [edn-query-language.core :as eql]
-   [taoensso.timbre :as log]))
+    [com.fulcrologic.rad.pathom-common :as rpc]
+    [com.wsscode.common.async-clj :refer [let-chan]]
+    [com.wsscode.pathom.connect :as pc]
+    [com.wsscode.pathom.core :as p]
+    [edn-query-language.core :as eql]
+    [taoensso.timbre :as log]))
 
 (defn preprocess-parser-plugin
   "Helper to create a plugin that can view/modify the env/tx of a top-level request.

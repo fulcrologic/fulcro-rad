@@ -2,12 +2,11 @@
   "An implementation of date formatting that uses ISO format specifiers, but uses browser built-in Intl support
    to get the locale-dependent values"
   (:require
-    [clojure.string :as str]
-    [cljc.java-time.zoned-date-time :as zdt]
-    [taoensso.timbre :as log]
+    [cljc.java-time.instant :as instant]
     [cljc.java-time.zone-id :as zone-id]
     [cljc.java-time.zone-offset :as zo]
-    [cljc.java-time.instant :as instant]))
+    [cljc.java-time.zoned-date-time :as zdt]
+    [clojure.string :as str]))
 
 (def tokenize
   "[format-str]

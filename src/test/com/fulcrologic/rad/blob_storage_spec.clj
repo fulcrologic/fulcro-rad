@@ -1,10 +1,10 @@
 (ns com.fulcrologic.rad.blob-storage-spec
   (:require
-    [fulcro-spec.core :refer [assertions specification component when-mocking
-                              behavior]]
-    [com.fulcrologic.rad.blob-storage :as bs]
     [clojure.java.io :as jio]
-    [com.fulcrologic.rad.type-support.date-time :as dt]))
+    [com.fulcrologic.rad.blob-storage :as bs]
+    [com.fulcrologic.rad.type-support.date-time :as dt]
+    [fulcro-spec.core :refer [assertions behavior component specification
+                              when-mocking]]))
 
 (declare =>)
 

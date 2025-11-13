@@ -12,8 +12,7 @@
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.routing.history :as history]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.rad.routing.history :as history]))
 
 (defn absolute-path
   "Get the absolute path for the given route target. NOTE: Using a route target in multiple paths of your application

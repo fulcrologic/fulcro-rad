@@ -35,10 +35,10 @@
 
 (defn just-pathom3-keys [m]
   (into {}
-        (keep (fn [k]
-                (when (= (namespace k) "com.wsscode.pathom3.connect.operation")
-                  [k (get m k)])))
-        (keys m)))
+    (keep (fn [k]
+            (when (= (namespace k) "com.wsscode.pathom3.connect.operation")
+              [k (get m k)])))
+    (keys m)))
 
 (defn attribute-resolver
   "Generate a resolver for an attribute that specifies a :com.wsscode.pathom3.connect.operation/resolve key. Returns a resolver
@@ -47,14 +47,14 @@
   Accepts any keys in the com.wsscode.pathom3.connect.operation ns,
   thus any keys defresolver accepts are valid."
   [attr]
-  (enc/when-let [resolver        (::pco/resolve attr)
-                 k               (::attr/qualified-key attr)
-                 output          [k]
-                 resolve-sym     (symbol (namespace k) (str (name k) "-resolver"))]
+  (enc/when-let [resolver    (::pco/resolve attr)
+                 k           (::attr/qualified-key attr)
+                 output      [k]
+                 resolve-sym (symbol (namespace k) (str (name k) "-resolver"))]
     (log/info "Building Pathom3 attribute resolver for" (::attr/qualified-key attr))
     (pco/resolver
       (merge
-        {::pco/output  output}
+        {::pco/output output}
         ; Allow output to be overridden
         (just-pathom3-keys attr)
         ; But not op-name or resolve

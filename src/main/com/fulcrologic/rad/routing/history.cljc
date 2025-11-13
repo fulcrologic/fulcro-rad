@@ -8,11 +8,10 @@
   `com.fulcrologic.rad.routing` namespace functions, which will keep track of history if it is installed."
   (:require
     [clojure.spec.alpha :as s]
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.rad.authorization :as auth]
+    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+    [com.fulcrologic.guardrails.core :refer [=> >defn ?]]
     [taoensso.timbre :as log]))
 
 (defprotocol RouteHistory

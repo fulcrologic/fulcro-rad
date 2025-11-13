@@ -6,6 +6,7 @@
        :cljs [goog.functions :as gf])
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
+    [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.components :as comp]
@@ -42,7 +43,7 @@
 #?(:clj
    (>defn resolve-keys
      "Used by RAD macros on options map to resolve keys in option maps at compile time. options-map MUST be
-      a map already."
+ a map already."
      [macro-env options-map]
      [any? map? => map?]
      (reduce-kv
@@ -54,16 +55,19 @@
 (defn ?!
   "Run if the argument is a fn. This function can accept a value or function. If it is a
   function then it will apply the remaining arguments to it; otherwise it will just return
-  `v`."
+  `v`.
+
+  The function is wrapped with ->arity-tolerant to handle arity mismatches in CLJ
+  (CLJS/JS natively ignores extra arguments)."
   [v & args]
   (if (and (fn? v) (not (rc/component-class? v)))
-    (apply v args)
+    (apply (->arity-tolerant v) args)
     v))
 
 (>defn qkey
   "Ensure that the argument, which can be the qualified key of an attribute or the attribute itself, is a keyword.
 
-  Returns the value if is passed unless it is a map, in which case it returns the value at ::attr/qualified-key."
+Returns the value if is passed unless it is a map, in which case it returns the value at ::attr/qualified-key."
   [attr-or-keyword]
   [(s/or :k keyword :attr (s/keys :req [:com.fulcrologic.rad.attributes/qualified-key])) => (? keyword?)]
   (cond-> attr-or-keyword
@@ -90,16 +94,16 @@
 #?(:clj
    (>defn macro-optimize-options
      "Applies standard RAD optimizations to a macro's options map (where things may be symbolic). Returns an updated
-      options map that contains new syntax that must be evaluated.
+ options map that contains new syntax that must be evaluated.
 
-      Fixes anything listed in `keys-to-fix` by applying `opts/?fix-keys`, and anything in `key-transform`.
+ Fixes anything listed in `keys-to-fix` by applying `opts/?fix-keys`, and anything in `key-transform`.
 
-      The returned option map will change the values for keys in the `keys-to-fix`:
+ The returned option map will change the values for keys in the `keys-to-fix`:
 
-      * If there is an entry in `key-transforms` {k (fn [v] ...)} then it will use that (the fn should return syntax, since
-        v may be symbolic)
-      * Otherwise it will apply opts/?fix-keys iff the value is a map or is symbolic.
-      "
+ * If there is an entry in `key-transforms` {k (fn [v] ...)} then it will use that (the fn should return syntax, since
+   v may be symbolic)
+ * Otherwise it will apply opts/?fix-keys iff the value is a map or is symbolic.
+ "
      [env options keys-to-fix key-transforms]
      [any? map? (s/coll-of keyword? :kind set?) (s/map-of keyword? fn?) => map?]
      (try
@@ -120,8 +124,8 @@
 
 (>defn form-class
   "Attempt to coerce into a Fulcro component class. If the argument is a keyword it will look it up in Fulcro's
-  component registry, otherwise the argument is return unmodified. May return nil if it is passed nil or the
-  component is not registered at the provided key."
+component registry, otherwise the argument is return unmodified. May return nil if it is passed nil or the
+component is not registered at the provided key."
   [registry-key-or-component-class]
   [(? (s/or :registry-key keyword? :fulcro-class comp/component-class?)) => (? comp/component-class?)]
   (cond-> registry-key-or-component-class
@@ -135,14 +139,14 @@
 
 (>defn narrow-keyword
   "Narrow the meaning of a keyword by turning the full original keyword into a namespace and adding the given
-  `new-name`.
+`new-name`.
 
-  ```
-  (narrow-keyword :a/b \"c\") => :a.b/c
-  ```
+```
+(narrow-keyword :a/b \"c\") => :a.b/c
+```
 
-  Requires that the incoming keyword already have a namespace.
-  "
+Requires that the incoming keyword already have a namespace.
+"
   [k new-name]
   [qualified-keyword? (s/or :string string? :k keyword? :sym symbol?) => qualified-keyword?]
   (let [old-ns (namespace k)

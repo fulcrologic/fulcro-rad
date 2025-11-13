@@ -14,8 +14,7 @@
   (:require
     [com.fulcrologic.fulcro.raw.components :as rc]
     [com.fulcrologic.rad.attributes-options :as ao]
-    [com.fulcrologic.rad.options-util :refer [?! defoption]]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.rad.options-util :refer [?! defoption]]))
 
 (def id
   "RForm option. EQUIRED: The *attribute* that will act as the primary key for this form."

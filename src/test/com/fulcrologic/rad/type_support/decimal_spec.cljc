@@ -1,10 +1,10 @@
 (ns com.fulcrologic.rad.type-support.decimal-spec
   (:refer-clojure :exclude [name])
   (:require
-    [fulcro-spec.core :refer [specification assertions component]]
-    [com.fulcrologic.rad.type-support.date-time :as datetime]
     [cognitect.transit :as ct]
-    [com.fulcrologic.rad.type-support.decimal :as math]))
+    [com.fulcrologic.rad.type-support.date-time :as datetime]
+    [com.fulcrologic.rad.type-support.decimal :as math]
+    [fulcro-spec.core :refer [assertions component specification]]))
 
 (declare =>)
 
@@ -137,23 +137,23 @@
 
 (specification "Basic Math"
   #_(assertions
-    "Primitive mode is faster than normal mode"
-    (is-x-times-faster? 2
-      (fn []
-        (math/with-primitive-ops
+      "Primitive mode is faster than normal mode"
+      (is-x-times-faster? 2
+        (fn []
+          (math/with-primitive-ops
+            (doseq [n (range 1000)]
+              (-> n
+                (math/+ 5)
+                (math/* 55)
+                (math/- 4 5 6)
+                (math/div 11.45)))))
+        (fn []
           (doseq [n (range 1000)]
             (-> n
               (math/+ 5)
               (math/* 55)
               (math/- 4 5 6)
-              (math/div 11.45)))))
-      (fn []
-        (doseq [n (range 1000)]
-          (-> n
-            (math/+ 5)
-            (math/* 55)
-            (math/- 4 5 6)
-            (math/div 11.45))))) => true)
+              (math/div 11.45))))) => true)
   (component "Normal mode"
     (assertions
       "regular + math cannot represent certain (common) numbers"

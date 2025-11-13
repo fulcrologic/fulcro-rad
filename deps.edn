@@ -3,7 +3,7 @@
  :deps    {edn-query-language/eql            {:mvn/version "1.0.2"}
            com.taoensso/timbre               {:mvn/version "4.10.0"}
            com.taoensso/encore               {:mvn/version "3.45.0"}
-           com.fulcrologic/fulcro            {:mvn/version "3.7.1"}
+           com.fulcrologic/fulcro            {:mvn/version "3.9.0-rc14-SNAPSHOT"}
            com.fulcrologic/fulcro-i18n       {:mvn/version "1.0.0"}
            com.fulcrologic/guardrails        {:mvn/version "1.2.9"}
            commons-codec/commons-codec       {:mvn/version "1.15"}
@@ -15,7 +15,11 @@
            org.clojure/core.async            {:mvn/version "1.6.673"}}
 
  :aliases {:tests     {:extra-paths ["src/test"]
-                       :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.12"}}}
+                       :extra-deps  {fulcrologic/fulcro-spec {:mvn/version "3.1.17-SNAPSHOT"}}}
+
+           :nrepl     {:extra-deps {nrepl/nrepl {:mvn/version "1.5.1"}}
+                       :jvm-opts   ["-Djdk.attach.allowAttachSelf" "-Dtest"]
+                       :main-opts  ["-m" "nrepl.cmdline" "--port" "7888"]}
 
            :clj-tests {:extra-paths ["src/test"]
                        :main-opts   ["-m" "kaocha.runner"]

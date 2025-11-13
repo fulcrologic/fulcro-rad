@@ -1,18 +1,15 @@
 (ns com.fulcrologic.rad.form-spec
   (:require
-    [clojure.pprint :refer [pprint]]
-    [clojure.test :refer [use-fixtures]]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.components :as comp :refer [defsc]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism]
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.attributes :refer [defattr]]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.form-options :as fo]
-    [fulcro-spec.core :refer [assertions specification behavior when-mocking! component]]
-    [taoensso.timbre :as log]))
+    [fulcro-spec.core :refer [assertions behavior component specification]]))
 
 (declare =>)
 
@@ -36,7 +33,7 @@
    fo/default-values {:address/street default-street}
    ao/target         :address/id
    fo/id             address-id
-   :query                [:mocked/query]})
+   :query            [:mocked/query]})
 
 (defsc PersonForm [_ _]
   {fo/attributes [person-name]
@@ -47,7 +44,7 @@
    fo/id             account-id
    fo/default-values {:account/spouse {}}
    fo/subforms       {:account/addresses {fo/ui AddressForm}
-                          :account/spouse    {fo/ui PersonForm}}})
+                      :account/spouse    {fo/ui PersonForm}}})
 
 (specification "attributes->form-query"
   (component "Single-level query conversion"

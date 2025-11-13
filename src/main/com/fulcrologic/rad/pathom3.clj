@@ -1,13 +1,13 @@
 (ns com.fulcrologic.rad.pathom3
   "Support for Pathom 3 as the EQL processor for RAD"
   (:require
+    [com.fulcrologic.rad.pathom-common :as rpc]
     [com.wsscode.pathom3.connect.indexes :as pci]
     [com.wsscode.pathom3.connect.operation :as pco]
     [com.wsscode.pathom3.connect.runner :as pcr]
     [com.wsscode.pathom3.error :as p.error]
     [com.wsscode.pathom3.interface.eql :as p.eql]
     [com.wsscode.pathom3.plugin :as p.plugin]
-    [com.fulcrologic.rad.pathom-common :as rpc]
     [edn-query-language.core :as eql]
     [taoensso.timbre :as log]))
 
@@ -110,13 +110,13 @@
     ([config env-middleware extra-plugins resolvers] (new-processor config env-middleware extra-plugins resolvers nil))
     ([{{:keys [log-requests? log-responses?]} :com.fulcrologic.rad.pathom/config :as config} env-middleware extra-plugins resolvers update-base-env]
      (let [base-env (cond-> (-> {}
-                                (p.plugin/register extra-plugins)
-                                (p.plugin/register-plugin attribute-error-plugin)
-                                (p.plugin/register-plugin rewrite-mutation-exceptions)
-                                ;(p.plugin/register-plugin log-resolver-error)
-                                (pci/register (convert-resolvers resolvers))
-                                (assoc :config config))
-                            update-base-env (update-base-env))
+                              (p.plugin/register extra-plugins)
+                              (p.plugin/register-plugin attribute-error-plugin)
+                              (p.plugin/register-plugin rewrite-mutation-exceptions)
+                              ;(p.plugin/register-plugin log-resolver-error)
+                              (pci/register (convert-resolvers resolvers))
+                              (assoc :config config))
+                      update-base-env (update-base-env))
            process  (p.eql/boundary-interface base-env)]
        (fn [env tx]
          (when log-requests?

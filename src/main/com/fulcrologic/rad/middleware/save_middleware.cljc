@@ -1,8 +1,6 @@
 (ns com.fulcrologic.rad.middleware.save-middleware
   (:require
-    [com.fulcrologic.rad.form :as form]
-    [taoensso.timbre :as log]
-    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]))
+    [com.fulcrologic.rad.form :as form]))
 
 (defmulti rewrite-value
   "

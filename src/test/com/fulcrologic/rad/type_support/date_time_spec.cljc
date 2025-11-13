@@ -174,7 +174,7 @@
 (specification "inst->zoned-date-time"
   (let [expected    (zdt/of (ldt/of (ld/of 2020 3 1) (lt/of 6 0)) (dt/get-zone-id "America/Los_Angeles"))
         pretend-now #inst "2020-04-05T12:00Z"
-        zdt-now (zdt/of (ldt/of (ld/of 2020 4 5) (lt/of 5 0)) (dt/get-zone-id "America/Los_Angeles"))]
+        zdt-now     (zdt/of (ldt/of (ld/of 2020 4 5) (lt/of 5 0)) (dt/get-zone-id "America/Los_Angeles"))]
     (dt/set-timezone! "America/Los_Angeles")
     (when-mocking
       (dt/now) => pretend-now

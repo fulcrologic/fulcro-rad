@@ -2266,9 +2266,8 @@ Here are some ideas for middleware that we've found useful:
 
 ==== Autojoin Middleware
 
-In RAD 1.6.5 another middleware was introduced: autojoin. This middleware is used in the case where you
-want to create or edit an entity that MUST have a parent, but you simply want to specify the parent
-on form start instead of having to make the parent form with subforms in order to work with the children.
+In RAD 1.6.5 another middleware was introduced: autojoin.
+This middleware is used in the case where you want to create or edit an entity that MUST have a parent, but you simply want to specify the parent on form start instead of having to make the parent form with subforms in order to work with the children.
 
 See the `com.fulcrologic.rad.middleware.autojoin` namespace docstring for details and an example.
 
@@ -2531,12 +2530,14 @@ The first thing is to make a function that can install the support under a well-
 
 Calling `install!` on startup will make it so that any RAD registered keywords will derive from :default.
 
-The RAD rendering uses the multimethods for all rendering already, but installs `:default` handlers that call the
-old code by default, so that fall-through will hit any plugin.
+The RAD rendering uses the multimethods for all rendering already, but installs `:default` handlers that call the old code by default, so that fall-through will hit any plugin.
 
-For our demo we will choose to use a style named `:multimethod`. I.e. forms that set `fro/style :multimethod` will use the new rendering.
+For our demo we will choose to use a style named `:multimethod`.
+I.e. forms that set `fro/style :multimethod` will use the new rendering.
 
-Next, we should set up some defaults so that selecting multimethod as the style does something. We'll leverage the plugin to provide those defaults, but split them out so we can customize them. Note that we have to supply a default for rendering `:ref` fields because once we're using the multimethods there is no special handling of refs like there is in the standard SUI plugin, but we can dispatch to the code that is in the plugin.
+Next, we should set up some defaults so that selecting multimethod as the style does something.
+We'll leverage the plugin to provide those defaults, but split them out so we can customize them.
+Note that we have to supply a default for rendering `:ref` fields because once we're using the multimethods there is no special handling of refs like there is in the standard SUI plugin, but we can dispatch to the code that is in the plugin.
 
 [source]
 -----
@@ -2777,16 +2778,17 @@ See the RAD Semantic UI plugin for example implementations of these.
 
 === Form Abandonment
 
-When the user tries to route away from a form with unsaved changes the default is to show a `js/confirm` dialog and
-ask if the user intends to throw away changes. If they answer yes, then routing continues, otherwise they stay on the form.
+When the user tries to route away from a form with unsaved changes the default is to show a `js/confirm` dialog and ask if the user intends to throw away changes.
+If they answer yes, then routing continues, otherwise they stay on the form.
 
-In the latest versions of RAD and the SUI plugin, you can choose an alternative that can be customized. To do so you
-specify the `fo/confirm` option. This option can be a synchronous function (e.g. `js/confirm`) that takes a message
-and returns a boolean. The reason for this is to make it compatible with native (non-web) environments.
+In the latest versions of RAD and the SUI plugin, you can choose an alternative that can be customized.
+To do so you specify the `fo/confirm` option.
+This option can be a synchronous function (e.g. `js/confirm`) that takes a message and returns a boolean.
+The reason for this is to make it compatible with native (non-web) environments.
 
-You can now also set it to the special keyword `:async`, which causes the form state machine to assume you have
-a rendering plugin that can support rendering some kind of modal for the user to interact with. The SUI plugin
-includes a default modal. So, the only thing you have to do is:
+You can now also set it to the special keyword `:async`, which causes the form state machine to assume you have a rendering plugin that can support rendering some kind of modal for the user to interact with.
+The SUI plugin includes a default modal.
+So, the only thing you have to do is:
 
 [source]
 -----
@@ -3195,8 +3197,7 @@ RAD predefines a number of multimethods for rendering:
 `render-row`:: Meant to be called once per row of the report.
 `render-footer`:: Meant to render the footer (duplicate controls?)
 
-and it defines defaults for three of them to do what the older
-versions of RAD already did (so you can fall back on those if desired):
+and it defines defaults for three of them to do what the older versions of RAD already did (so you can fall back on those if desired):
 
 [source]
 -----
@@ -3209,8 +3210,7 @@ versions of RAD already did (so you can fall back on those if desired):
   ((control-renderer this) this))
 -----
 
-other methods are defined because they seem like the generally useful set of methods you'd want, and if you had
-to define them yourself then library authors would not have much common ground to rely on.
+other methods are defined because they seem like the generally useful set of methods you'd want, and if you had to define them yourself then library authors would not have much common ground to rely on.
 
 The multimethods use the *same* dispatch hierarchy as forms.
 So `fr/derive!` and `fr/isa?`  are what you would use to manage ad-hoc polymorphism.
@@ -3232,10 +3232,8 @@ All of these styles are meant to appear as top-level options on the report compo
 -----
 
 would try to invoke the `render-report` with a dispatch of `[:person/id :compact/table]`.
-This would resolve according to multimethod rules (isa? on each element of the vector) and fall
-back to the special value `:default` (not a vector) if none are found. All the multimethods would
-expect style `:compact/table` (dispatch uses rr/style as a fallback) except for headers,
-which stated an explicit header style of `rro/header-style :foo`.
+This would resolve according to multimethod rules (isa? on each element of the vector) and fall back to the special value `:default` (not a vector) if none are found.
+All the multimethods would expect style `:compact/table` (dispatch uses rr/style as a fallback) except for headers, which stated an explicit header style of `rro/header-style :foo`.
 
 === Example Setup
 
@@ -3261,9 +3259,7 @@ Say you want to specialize how reports render people and employees, but there ar
 
 Now if a report for employee's is rendering as a compact table the dispatch [:employee/id :compact/table] can look for multimethods that accept [:employee/id :compact/table], [:person/id :compact/table], [:employee/id :table], etc.
 
-This means that you can define, say, a custom `render-body` for `[:default :compact/table]` that adds css classes to
-compress the table, but you can then let the other elements (header/footer/rows) fall all the way through to default,
-or be specialized on the data type.
+This means that you can define, say, a custom `render-body` for `[:default :compact/table]` that adds css classes to compress the table, but you can then let the other elements (header/footer/rows) fall all the way through to default, or be specialized on the data type.
 
 ==== Define the Multimethods
 
@@ -3271,9 +3267,8 @@ The `com.example.ui.report-rendering` of the
 https://github.com/fulcrologic/fulcro-rad-demo/blob/new-rendering/src/shared/com/example/ui/report_rendering.cljc[new-rendering branch]
 of the Fulcro RAD Demo is a runnable demo that sets things up as follows.
 
-First, it invents style name (`:multimethod`) for `render-report`, and provides
-a default for rendering controls and the report body. In those it calls some of
-the other multimethods:
+First, it invents style name (`:multimethod`) for `render-report`, and provides a default for rendering controls and the report body.
+In those it calls some of the other multimethods:
 
 [source]
 -----
@@ -3309,9 +3304,9 @@ the other multimethods:
       (rr/render-footer this options))))
 -----
 
-Next, it sets up a global fall-through default for table headers and footers (since there are none). Headers are
-somewhat complex because you often want to let the user click on a header to sort the table. The code for the headers was largely lifted
-from the SUI plugin:
+Next, it sets up a global fall-through default for table headers and footers (since there are none).
+Headers are somewhat complex because you often want to let the user click on a header to sort the table.
+The code for the headers was largely lifted from the SUI plugin:
 
 [source]
 -----
@@ -3360,9 +3355,10 @@ from the SUI plugin:
         "Table by multimethods"))))
 -----
 
-Next we define a query-less component to wrap how we will render a row. We do this because `defsc` generates a pure
-component, which will avoid rendering if the props have not changed. This is important for a table, which might
-be trying to display a lot of DOM. Then a factory is generated and called from the multimethod.
+Next we define a query-less component to wrap how we will render a row.
+We do this because `defsc` generates a pure component, which will avoid rendering if the props have not changed.
+This is important for a table, which might be trying to display a lot of DOM.
+Then a factory is generated and called from the multimethod.
 
 [source]
 -----
@@ -3415,13 +3411,14 @@ be trying to display a lot of DOM. Then a factory is generated and called from t
   (render-table-row this (ro/BodyItem options) row))
 -----
 
-The render-row multimethod is called with the report instance, row class, and row props. Usually you won't need the
-row class (it established the query and normalization), but it is there just in case. The bulk of the logic in row
-rendering centers around the fact that a row can be "selected" and/or have form links. So, if you want to support those
-RAD options, you'll have to include logic to handle them.
+The render-row multimethod is called with the report instance, row class, and row props.
+Usually you won't need the row class (it established the query and normalization), but it is there just in case.
+The bulk of the logic in row rendering centers around the fact that a row can be "selected" and/or have form links.
+So, if you want to support those RAD options, you'll have to include logic to handle them.
 
-That's it! A full set of multimethods for rendering reports. All you have to do is add a style option and your report
-will switch to using the multimethods:
+That's it!
+A full set of multimethods for rendering reports.
+All you have to do is add a style option and your report will switch to using the multimethods:
 
 [source]
 -----

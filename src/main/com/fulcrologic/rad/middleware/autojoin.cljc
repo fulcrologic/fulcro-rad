@@ -50,10 +50,10 @@
 
    "
   (:require
+    [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.middleware.autojoin-options :as ajo]
-    [com.fulcrologic.rad.attributes :as attr]
     [edn-query-language.core :as eql]))
 
 (defn keys-to-autojoin [all-attributes]

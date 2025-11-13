@@ -35,9 +35,7 @@
   "
   (:refer-clojure :exclude [isa?])
   (:require
-    [com.fulcrologic.fulcro.application :as app]
     [com.fulcrologic.fulcro.raw.components :as rc]
-    [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.form-render-options :as fro]

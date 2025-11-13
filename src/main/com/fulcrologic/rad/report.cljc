@@ -26,6 +26,7 @@
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
+    [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fstate]
     [com.fulcrologic.rad.attributes :as attr]
@@ -61,7 +62,7 @@
         layout-style (or (some-> report-instance comp/component-options ::layout-style) :default)
         layout       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::style->layout layout-style)]
     (if layout
-      (layout report-instance)
+      ((->arity-tolerant layout) report-instance)
       (do
         (log/error "No layout function found for form layout style" layout-style)
         nil))))
@@ -74,7 +75,7 @@
         layout-style (or (some-> report-instance comp/component-options ::row-style) :default)
         render       (some-> runtime-atom deref :com.fulcrologic.rad/controls ::row-style->row-layout layout-style)]
     (if render
-      (render report-instance row-class row-props)
+      ((->arity-tolerant render) report-instance row-class row-props)
       (do
         (log/error "No layout function found for form layout style" layout-style)
         nil))))
@@ -278,8 +279,7 @@
       (let [compare-rows (report-options uism-env ::compare-rows)
             normalized?  (some-> all-rows (first) (eql/ident?))
             sorted-rows  (if compare-rows
-                           (let [
-                                 keyfn     (if normalized? #(get-in state-map %) identity)
+                           (let [keyfn     (if normalized? #(get-in state-map %) identity)
                                  comparefn (fn [a b] (compare-rows sort-params a b))]
                              (vec (sort-by keyfn comparefn all-rows)))
                            all-rows)]
@@ -793,8 +793,8 @@
                                          (or
                                            formatter
                                            (built-in-formatter type style)
-                                           (fn [_ v] (str v)))))
-        formatted-value        (formatter report-instance value row-props column-attribute)]
+                                           (fn [_ v _ _] (str v)))))
+        formatted-value        ((->arity-tolerant formatter) report-instance value row-props column-attribute)]
     formatted-value))
 
 (defn install-formatter!
@@ -1006,7 +1006,7 @@
                              {:route-segment (if (vector? route) route [route])
                               :render        render
                               ::BodyItem     ItemClass
-                              :query         (fn [] query)
+                              :query         (fn [_] query)
                               :initial-state (fn [params]
                                                (let [user-initial-state (?! initialize-ui-props (get-class) params)]
                                                  (cond-> {:ui/parameters   {}

@@ -18,12 +18,10 @@
     [com.fulcrologic.fulcro.raw.components :as comp]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.routing.history :as history]
-    [com.fulcrologic.rad.type-support.date-time :as dt]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.rad.type-support.date-time :as dt]))
 
 (defn start-load [env]
   (let [Report         (uism/actor-class env :actor/report)

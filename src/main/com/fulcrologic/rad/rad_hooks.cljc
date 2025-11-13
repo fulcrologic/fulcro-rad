@@ -10,8 +10,7 @@
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.form :as form]
     [com.fulcrologic.rad.form-options :as fo]
-    [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.report-options :as ro]))
+    [com.fulcrologic.rad.report :as report]))
 
 (defn use-form
   "React hook. Use a RAD form.
@@ -81,8 +80,8 @@
          [report-factory] (hooks/use-state (fn [] (comp/computed-factory Report {:keyfn id-key})))
          active-state (get-in report-props [::uism/asm-id report-ident ::uism/active-state])]
      (hooks/use-lifecycle
-      (fn [] (report/start-report! app Report (assoc options :embedded? true)))
-      (fn [] (when-not keep-existing? (uism/remove-uism! app report-ident))))
+       (fn [] (report/start-report! app Report (assoc options :embedded? true)))
+       (fn [] (when-not keep-existing? (uism/remove-uism! app report-ident))))
      {:report-factory report-factory
       :report-props   report-props
       :report-state   active-state})))

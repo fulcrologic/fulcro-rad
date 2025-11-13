@@ -1,15 +1,15 @@
 (ns com.fulcrologic.rad.pathom-common
   "Helper functions that are used by both Pathom 2 and 3 support."
   (:require
-   [clojure.walk :as walk]
-   [taoensso.timbre :as log]))
+    [clojure.walk :as walk]
+    [taoensso.timbre :as log]))
 
 (defn remove-omissions
   "Replaces black-listed keys from tx with :com.fulcrologic.rad.pathom/omitted, meant for logging tx's
   without logging sensitive details like passwords."
   [config tx]
   (let [sensitive-keys (conj (:sensitive-keys config #{})
-                             :com.wsscode.pathom/trace)]
+                         :com.wsscode.pathom/trace)]
     (walk/postwalk
       (fn [x]
         (if (and (vector? x) (= 2 (count x)) (contains? sensitive-keys (first x)))

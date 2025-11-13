@@ -1,8 +1,8 @@
 (ns com.fulcrologic.rad.type-support.integer
   (:refer-clojure :exclude [parse-long])
   (:require
-    [com.fulcrologic.guardrails.core :refer [>defn =>]]
-    [cognitect.transit :as ct]))
+    [cognitect.transit :as ct]
+    [com.fulcrologic.guardrails.core :refer [=> >defn]]))
 
 (>defn parse-long
   "Parse a string into an integer value. In CLJS this can return a Number or a goog.math.Long

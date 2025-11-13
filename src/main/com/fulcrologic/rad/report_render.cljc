@@ -3,8 +3,8 @@
    the mm hierarchy for dispatch."
   (:require
     [com.fulcrologic.rad.attributes-options :as ao]
-    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.form-render :as fr]
+    [com.fulcrologic.rad.options-util :refer [?!]]
     [com.fulcrologic.rad.report-options :as ro]
     [com.fulcrologic.rad.report-render-options :as rro]))
 

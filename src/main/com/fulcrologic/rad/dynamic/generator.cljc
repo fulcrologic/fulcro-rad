@@ -1,12 +1,12 @@
 (ns com.fulcrologic.rad.dynamic.generator
   (:require
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.form :as form]
-    [com.fulcrologic.rad.options-util :refer [?!]]
-    [com.fulcrologic.rad.dynamic.generator-options :as geno]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.dynamic.generator-options :as geno]
+    [com.fulcrologic.rad.form :as form]
+    [com.fulcrologic.rad.options-util :refer [?!]]
+    [com.fulcrologic.rad.report :as report]
     [taoensso.timbre :as log]))
 
 (defn add-routes! [app component-map Router]

@@ -1,9 +1,8 @@
 (ns com.fulcrologic.rad.attributes-spec
   (:require
-    [com.fulcrologic.rad.attributes :as attr :refer [defattr]]
+    [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
-    [fulcro-spec.core :refer [assertions specification component =>]]
-    [taoensso.timbre :as log]))
+    [fulcro-spec.core :refer [=> assertions component specification]]))
 
 (specification "valid-value?"
   (let [no-valid-fn     (attr/new-attribute :sample/a :string {})

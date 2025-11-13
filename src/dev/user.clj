@@ -1,10 +1,9 @@
 (ns user
   (:require
-    [clojure.pprint :refer [pprint]]
+    [clojure.pprint]
     [clojure.spec.alpha :as s]
     [clojure.tools.namespace.repl
-     :as tools-ns
-     :refer [disable-reload! refresh clear set-refresh-dirs]]
+     :refer [refresh set-refresh-dirs]]
     [expound.alpha :as expound]
     [taoensso.timbre :as log]))
 
@@ -13,7 +12,7 @@
 (alter-var-root #'s/*explain-out* (constantly expound/printer))
 
 (log/merge-config!
-  {:level      :info
+  {:level :info
    :middleware
    (if (System/getProperty "dev")
      [(fn [{:keys [level vargs] :as data}]
