@@ -7,11 +7,11 @@ jobs:
       - image: cimg/clojure:1.12.0-openjdk-21.0-browsers
 
     steps:
-      - browser-tools/install-browser-tools
       - checkout
+      - browser-tools/install_browser_tools
       - restore_cache:
           key: cljs-{{ checksum "deps.edn" }}-{{ checksum "package.json" }}
-      - run: npm ci
+      - run: npm install
       - run: npx shadow-cljs -v compile ci-tests
       - run: npx karma start --single-run
       - save_cache:
