@@ -98,6 +98,7 @@
                                                         (cond-> query-result
                                                           options-xform (options-xform raw-result)))]
                                      (fns/swap!-> state
+                                       (assoc-in time-path now)
                                        (assoc-in options-path options))))})
            remote (assoc :remote remote)))))))
 
