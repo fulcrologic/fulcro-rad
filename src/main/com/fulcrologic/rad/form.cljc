@@ -17,6 +17,7 @@
     [com.fulcrologic.fulcro.mutations :as m]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
+    [com.fulcrologic.guardrails.malli.core :as grm]
     [com.fulcrologic.rad :as rad]
     [com.fulcrologic.rad.control :as control]
     [com.fulcrologic.rad.errors :refer [required! warn-once!]]
@@ -38,6 +39,23 @@
     [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.rad.routing.history :as history]))
+
+(>def ::id any?)
+(>def ::master-pk qualified-keyword?)
+(>def ::delta (s/map-of eql/ident? map?))
+(>def ::params (s/keys :req [::id ::master-pk ::delta]))
+(>def ::save-middleware fn?)
+(>def ::form-env map?)
+
+(grm/>def ::id any?)
+(grm/>def ::master-pk :qualified-keyword)
+(grm/>def ::delta [:map-of [:fn eql/ident?] :map])
+(grm/>def ::params [:map
+                    ::id
+                    ::master-pk
+                    ::delta])
+(grm/>def ::save-middleware fn?)
+(grm/>def ::form-env :map)
 
 (def ^:dynamic *default-save-form-mutation* `save-form)
 
@@ -103,8 +121,6 @@
                               remote-busy? (seq (:com.fulcrologic.fulcro.application/active-remotes props))]
                           (when remote-busy? "ui tiny primary button loading")))
            :action    (fn [this] (save! {::master-form this}))}})
-
-(>def ::form-env map?)
 
 (>defn picker-join-key
   "Returns a :ui/picker keyword customized to the qualified keyword"
