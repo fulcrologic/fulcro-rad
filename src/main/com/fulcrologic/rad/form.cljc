@@ -2,43 +2,44 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.form]))
   (:refer-clojure :exclude [parse-long])
   (:require
-    [clojure.spec.alpha :as s]
-    [clojure.set :as set]
-    [clojure.string :as str]
-    [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
-    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
-    [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
-    [com.fulcrologic.fulcro.raw.application :as raw.app]
-    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
-    [com.fulcrologic.fulcro.algorithms.merge :as merge]
-    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
-    [com.fulcrologic.fulcro.algorithms.scheduling :as sched]
-    [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.fulcro.mutations :as m]
-    [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
-    [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
-    [com.fulcrologic.guardrails.malli.core :as grm]
-    [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.control :as control]
-    [com.fulcrologic.rad.errors :refer [required! warn-once!]]
-    [com.fulcrologic.rad.attributes :as attr]
-    [com.fulcrologic.rad.attributes-options :as ao]
-    [com.fulcrologic.rad.application :as rapp]
-    [com.fulcrologic.rad.form-render-options :as fro]
-    [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
-    [com.fulcrologic.rad.type-support.integer :as int]
-    [edn-query-language.core :as eql]
-    [taoensso.encore :as enc]
-    [taoensso.timbre :as log]
-    #?@(:clj [[cljs.analyzer :as ana]])
-    [com.fulcrologic.rad.options-util :as opts :refer [?!]]
-    [com.fulcrologic.rad.picker-options :as picker-options]
-    [com.fulcrologic.rad.form-options :as fo]
-    [com.fulcrologic.rad.form-render :as fr]
-    [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
-    [com.fulcrologic.rad.routing :as rad-routing]
-    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
-    [com.fulcrologic.rad.routing.history :as history]))
+   [clojure.spec.alpha :as s]
+   [clojure.set :as set]
+   [clojure.string :as str]
+   [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
+   [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
+   [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
+   [com.fulcrologic.fulcro.raw.application :as raw.app]
+   [com.fulcrologic.fulcro.algorithms.form-state :as fs]
+   [com.fulcrologic.fulcro.algorithms.merge :as merge]
+   [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
+   [com.fulcrologic.fulcro.algorithms.scheduling :as sched]
+   [com.fulcrologic.fulcro.components :as comp]
+   [com.fulcrologic.fulcro.mutations :as m]
+   [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
+   [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
+   [com.fulcrologic.guardrails.malli.core :as grm]
+   [com.fulcrologic.rad :as rad]
+   [com.fulcrologic.rad.control :as control]
+   [com.fulcrologic.rad.errors :refer [required! warn-once!]]
+   [com.fulcrologic.rad.attributes :as attr]
+   [com.fulcrologic.rad.attributes-options :as ao]
+   [com.fulcrologic.rad.application :as rapp]
+   [com.fulcrologic.rad.form-render-options :as fro]
+   [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
+   [com.fulcrologic.rad.type-support.integer :as int]
+   [edn-query-language.core :as eql]
+   [taoensso.encore :as enc]
+   [taoensso.timbre :as log]
+   #?@(:clj [[cljs.analyzer :as ana]])
+   [com.fulcrologic.rad.options-util :as opts :refer [?!]]
+   [com.fulcrologic.rad.picker-options :as picker-options]
+   [com.fulcrologic.rad.form-options :as fo]
+   [com.fulcrologic.rad.form-render :as fr]
+   [com.fulcrologic.rad.form.impl :as form-impl]
+   [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
+   [com.fulcrologic.rad.routing :as rad-routing]
+   [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
+   [com.fulcrologic.rad.routing.history :as history]))
 
 (>def ::id any?)
 (>def ::master-pk qualified-keyword?)
@@ -68,14 +69,14 @@
   "Returns true if the main form was started in view mode. `form-instance` can be from main form or any subform."
   [form-instance]
   (let [master-form (or (::master-form (comp/get-computed form-instance))
-                      form-instance)]
+                        form-instance)]
     (= view-action (-> master-form
-                     comp/props
-                     ::uism/asm-id
-                     (get (comp/get-ident master-form))
-                     ::uism/local-storage
-                     :options
-                     :action))))
+                       comp/props
+                       ::uism/asm-id
+                       (get (comp/get-ident master-form))
+                       ::uism/local-storage
+                       :options
+                       :action))))
 
 (def standard-action-buttons
   "The standard ::form/action-buttons button layout. Requires you include stardard-controls in your ::control/controls key."
@@ -123,12 +124,12 @@
            :action    (fn [this] (save! {::master-form this}))}})
 
 (>defn picker-join-key
-  "Returns a :ui/picker keyword customized to the qualified keyword"
-  [qualified-key]
-  [qualified-keyword? => qualified-keyword?]
-  (keyword "ui" (str (namespace qualified-key) "-"
-                  (name qualified-key)
-                  "-picker")))
+       "Returns a :ui/picker keyword customized to the qualified keyword"
+       [qualified-key]
+       [qualified-keyword? => qualified-keyword?]
+       (keyword "ui" (str (namespace qualified-key) "-"
+                          (name qualified-key)
+                          "-picker")))
 
 (defn master-form
   "Return the master form for the given component instance."
@@ -177,9 +178,9 @@
         copts                  (comp/component-options form-instance)
         id-attr                (fo/id copts)
         layout-style           (or
-                                 (get-in copts style-path)
-                                 (?! (fro/style copts) id-attr form-env)
-                                 :default)
+                                (get-in copts style-path)
+                                (?! (fro/style copts) id-attr form-env)
+                                :default)
         element->style->layout (some-> runtime-atom deref ::rad/controls ::element->style->layout)
         render-fn              (some-> element->style->layout (get element) (get layout-style))
         default-render-fn      (some-> element->style->layout (get element) :default)]
@@ -244,11 +245,11 @@
             {:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
             element      :ref-container
             layout-style (or
-                           (get layout-styles element)
-                           (get target-styles element)
-                           :default)
+                          (get layout-styles element)
+                          (get target-styles element)
+                          :default)
             render-fn    (some-> runtime-atom deref ::rad/controls ::element->style->layout
-                           (get-in [element layout-style]))]
+                                 (get-in [element layout-style]))]
         render-fn))))
 
 (defn attr->renderer
@@ -261,18 +262,18 @@
                                          ::keys      [field-style] :as attr}]
   (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (?! (or
-                          (some-> master-form comp/component-options ::field-styles qualified-key)
-                          (some-> form-instance comp/component-options ::field-styles qualified-key)
-                          field-style
-                          style
-                          :default)
-                      form-instance)
+                         (some-> master-form comp/component-options ::field-styles qualified-key)
+                         (some-> form-instance comp/component-options ::field-styles qualified-key)
+                         field-style
+                         style
+                         :default)
+                        form-instance)
         control-map (some-> runtime-atom deref ::rad/controls ::type->style->control)
         control     (or
-                      (get-in control-map [type field-style])
-                      (do
-                        (warn-once! "Renderer not found: " type field-style)
-                        (get-in control-map [type :default])))]
+                     (get-in control-map [type field-style])
+                     (do
+                       (warn-once! "Renderer not found: " type field-style)
+                       (get-in control-map [type :default])))]
     (if control
       control
       (log/error "Unable to find control (no default) for attribute " attr))))
@@ -311,17 +312,17 @@
    (let [props  (comp/props form-instance)
          cprops (comp/get-computed props)]
      (merge cprops
-       {::master-form    (master-form form-instance)
-        ::form-instance  form-instance
-        ::props          props
-        ::computed-props cprops})))
+            {::master-form    (master-form form-instance)
+             ::form-instance  form-instance
+             ::props          props
+             ::computed-props cprops})))
   ([form-instance props]
    (let [cprops (comp/get-computed props)]
      (merge cprops
-       {::master-form    (master-form form-instance)
-        ::form-instance  form-instance
-        ::props          props
-        ::computed-props cprops}))))
+            {::master-form    (master-form form-instance)
+             ::form-instance  form-instance
+             ::props          props
+             ::computed-props cprops}))))
 
 (defn render-form-fields
   "Render JUST the form fields (and subforms). This will skip rendering the header/controls on the top-level form, and
@@ -375,8 +376,8 @@
    that match `(pred attribute)`"
   [form-class pred]
   (let [attributes        (or
-                            (comp/component-options form-class ::attributes)
-                            [])
+                           (comp/component-options form-class ::attributes)
+                           [])
         local-optional    (into #{} (comp (filter pred) (map ::attr/qualified-key)) attributes)
         children          (some->> form-class comp/get-query eql/query->ast :children (keep :component))
         children-optional (map #(find-fields % pred) children)]
@@ -389,11 +390,11 @@
 
 #?(:clj
    (s/def ::defsc-form-args (s/cat
-                              :sym symbol?
-                              :doc (s/? string?)
-                              :arglist (s/and vector? #(<= 2 (count %) 5))
-                              :options map?
-                              :body (s/* any?))))
+                             :sym symbol?
+                             :doc (s/? string?)
+                             :arglist (s/and vector? #(<= 2 (count %) 5))
+                             :options map?
+                             :body (s/* any?))))
 
 #?(:clj
    (s/def ::defsc-form-options (s/keys :req [::attr/attributes])))
@@ -410,29 +411,29 @@
   (let [id-key             (::attr/qualified-key id-attr)
         {refs true scalars false} (group-by #(= :ref (::attr/type %)) attributes)
         query-with-scalars (into
-                             [id-key
-                              :ui/confirmation-message
-                              :ui/route-denied?
-                              ::errors
-                              [::picker-options/options-cache '_]
-                              [:com.fulcrologic.fulcro.application/active-remotes '_]
-                              [::uism/asm-id '_]
-                              fs/form-config-join]
-                             (map ::attr/qualified-key)
+                            [id-key
+                             :ui/confirmation-message
+                             :ui/route-denied?
+                             ::errors
+                             [::picker-options/options-cache '_]
+                             [:com.fulcrologic.fulcro.application/active-remotes '_]
+                             [::uism/asm-id '_]
+                             fs/form-config-join]
+                            (map ::attr/qualified-key)
                              ;; Make sure id isn't included twice, if it is also to be displayed in the for
-                             (remove #{id-attr} scalars))
+                            (remove #{id-attr} scalars))
         full-query         (into query-with-scalars
-                             (mapcat (fn [{::attr/keys [qualified-key] :as attr}]
-                                       (if-let [subform (subform-ui form-options attr)]
-                                         [{qualified-key (comp/get-query subform)}]
-                                         (let [k->attr        (into {} (map (fn [{::attr/keys [qualified-key] :as attr}] [qualified-key attr])) attributes)
-                                               target-id-key  (::attr/target (k->attr qualified-key))
-                                               fake-component (sc qualified-key {:query (fn [_] [target-id-key])
-                                                                                 :ident (fn [_ props] [target-id-key (get props target-id-key)])})]
-                                           (when-not target-id-key
-                                             (log/warn "Reference attribute" qualified-key "in form has no subform ::form/ui, and no ::attr/target."))
-                                           [{qualified-key (comp/get-query fake-component)}]))))
-                             refs)]
+                                 (mapcat (fn [{::attr/keys [qualified-key] :as attr}]
+                                           (if-let [subform (subform-ui form-options attr)]
+                                             [{qualified-key (comp/get-query subform)}]
+                                             (let [k->attr        (into {} (map (fn [{::attr/keys [qualified-key] :as attr}] [qualified-key attr])) attributes)
+                                                   target-id-key  (::attr/target (k->attr qualified-key))
+                                                   fake-component (sc qualified-key {:query (fn [_] [target-id-key])
+                                                                                     :ident (fn [_ props] [target-id-key (get props target-id-key)])})]
+                                               (when-not target-id-key
+                                                 (log/warn "Reference attribute" qualified-key "in form has no subform ::form/ui, and no ::attr/target."))
+                                               [{qualified-key (comp/get-query fake-component)}]))))
+                                 refs)]
     full-query))
 
 (def ^:deprecated parse-long "moved to integer.cljs" int/parse-long)
@@ -465,9 +466,9 @@
          new?       (tempid/tempid? id)
          form-ident [qualified-key id]]
      (uism/begin! app machine
-       form-ident
-       {:actor/form (uism/with-actor-class form-ident form-class)}
-       (merge params {::create? new?})))))
+                  form-ident
+                  {:actor/form (uism/with-actor-class form-ident form-class)}
+                  (merge params {::create? new?})))))
 
 (defn form-will-enter
   "Used as the implementation and return value of a form target's will-enter dynamic routing hook."
@@ -514,24 +515,24 @@
   pre-merge fn, or `nil` if none is needed"
   [component-options key->attribute]
   (let [sorters-by-k (into {}
-                       (keep (fn [k]
-                               (when-let [sorter (::sort-children (subform-options component-options (key->attribute k)))]
-                                 [k sorter])) (keys key->attribute)))]
+                           (keep (fn [k]
+                                   (when-let [sorter (::sort-children (subform-options component-options (key->attribute k)))]
+                                     [k sorter])) (keys key->attribute)))]
     (when (seq sorters-by-k)
       (fn [{:keys [data-tree]}]
         (let [ks (keys sorters-by-k)]
           (log/debug "Form system sorting data tree children for keys " ks)
           (reduce
-            (fn [tree k]
-              (if (vector? (get tree k))
-                (try
-                  (update tree k (comp vec (get sorters-by-k k)))
-                  (catch #?(:clj Exception :cljs :default) e
-                    (log/error "Sort failed: " (str e))
-                    tree))
-                tree))
-            data-tree
-            ks))))))
+           (fn [tree k]
+             (if (vector? (get tree k))
+               (try
+                 (update tree k (comp vec (get sorters-by-k k)))
+                 (catch #?(:clj Exception :cljs :default) e
+                   (log/error "Sort failed: " (str e))
+                   tree))
+               tree))
+           data-tree
+           ks))))))
 
 (defn form-and-subform-attributes
   "Find all attributes that are referenced by a form and all of its subforms, recursively."
@@ -540,7 +541,7 @@
         base-attributes (fo/attributes options)
         subforms        (keep (fn [a] (fo/ui (subform-options options a))) base-attributes)]
     (into (set base-attributes)
-      (mapcat form-and-subform-attributes subforms))))
+          (mapcat form-and-subform-attributes subforms))))
 
 (defn convert-options
   "Runtime conversion of form options to what comp/configure-component! needs."
@@ -551,47 +552,47 @@
          :keys  [will-enter]} options
         id-key                     (::attr/qualified-key id)
         form-field?                (fn [{::attr/keys [identity? computed-value]}] (and
-                                                                                    (not computed-value)
-                                                                                    (not identity?)))
+                                                                                   (not computed-value)
+                                                                                   (not identity?)))
         attribute-map              (attr/attribute-map attributes)
         pre-merge                  (form-pre-merge options attribute-map)
         Form                       (get-class)
         base-options               (merge
-                                     {::validator        (attr/make-attribute-validator (form-and-subform-attributes Form) true)
-                                      ::control/controls standard-controls
-                                      :route-denied      (fn [this relative-root proposed-route timeouts-and-params]
-                                                           (let [rroot (cond
-                                                                         (comp/component-class? relative-root) (comp/class->registry-key relative-root)
-                                                                         (keyword? relative-root) relative-root
-                                                                         :else (some-> relative-root (comp/react-type) (comp/class->registry-key)))]
-                                                             (uism/trigger!! this (comp/get-ident this)
-                                                               :event/route-denied
-                                                               {:form                (some-> (get-class) (comp/class->registry-key))
-                                                                :relative-root       rroot
-                                                                :route               proposed-route
-                                                                :timeouts-and-params timeouts-and-params})))}
-                                     options
-                                     (cond->
-                                       {:ident               (fn [_ props] [id-key (get props id-key)])
-                                        ::key->attribute     attribute-map
-                                        :fulcro/registry-key (some-> Form (comp/class->registry-key))
-                                        :form-fields         (into #{}
-                                                               (comp
-                                                                 (filter form-field?)
-                                                                 (map ::attr/qualified-key))
-                                                               attributes)}
-                                       pre-merge (assoc :pre-merge pre-merge)
-                                       route-prefix (merge {:route-segment       [route-prefix :action :id]
-                                                            :allow-route-change? form-allow-route-change
-                                                            :will-leave          (fn [this props] (form-will-leave this))
-                                                            :will-enter          (or will-enter
-                                                                                   (fn [app route-params]
-                                                                                     (form-will-enter app route-params (get-class))))})))
+                                    {::validator        (attr/make-attribute-validator (form-and-subform-attributes Form) true)
+                                     ::control/controls standard-controls
+                                     :route-denied      (fn [this relative-root proposed-route timeouts-and-params]
+                                                          (let [rroot (cond
+                                                                        (comp/component-class? relative-root) (comp/class->registry-key relative-root)
+                                                                        (keyword? relative-root) relative-root
+                                                                        :else (some-> relative-root (comp/react-type) (comp/class->registry-key)))]
+                                                            (uism/trigger!! this (comp/get-ident this)
+                                                                            :event/route-denied
+                                                                            {:form                (some-> (get-class) (comp/class->registry-key))
+                                                                             :relative-root       rroot
+                                                                             :route               proposed-route
+                                                                             :timeouts-and-params timeouts-and-params})))}
+                                    options
+                                    (cond->
+                                     {:ident               (fn [_ props] [id-key (get props id-key)])
+                                      ::key->attribute     attribute-map
+                                      :fulcro/registry-key (some-> Form (comp/class->registry-key))
+                                      :form-fields         (into #{}
+                                                                 (comp
+                                                                  (filter form-field?)
+                                                                  (map ::attr/qualified-key))
+                                                                 attributes)}
+                                      pre-merge (assoc :pre-merge pre-merge)
+                                      route-prefix (merge {:route-segment       [route-prefix :action :id]
+                                                           :allow-route-change? form-allow-route-change
+                                                           :will-leave          (fn [this props] (form-will-leave this))
+                                                           :will-enter          (or will-enter
+                                                                                    (fn [app route-params]
+                                                                                      (form-will-enter app route-params (get-class))))})))
         attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
         inclusions                 (set/union attribute-query-inclusions (set query-inclusion))]
     (when (and #?(:cljs goog.DEBUG :clj true) will-enter (not route-prefix))
       (warn-once! "NOTE: There's a :will-enter option in form/defsc-form" location "that will be ignored because ::report/route-prefix is not specified"))
-    (assoc base-options :query (fn [_] (cond-> (form-options->form-query base-options)
+    (assoc base-options :query (fn [_] (cond-> (form-impl/form-options->form-query base-options [[::uism/asm-id '_]])
                                          (seq inclusions) (into inclusions))))))
 
 #?(:clj
@@ -618,7 +619,7 @@
                           (#'comp/build-render sym thissym propsym computedsym extra-args body))
            options-expr `(let [get-class# (fn [] ~sym)]
                            (assoc (convert-options get-class# ~location ~options) :render ~render-form
-                                                                                  :componentName ~fqkw))]
+                                  :componentName ~fqkw))]
        (when (some #(= '_ %) arglist)
          (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
        (cond
@@ -668,7 +669,7 @@
       "
      [& args]
      (try
-       (defsc-form* &env args)
+       (form-impl/defsc-form* &env args `convert-options)
        (catch Exception e
          (if (contains? (ex-data e) :tag)
            (throw e)
@@ -711,7 +712,7 @@
 
 (def pathom2-server-save-as-form-mutation
   (assoc pathom2-server-save-form-mutation
-    :com.wsscode.pathom.connect/sym `save-as-form))
+         :com.wsscode.pathom.connect/sym `save-as-form))
 
 ;; do-saves! params/env => return value
 ;; -> params/env -> middleware-in -> do-saves -> middleware-out
@@ -745,29 +746,29 @@
       This mutation's ok-action will also update the data in the local state."
      [{:keys [root-ident entity delta]}]
      (ok-action [{:keys [state tempid->realid]}]
-       (if delta
-         (doseq [[ident changes] (tempid/resolve-tempids delta tempid->realid)
-                 :let [data-to-merge (reduce-kv
-                                       (fn [m k v] (assoc m k (:after v)))
-                                       {}
-                                       changes)]]
-           (swap! state update-in ident merge data-to-merge))
-         (swap! state
-           update-in
-           (tempid/resolve-tempids root-ident tempid->realid)
-           merge
-           (tempid/resolve-tempids entity tempid->realid))))
+                (if delta
+                  (doseq [[ident changes] (tempid/resolve-tempids delta tempid->realid)
+                          :let [data-to-merge (reduce-kv
+                                               (fn [m k v] (assoc m k (:after v)))
+                                               {}
+                                               changes)]]
+                    (swap! state update-in ident merge data-to-merge))
+                  (swap! state
+                         update-in
+                         (tempid/resolve-tempids root-ident tempid->realid)
+                         merge
+                         (tempid/resolve-tempids entity tempid->realid))))
      (remote [env]
-       (let [delta (or delta
-                     {root-ident (reduce-kv
-                                   (fn [m k v]
-                                     (assoc m k {:after v}))
-                                   {}
-                                   entity)})]
-         (-> env
-           (m/with-params {::master-pk (first root-ident)
-                           ::id        (second root-ident)
-                           ::delta     delta}))))))
+             (let [delta (or delta
+                             {root-ident (reduce-kv
+                                          (fn [m k v]
+                                            (assoc m k {:after v}))
+                                          {}
+                                          entity)})]
+               (-> env
+                   (m/with-params {::master-pk (first root-ident)
+                                   ::id        (second root-ident)
+                                   ::delta     delta}))))))
 
 #_(defn attr-value
     "UISM helper. When interpreting an event from a form field, this function will extract the pair of:
@@ -781,9 +782,9 @@
         form-ident (uism/actor->ident uism-env :actor/form)]
     (log/debug "Issuing load of pre-existing form entity" form-ident)
     (-> uism-env
-      (uism/load form-ident FormClass {::uism/ok-event    :event/loaded
-                                       ::uism/error-event :event/failed})
-      (uism/activate :state/loading))))
+        (uism/load form-ident FormClass {::uism/ok-event    :event/loaded
+                                         ::uism/error-event :event/failed})
+        (uism/activate :state/loading))))
 
 (declare default-state)
 
@@ -830,7 +831,7 @@
       (do
         (when-not SubClass
           (log/error "Subforms for class" (comp/component-name FormClass)
-            "must include a ::form/ui entry for" qualified-key))
+                     "must include a ::form/ui entry for" qualified-key))
         (if (or (nil? default-value) (vector? default-value))
           (mapv (fn [v]
                   (let [id          (tempid/tempid)
@@ -843,10 +844,10 @@
                     (when-not ChildForm
                       (log/error "Union subform's default-value function failed to assign the ID. Cannot determine which kind of thing we are creating"))
                     (merge
-                      (default-state ChildForm id)
-                      base-entity
-                      {id-key id})))
-            default-value)
+                     (default-state ChildForm id)
+                     base-entity
+                     {id-key id})))
+                default-value)
           (do
             (log/error "Default value for" qualified-key "MUST be a vector.")
             nil)))
@@ -883,15 +884,15 @@
     (when-not (comp/union-component? SubClass)
       (when-not SubClass
         (log/error "Subforms for class" (comp/component-name FormClass)
-          "must include a ::form/ui entry for" qualified-key))
+                   "must include a ::form/ui entry for" qualified-key))
       (when-not (keyword? id-key)
         (log/error "Subform class" (comp/component-name SubClass)
-          "must include a ::form/id that is an attr/attribute"))
+                   "must include a ::form/id that is an attr/attribute"))
       (if id-key
         (merge
-          (default-state SubClass new-id)
-          (when (map? default-value) default-value)
-          {id-key new-id})
+         (default-state SubClass new-id)
+         (when (map? default-value) default-value)
+         {id-key new-id})
         {}))))
 
 (defn default-state
@@ -912,29 +913,29 @@
   [FormClass new-id]
   (when-not (tempid/tempid? new-id)
     (throw (ex-info (str "Default state received " new-id " for a new form ID. It MUST be a Fulcro tempid.")
-             {})))
+                    {})))
   (if (comp/union-component? FormClass)
     {}
     (let [{::keys [id attributes default-values initialize-ui-props field-styles]} (comp/component-options FormClass)
           {id-key ::attr/qualified-key} id
           entity (reduce
-                   (fn [result {::attr/keys [qualified-key type field-style]
-                                ::keys      [default-value] :as attr}]
-                     (let [field-style   (?! (or (get field-styles qualified-key) field-style))
-                           default-value (?! (get default-values qualified-key default-value))]
-                       (cond
-                         (and (not field-style) (= :ref type) (attr/to-many? attr))
-                         (assoc result qualified-key (default-to-many FormClass attr))
+                  (fn [result {::attr/keys [qualified-key type field-style]
+                               ::keys      [default-value] :as attr}]
+                    (let [field-style   (?! (or (get field-styles qualified-key) field-style))
+                          default-value (?! (get default-values qualified-key default-value))]
+                      (cond
+                        (and (not field-style) (= :ref type) (attr/to-many? attr))
+                        (assoc result qualified-key (default-to-many FormClass attr))
 
-                         (and default-value (not field-style) (= :ref type) (not (attr/to-many? attr)))
-                         (assoc result qualified-key (default-to-one FormClass attr))
+                        (and default-value (not field-style) (= :ref type) (not (attr/to-many? attr)))
+                        (assoc result qualified-key (default-to-one FormClass attr))
 
-                         :otherwise
-                         (if-not (nil? default-value)
-                           (assoc result qualified-key default-value)
-                           result))))
-                   {id-key new-id}
-                   attributes)]
+                        :otherwise
+                        (if-not (nil? default-value)
+                          (assoc result qualified-key default-value)
+                          result))))
+                  {id-key new-id}
+                  attributes)]
       ;; The merge is so that `initialize-ui-props` cannot possibly harm keys that are initialized by defaults
       (merge (?! initialize-ui-props FormClass entity) entity))))
 
@@ -948,7 +949,7 @@
         (uism/trigger env router-id :ready!))
       (do
         (log/error "dr/target-ready! was called but there was no router waiting for the target listed: " target
-          "This could mean you sent one ident, and indicated ready on another.")
+                   "This could mean you sent one ident, and indicated ready on another.")
         env))))
 
 (defn mark-fields-complete*
@@ -968,11 +969,11 @@
 
 (defn- all-keys [m]
   (reduce-kv
-    (fn [result k v]
-      (cond-> (conj result k)
-        (map? v) (into (all-keys v))))
-    #{}
-    m))
+   (fn [result k v]
+     (cond-> (conj result k)
+       (map? v) (into (all-keys v))))
+   #{}
+   m))
 
 (defn start-create [{::uism/keys [state-map] :as uism-env} start-params]
   (let [form-overrides   (:initial-state start-params)
@@ -986,11 +987,11 @@
         initialized-keys (all-keys initial-state)
         optional-keys    (optional-fields FormClass)]
     (-> uism-env
-      (uism/apply-action merge/merge-component FormClass entity-to-merge)
-      (uism/apply-action mark-fields-complete* {:entity-ident form-ident
-                                                :target-keys  (set/union initialized-keys optional-keys)})
-      (cond-> route-pending? (route-target-ready form-ident))
-      (uism/activate :state/editing))))
+        (uism/apply-action merge/merge-component FormClass entity-to-merge)
+        (uism/apply-action mark-fields-complete* {:entity-ident form-ident
+                                                  :target-keys  (set/union initialized-keys optional-keys)})
+        (cond-> route-pending? (route-target-ready form-ident))
+        (uism/activate :state/editing))))
 
 (defn leave-form
   "Discard all changes, and attempt to change route."
@@ -1020,21 +1021,21 @@
                            use-history (history/back! fulcro-app)))]
     (sched/defer routing-action 100)
     (-> uism-env
-      (cond->
-        on-cancel (uism/transact on-cancel))
-      (uism/store :abandoned? true)
-      (uism/apply-action fs/pristine->entity* form-ident))))
+        (cond->
+         on-cancel (uism/transact on-cancel))
+        (uism/store :abandoned? true)
+        (uism/apply-action fs/pristine->entity* form-ident))))
 
 (>defn calc-diff
-  "Calculates the minimal form diff from the UISM env of the master form's state machine."
-  [uism-env]
-  [::uism/env => (s/keys :req [::delta])]
-  (let [{::uism/keys [state-map]} uism-env
-        form-ident (uism/actor->ident uism-env :actor/form)
-        Form       (uism/actor-class uism-env :actor/form)
-        props      (fns/ui->props state-map Form form-ident)
-        delta      (fs/dirty-fields props true)]
-    {::delta delta}))
+       "Calculates the minimal form diff from the UISM env of the master form's state machine."
+       [uism-env]
+       [::uism/env => (s/keys :req [::delta])]
+       (let [{::uism/keys [state-map]} uism-env
+             form-ident (uism/actor->ident uism-env :actor/form)
+             Form       (uism/actor-class uism-env :actor/form)
+             props      (fns/ui->props state-map Form form-ident)
+             delta      (fs/dirty-fields props true)]
+         {::delta delta}))
 
 (defn clear-server-errors
   "UISM helper. Clears the server errors on the form."
@@ -1065,27 +1066,27 @@
         subforms        (subform-options form-options)
         possible-keys   (set (keys subforms))
         attrs-to-create (into []
-                          (filter (fn [{::attr/keys [qualified-key type cardinality]}]
-                                    (and
-                                      (true? (get-in subforms [qualified-key ::autocreate-on-load?]))
-                                      (nil? (get form-value qualified-key))
-                                      (contains? possible-keys qualified-key)
-                                      (= :ref type)
-                                      (or (= :one) (nil? cardinality)))))
-                          attributes)]
+                              (filter (fn [{::attr/keys [qualified-key type cardinality]}]
+                                        (and
+                                         (true? (get-in subforms [qualified-key ::autocreate-on-load?]))
+                                         (nil? (get form-value qualified-key))
+                                         (contains? possible-keys qualified-key)
+                                         (= :ref type)
+                                         (or (= :one) (nil? cardinality)))))
+                              attributes)]
     (reduce
-      (fn [env {::attr/keys [qualified-key target] :as _attr}]
-        (let [{::keys [ui]} (get subforms qualified-key)
-              id         (tempid/tempid)
-              new-entity (default-state ui id)
-              new-ident  [target id]]
-          (when-not ui (log/error "::form/ui missing in subforms for autocreate target" qualified-key))
-          (when-not target (log/error "Reference attribute is missing ::attr/target" qualified-key))
-          (-> env
-            (uism/apply-action assoc-in (conj form-ident qualified-key) new-ident)
-            (uism/apply-action assoc-in new-ident new-entity))))
-      env
-      attrs-to-create)))
+     (fn [env {::attr/keys [qualified-key target] :as _attr}]
+       (let [{::keys [ui]} (get subforms qualified-key)
+             id         (tempid/tempid)
+             new-entity (default-state ui id)
+             new-ident  [target id]]
+         (when-not ui (log/error "::form/ui missing in subforms for autocreate target" qualified-key))
+         (when-not target (log/error "Reference attribute is missing ::attr/target" qualified-key))
+         (-> env
+             (uism/apply-action assoc-in (conj form-ident qualified-key) new-ident)
+             (uism/apply-action assoc-in new-ident new-entity))))
+     env
+     attrs-to-create)))
 
 (defn update-tree*
   "Run the given `(xform ui-props)` against the current ui props of `component-class`'s instance at `component-ident`
@@ -1127,25 +1128,25 @@
             ui-props        (?! initialize-ui-props FormClass denorm-props)
             query           (comp/get-query FormClass state-map)
             k->component    (into {}
-                              (keep (fn [{:keys [key component] :as _node}]
-                                      (when component {key component})))
-                              (:children (eql/query->ast query)))
+                                  (keep (fn [{:keys [key component] :as _node}]
+                                          (when component {key component})))
+                                  (:children (eql/query->ast query)))
             all-keys        (set (keys ui-props))
             ;; Ensure that the user's function cannot possible conflict with form state
             allowed-keys    (set/difference all-keys predefined-keys)
             populate-data   (fn [sm]
                               (reduce
-                                (fn [s k]
-                                  (let [raw-value       (get ui-props k)
-                                        c               (k->component k)
-                                        component-ident (when c (comp/get-ident c raw-value))
-                                        value-to-place  (if (and c (vector? component-ident) (some? (second component-ident)))
-                                                          component-ident
-                                                          raw-value)]
-                                    (cond-> (assoc-in s (conj form-ident k) value-to-place)
-                                      c (merge/merge-component c raw-value))))
-                                sm
-                                allowed-keys))]
+                               (fn [s k]
+                                 (let [raw-value       (get ui-props k)
+                                       c               (k->component k)
+                                       component-ident (when c (comp/get-ident c raw-value))
+                                       value-to-place  (if (and c (vector? component-ident) (some? (second component-ident)))
+                                                         component-ident
+                                                         raw-value)]
+                                   (cond-> (assoc-in s (conj form-ident k) value-to-place)
+                                     c (merge/merge-component c raw-value))))
+                               sm
+                               allowed-keys))]
         (uism/apply-action env populate-data))
       env)))
 
@@ -1165,12 +1166,12 @@
           on-saved (when on-saved
                      (let [{:keys [children] :as ast} (eql/query->ast on-saved)
                            new-ast (assoc ast :children
-                                              (mapv
-                                                (fn [{:keys [type] :as node}]
-                                                  (if (= type :call)
-                                                    (assoc-in node [:params id-key] id)
-                                                    node))
-                                                children))
+                                          (mapv
+                                           (fn [{:keys [type] :as node}]
+                                             (if (= type :call)
+                                               (assoc-in node [:params id-key] id)
+                                               node))
+                                           children))
                            txn     (eql/ast->query new-ast)]
                        txn))]
       (if (seq on-saved)
@@ -1187,8 +1188,8 @@
   [uism-env]
   (let [form-ident (uism/actor->ident uism-env :actor/form)]
     (-> uism-env
-      (clear-server-errors)
-      (uism/apply-action fs/pristine->entity* form-ident))))
+        (clear-server-errors)
+        (uism/apply-action fs/pristine->entity* form-ident))))
 
 (defstatemachine form-machine
   {::uism/actors
@@ -1215,245 +1216,245 @@
     :state/loading
     {::uism/events
      (merge global-events
-       {:event/loaded
-        {::uism/handler
-         (fn [{::uism/keys [state-map] :as env}]
-           (log/debug "Loaded. Marking the form complete.")
-           (let [FormClass      (uism/actor-class env :actor/form)
-                 form-ident     (uism/actor->ident env :actor/form)
-                 routeable?     (boolean (get (comp/component-options FormClass) ::route-prefix))
-                 route-pending? (and routeable? (some? (dr/router-for-pending-target state-map form-ident)))]
-             (-> env
-               (clear-server-errors)
-               (auto-create-to-one)
-               (handle-user-ui-props FormClass form-ident)
-               (uism/apply-action fs/add-form-config* FormClass form-ident {:destructive? true})
-               (uism/apply-action fs/mark-complete* form-ident)
-               (cond-> route-pending? (route-target-ready form-ident))
-               (apply-derived-calculations)
-               (uism/activate :state/editing))))}
-        :event/failed
-        {::uism/handler
-         (fn [env]
-           (uism/assoc-aliased env :server-errors [{:message "Load failed."}]))}})}
+            {:event/loaded
+             {::uism/handler
+              (fn [{::uism/keys [state-map] :as env}]
+                (log/debug "Loaded. Marking the form complete.")
+                (let [FormClass      (uism/actor-class env :actor/form)
+                      form-ident     (uism/actor->ident env :actor/form)
+                      routeable?     (boolean (get (comp/component-options FormClass) ::route-prefix))
+                      route-pending? (and routeable? (some? (dr/router-for-pending-target state-map form-ident)))]
+                  (-> env
+                      (clear-server-errors)
+                      (auto-create-to-one)
+                      (handle-user-ui-props FormClass form-ident)
+                      (uism/apply-action fs/add-form-config* FormClass form-ident {:destructive? true})
+                      (uism/apply-action fs/mark-complete* form-ident)
+                      (cond-> route-pending? (route-target-ready form-ident))
+                      (apply-derived-calculations)
+                      (uism/activate :state/editing))))}
+             :event/failed
+             {::uism/handler
+              (fn [env]
+                (uism/assoc-aliased env :server-errors [{:message "Load failed."}]))}})}
 
     :state/asking-to-discard-changes
     {::uism/events
      (merge
-       global-events
-       {:event/ok     {::uism/handler leave-form}
-        :event/cancel {::uism/handler (fn [env] (uism/activate env :state/editing))}})}
+      global-events
+      {:event/ok     {::uism/handler leave-form}
+       :event/cancel {::uism/handler (fn [env] (uism/activate env :state/editing))}})}
 
     :state/saving
     {::uism/events
      (merge
-       global-events
-       {:event/save-failed
-        {::uism/handler (fn [env]
-                          (let [{:keys [on-save-failed]} (uism/retrieve env :options)
-                                Form          (uism/actor-class env :actor/form)
-                                {::keys                [save-mutation]
-                                 {:keys [save-failed]} ::triggers} (comp/component-options Form)
-                                save-mutation (or save-mutation *default-save-form-mutation*)
-                                errors        (some-> env ::uism/event-data ::uism/mutation-result :body (get save-mutation) ::errors)
-                                form-ident    (uism/actor->ident env :actor/form)]
-                            (cond-> (uism/activate env :state/editing)
-                              (seq errors) (uism/assoc-aliased :server-errors errors)
-                              save-failed (save-failed form-ident)
-                              on-save-failed (uism/transact on-save-failed))))}
-        :event/saved
-        {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (let [form-ident  (uism/actor->ident env :actor/form)
-                                Form        (uism/actor-class env :actor/form)
-                                {{:keys [saved]} ::triggers} (some-> Form (comp/component-options))
-                                {:keys [embedded?]} (uism/retrieve env :options)
-                                use-history (and (not embedded?) (history/history-support? fulcro-app))]
-                            (when use-history
-                              (let [{:keys [route params]} (history/current-route fulcro-app)
-                                    new-route (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
-                                (history/replace-route! fulcro-app new-route params)))
-                            (-> env
-                              (cond->
+      global-events
+      {:event/save-failed
+       {::uism/handler (fn [env]
+                         (let [{:keys [on-save-failed]} (uism/retrieve env :options)
+                               Form          (uism/actor-class env :actor/form)
+                               {::keys                [save-mutation]
+                                {:keys [save-failed]} ::triggers} (comp/component-options Form)
+                               save-mutation (or save-mutation *default-save-form-mutation*)
+                               errors        (some-> env ::uism/event-data ::uism/mutation-result :body (get save-mutation) ::errors)
+                               form-ident    (uism/actor->ident env :actor/form)]
+                           (cond-> (uism/activate env :state/editing)
+                             (seq errors) (uism/assoc-aliased :server-errors errors)
+                             save-failed (save-failed form-ident)
+                             on-save-failed (uism/transact on-save-failed))))}
+       :event/saved
+       {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
+                         (let [form-ident  (uism/actor->ident env :actor/form)
+                               Form        (uism/actor-class env :actor/form)
+                               {{:keys [saved]} ::triggers} (some-> Form (comp/component-options))
+                               {:keys [embedded?]} (uism/retrieve env :options)
+                               use-history (and (not embedded?) (history/history-support? fulcro-app))]
+                           (when use-history
+                             (let [{:keys [route params]} (history/current-route fulcro-app)
+                                   new-route (into (vec (drop-last 2 route)) [edit-action (str (second form-ident))])]
+                               (history/replace-route! fulcro-app new-route params)))
+                           (-> env
+                               (cond->
                                 saved (saved form-ident))
-                              (run-on-saved)
-                              (uism/apply-action fs/entity->pristine* form-ident)
-                              (uism/activate :state/editing))))}})}
+                               (run-on-saved)
+                               (uism/apply-action fs/entity->pristine* form-ident)
+                               (uism/activate :state/editing))))}})}
 
     :state/editing
     {::uism/events
      (merge
-       global-events
-       {:event/attribute-changed
-        {::uism/handler
-         (fn [{::uism/keys [event-data] :as env}]
+      global-events
+      {:event/attribute-changed
+       {::uism/handler
+        (fn [{::uism/keys [event-data] :as env}]
            ;; NOTE: value at this layer is ALWAYS typed to the attribute.
            ;; The rendering layer is responsible for converting the value to/from
            ;; the representation needed by the UI component (e.g. string)
-           (let [{:keys       [old-value form-key value form-ident]
-                  ::attr/keys [cardinality type qualified-key]} event-data
-                 form-class     (some-> form-key (comp/registry-key->class))
-                 {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
-                 many?          (= :many cardinality)
-                 ref?           (= :ref type)
-                 missing?       (nil? value)
-                 value          (cond
-                                  (and ref? many? (nil? value)) []
-                                  (and many? (nil? value)) #{}
-                                  (and ref? many?) (filterv #(not (nil? (second %))) value)
-                                  ref? (if (nil? (second value)) nil value)
-                                  :else value)
-                 path           (when (and form-ident qualified-key)
-                                  (conj form-ident qualified-key))
+          (let [{:keys       [old-value form-key value form-ident]
+                 ::attr/keys [cardinality type qualified-key]} event-data
+                form-class     (some-> form-key (comp/registry-key->class))
+                {{:keys [on-change]} ::triggers} (some-> form-class (comp/component-options))
+                many?          (= :many cardinality)
+                ref?           (= :ref type)
+                missing?       (nil? value)
+                value          (cond
+                                 (and ref? many? (nil? value)) []
+                                 (and many? (nil? value)) #{}
+                                 (and ref? many?) (filterv #(not (nil? (second %))) value)
+                                 ref? (if (nil? (second value)) nil value)
+                                 :else value)
+                path           (when (and form-ident qualified-key)
+                                 (conj form-ident qualified-key))
                  ;; TODO: Decide when to properly set the field to marked
-                 mark-complete? true]
-             (when #?(:clj true :cljs goog.DEBUG)
-               (when-not path
-                 (log/error "Unable to record attribute change. Path cannot be calculated."))
-               (when (and ref? many? (not (every? eql/ident? value)))
-                 (log/error "Setting a ref-many attribute to incorrect type. Value should be a vector of idents:" qualified-key value))
-               (when (and ref? (not many?) (not missing?) (not (eql/ident? value)))
-                 (log/error "Setting a ref-one attribute to incorrect type. Value should an ident:" qualified-key value)))
-             (-> env
-               (clear-server-errors)
-               (cond->
+                mark-complete? true]
+            (when #?(:clj true :cljs goog.DEBUG)
+              (when-not path
+                (log/error "Unable to record attribute change. Path cannot be calculated."))
+              (when (and ref? many? (not (every? eql/ident? value)))
+                (log/error "Setting a ref-many attribute to incorrect type. Value should be a vector of idents:" qualified-key value))
+              (when (and ref? (not many?) (not missing?) (not (eql/ident? value)))
+                (log/error "Setting a ref-one attribute to incorrect type. Value should an ident:" qualified-key value)))
+            (-> env
+                (clear-server-errors)
+                (cond->
                  mark-complete? (uism/apply-action fs/mark-complete* form-ident qualified-key)
                  (and path (nil? value)) (uism/apply-action update-in form-ident dissoc qualified-key)
                  (and path (not (nil? value))) (uism/apply-action assoc-in path value)
                  on-change (protected-on-change on-change form-ident qualified-key old-value value))
-               (apply-derived-calculations))))}
+                (apply-derived-calculations))))}
 
-        :event/blur
-        {::uism/handler (fn [env] env)}
+       :event/blur
+       {::uism/handler (fn [env] env)}
 
-        :event/route-denied
-        {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
-                          (let [{:keys [form relative-root route timeouts-and-params]} event-data
-                                Form         (comp/registry-key->class form)
-                                user-confirm (comp/component-options Form fo/confirm)]
-                            (if (= :async user-confirm)
-                              (-> env
-                                (uism/store :desired-route event-data)
-                                (uism/assoc-aliased :route-denied? true))
-                              (do
-                                (if-let [confirm-fn (or user-confirm #?(:cljs js/confirm))]
-                                  (if (confirm-fn "You will lose unsaved changes. Are you sure?")
-                                    (leave-form env)
-                                    env)
-                                  env)))))}
+       :event/route-denied
+       {::uism/handler (fn [{::uism/keys [fulcro-app event-data] :as env}]
+                         (let [{:keys [form relative-root route timeouts-and-params]} event-data
+                               Form         (comp/registry-key->class form)
+                               user-confirm (comp/component-options Form fo/confirm)]
+                           (if (= :async user-confirm)
+                             (-> env
+                                 (uism/store :desired-route event-data)
+                                 (uism/assoc-aliased :route-denied? true))
+                             (do
+                               (if-let [confirm-fn (or user-confirm #?(:cljs js/confirm))]
+                                 (if (confirm-fn "You will lose unsaved changes. Are you sure?")
+                                   (leave-form env)
+                                   env)
+                                 env)))))}
 
-        :event/continue-abandoned-route
-        {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
-                          (let [{:keys [form relative-root route timeouts-and-params]} (uism/retrieve env :desired-route)
-                                form-instance (some->> form (comp/registry-key->class) (comp/class->any fulcro-app))
-                                Router        (comp/registry-key->class relative-root)]
-                            (if (::replace-route? timeouts-and-params)
-                              (history/replace-route! fulcro-app route timeouts-and-params)
-                              (history/push-route! fulcro-app route timeouts-and-params))
-                            (dr/retry-route! form-instance Router route timeouts-and-params)
-                            (-> env
-                              (uism/assoc-aliased :route-denied? false)
-                              (uism/apply-action fs/pristine->entity* (uism/actor->ident env :actor/form)))))}
+       :event/continue-abandoned-route
+       {::uism/handler (fn [{::uism/keys [fulcro-app] :as env}]
+                         (let [{:keys [form relative-root route timeouts-and-params]} (uism/retrieve env :desired-route)
+                               form-instance (some->> form (comp/registry-key->class) (comp/class->any fulcro-app))
+                               Router        (comp/registry-key->class relative-root)]
+                           (if (::replace-route? timeouts-and-params)
+                             (history/replace-route! fulcro-app route timeouts-and-params)
+                             (history/push-route! fulcro-app route timeouts-and-params))
+                           (dr/retry-route! form-instance Router route timeouts-and-params)
+                           (-> env
+                               (uism/assoc-aliased :route-denied? false)
+                               (uism/apply-action fs/pristine->entity* (uism/actor->ident env :actor/form)))))}
 
-        :event/clear-route-denied
-        {::uism/handler (fn [env]
-                          (uism/assoc-aliased env :route-denied? false))}
+       :event/clear-route-denied
+       {::uism/handler (fn [env]
+                         (uism/assoc-aliased env :route-denied? false))}
 
-        :event/add-row
-        {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
-                          (let [{::keys [order parent-relation parent child-class
-                                         initial-state default-overrides]} event-data
-                                {{:keys [on-change]} ::triggers} (some-> parent (comp/component-options))
-                                parent-ident         (comp/get-ident parent)
-                                relation-attr        (form-key->attribute parent parent-relation)
-                                many?                (attr/to-many? relation-attr)
-                                target-path          (conj parent-ident parent-relation)
-                                old-value            (get-in state-map target-path)
-                                new-child            (if (map? initial-state)
-                                                       initial-state
-                                                       (merge
-                                                         (default-state child-class (tempid/tempid))
-                                                         default-overrides))
-                                child-ident          (comp/get-ident child-class new-child)
-                                optional-keys        (optional-fields child-class)
-                                mark-fields-complete (fn [state-map]
-                                                       (reduce
-                                                         (fn [s k]
-                                                           (fs/mark-complete* s child-ident k))
-                                                         state-map
-                                                         (concat optional-keys (keys new-child))))
-                                apply-on-change      (fn [env]
-                                                       (if on-change
-                                                         (let [new-value (get-in (::uism/state-map env) target-path)]
-                                                           (protected-on-change env on-change parent-ident parent-relation old-value new-value))
-                                                         env))]
-                            (when-not relation-attr
-                              (log/error "Cannot add child because you forgot to put the attribute for" parent-relation
-                                "in the fo/attributes of " (comp/component-name parent)))
-                            (-> env
-                              (uism/apply-action
+       :event/add-row
+       {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
+                         (let [{::keys [order parent-relation parent child-class
+                                        initial-state default-overrides]} event-data
+                               {{:keys [on-change]} ::triggers} (some-> parent (comp/component-options))
+                               parent-ident         (comp/get-ident parent)
+                               relation-attr        (form-key->attribute parent parent-relation)
+                               many?                (attr/to-many? relation-attr)
+                               target-path          (conj parent-ident parent-relation)
+                               old-value            (get-in state-map target-path)
+                               new-child            (if (map? initial-state)
+                                                      initial-state
+                                                      (merge
+                                                       (default-state child-class (tempid/tempid))
+                                                       default-overrides))
+                               child-ident          (comp/get-ident child-class new-child)
+                               optional-keys        (optional-fields child-class)
+                               mark-fields-complete (fn [state-map]
+                                                      (reduce
+                                                       (fn [s k]
+                                                         (fs/mark-complete* s child-ident k))
+                                                       state-map
+                                                       (concat optional-keys (keys new-child))))
+                               apply-on-change      (fn [env]
+                                                      (if on-change
+                                                        (let [new-value (get-in (::uism/state-map env) target-path)]
+                                                          (protected-on-change env on-change parent-ident parent-relation old-value new-value))
+                                                        env))]
+                           (when-not relation-attr
+                             (log/error "Cannot add child because you forgot to put the attribute for" parent-relation
+                                        "in the fo/attributes of " (comp/component-name parent)))
+                           (-> env
+                               (uism/apply-action
                                 (fn [s]
                                   (-> s
-                                    (merge/merge-component child-class new-child (if many?
-                                                                                   (or order :append)
-                                                                                   :replace) target-path)
-                                    (fs/add-form-config* child-class child-ident)
-                                    (mark-fields-complete))))
-                              (apply-on-change)
-                              (apply-derived-calculations))))}
+                                      (merge/merge-component child-class new-child (if many?
+                                                                                     (or order :append)
+                                                                                     :replace) target-path)
+                                      (fs/add-form-config* child-class child-ident)
+                                      (mark-fields-complete))))
+                               (apply-on-change)
+                               (apply-derived-calculations))))}
 
-        :event/delete-row
-        {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
-                          (let [{::keys [form-instance child-ident parent parent-relation]} event-data
-                                {{:keys [on-change]} ::triggers} (some-> parent (comp/component-options))
-                                relation-attr   (form-key->attribute parent parent-relation)
-                                many?           (attr/to-many? relation-attr)
-                                child-ident     (or child-ident (and form-instance (comp/get-ident form-instance)))
-                                parent-ident    (comp/get-ident parent)
-                                target-path     (conj parent-ident parent-relation)
-                                old-value       (get-in state-map target-path)
-                                apply-on-change (fn [env]
-                                                  (if on-change
-                                                    (let [new-value (get-in (::uism/state-map env) target-path)]
-                                                      (protected-on-change env on-change parent-ident parent-relation old-value new-value))
-                                                    env))]
-                            (when target-path
-                              (-> env
-                                (cond->
+       :event/delete-row
+       {::uism/handler (fn [{::uism/keys [event-data state-map] :as env}]
+                         (let [{::keys [form-instance child-ident parent parent-relation]} event-data
+                               {{:keys [on-change]} ::triggers} (some-> parent (comp/component-options))
+                               relation-attr   (form-key->attribute parent parent-relation)
+                               many?           (attr/to-many? relation-attr)
+                               child-ident     (or child-ident (and form-instance (comp/get-ident form-instance)))
+                               parent-ident    (comp/get-ident parent)
+                               target-path     (conj parent-ident parent-relation)
+                               old-value       (get-in state-map target-path)
+                               apply-on-change (fn [env]
+                                                 (if on-change
+                                                   (let [new-value (get-in (::uism/state-map env) target-path)]
+                                                     (protected-on-change env on-change parent-ident parent-relation old-value new-value))
+                                                   env))]
+                           (when target-path
+                             (-> env
+                                 (cond->
                                   many? (uism/apply-action fns/remove-ident child-ident target-path)
                                   (not many?) (uism/apply-action update-in parent-ident dissoc parent-relation))
-                                (apply-on-change)
-                                (apply-derived-calculations)))))}
+                                 (apply-on-change)
+                                 (apply-derived-calculations)))))}
 
-        :event/save
-        {::uism/handler (fn [{::uism/keys [state-map event-data] :as env}]
-                          (let [form-class          (uism/actor-class env :actor/form)
-                                form-ident          (uism/actor->ident env :actor/form)
-                                {::keys [id save-mutation]} (comp/component-options form-class)
-                                master-pk           (::attr/qualified-key id)
-                                proposed-form-props (fs/completed-form-props state-map form-class form-ident)]
-                            (if (valid? form-class proposed-form-props)
-                              (let [data-to-save  (calc-diff env)
-                                    params        (merge event-data data-to-save)
-                                    save-mutation (or save-mutation *default-save-form-mutation*)]
-                                (-> env
-                                  (clear-server-errors)
-                                  (uism/trigger-remote-mutation :actor/form save-mutation
-                                    (merge params
-                                      {::uism/error-event :event/save-failed
-                                       ::master-pk        master-pk
-                                       ::id               (second form-ident)
-                                       ::m/returning      form-class
-                                       ::uism/ok-event    :event/saved}))
-                                  (uism/activate :state/saving)))
-                              (-> env
-                                (uism/apply-action fs/mark-complete* form-ident)
-                                (uism/activate :state/editing)))))}
+       :event/save
+       {::uism/handler (fn [{::uism/keys [state-map event-data] :as env}]
+                         (let [form-class          (uism/actor-class env :actor/form)
+                               form-ident          (uism/actor->ident env :actor/form)
+                               {::keys [id save-mutation]} (comp/component-options form-class)
+                               master-pk           (::attr/qualified-key id)
+                               proposed-form-props (fs/completed-form-props state-map form-class form-ident)]
+                           (if (valid? form-class proposed-form-props)
+                             (let [data-to-save  (calc-diff env)
+                                   params        (merge event-data data-to-save)
+                                   save-mutation (or save-mutation *default-save-form-mutation*)]
+                               (-> env
+                                   (clear-server-errors)
+                                   (uism/trigger-remote-mutation :actor/form save-mutation
+                                                                 (merge params
+                                                                        {::uism/error-event :event/save-failed
+                                                                         ::master-pk        master-pk
+                                                                         ::id               (second form-ident)
+                                                                         ::m/returning      form-class
+                                                                         ::uism/ok-event    :event/saved}))
+                                   (uism/activate :state/saving)))
+                             (-> env
+                                 (uism/apply-action fs/mark-complete* form-ident)
+                                 (uism/activate :state/editing)))))}
 
-        :event/reset
-        {::uism/handler (fn [env] (undo-all env))}
+       :event/reset
+       {::uism/handler (fn [env] (undo-all env))}
 
-        :event/cancel
-        {::uism/handler leave-form}})}}})
+       :event/cancel
+       {::uism/handler leave-form}})}}})
 
 (defn save!
   "Trigger a save on the given form rendering env. `addl-save-params` is a map of data that can
@@ -1517,15 +1518,15 @@
    (let [env     (rendering-env form-instance)
          options (dissoc options :order :initial-state :default-overrides)]
      (add-child! (merge
-                   env
-                   {::order :prepend}
-                   options
-                   (cond-> {::parent-relation parent-relation
-                            ::parent          form-instance
-                            ::child-class     ChildForm}
-                     order (assoc ::order order)
-                     initial-state (assoc ::initial-state initial-state)
-                     default-overrides (assoc ::default-overrides default-overrides)))))))
+                  env
+                  {::order :prepend}
+                  options
+                  (cond-> {::parent-relation parent-relation
+                           ::parent          form-instance
+                           ::child-class     ChildForm}
+                    order (assoc ::order order)
+                    initial-state (assoc ::initial-state initial-state)
+                    default-overrides (assoc ::default-overrides default-overrides)))))))
 
 (defn delete-child!
   "Delete the current form instance from the parent relation of its containing form. You may pass either a
@@ -1549,9 +1550,9 @@
      (uism/trigger! master-form asm-id :event/delete-row env)))
   ([parent-instance relation-key child-ident]
    (let [env (assoc (rendering-env parent-instance)
-               ::parent parent-instance
-               ::parent-relation relation-key
-               ::child-ident child-ident)]
+                    ::parent parent-instance
+                    ::parent-relation relation-key
+                    ::child-ident child-ident)]
      (delete-child! env))))
 
 (defn read-only?
@@ -1574,15 +1575,15 @@
         master-form       (comp/get-computed form-instance ::master-form)
         master-read-only? (some-> master-form (comp/component-options ::read-only?))]
     (boolean
-      (or
-        (?! read-only-form? form-instance)
-        (?! master-read-only? master-form)
-        identity?
-        (?! read-only? form-instance attr)
-        computed-value
-        (let [read-only-fields (?! read-only-fields form-instance)]
-          (and (set? read-only-fields) (contains? read-only-fields qualified-key)))
-        (view-mode? form-instance)))))
+     (or
+      (?! read-only-form? form-instance)
+      (?! master-read-only? master-form)
+      identity?
+      (?! read-only? form-instance attr)
+      computed-value
+      (let [read-only-fields (?! read-only-fields form-instance)]
+        (and (set? read-only-fields) (contains? read-only-fields qualified-key)))
+      (view-mode? form-instance)))))
 
 (defn field-visible?
   "Should the `attr` on the given `form-instance` be visible? This is controlled:
@@ -1599,10 +1600,10 @@
   (let [form-field-visible? (?! (comp/component-options form-instance ::fields-visible? qualified-key) form-instance attr)
         field-visible?      (?! field-visible? form-instance attr)]
     (boolean
-      (or
-        (true? form-field-visible?)
-        (and (nil? form-field-visible?) (true? field-visible?))
-        (and (nil? form-field-visible?) (nil? field-visible?))))))
+     (or
+      (true? form-field-visible?)
+      (and (nil? form-field-visible?) (true? field-visible?))
+      (and (nil? form-field-visible?) (nil? field-visible?))))))
 
 (defn omit-label?
   "Should the `attr` on the given `form-instance` refrain from including a field label?
@@ -1629,15 +1630,15 @@
                                            :id     entity-id}))
   ([this form-class entity-id extra-params]
    (rad-routing/route-to! this form-class (merge extra-params
-                                            {:action view-action
-                                             :id     entity-id})))
+                                                 {:action view-action
+                                                  :id     entity-id})))
   ([this form-class entity-id extra-params dynamic-routing-options]
    (rad-routing/route-to! this (merge
-                                 dynamic-routing-options
-                                 {:target       form-class
-                                  :route-params (merge extra-params
-                                                  {:action view-action
-                                                   :id     entity-id})}))))
+                                dynamic-routing-options
+                                {:target       form-class
+                                 :route-params (merge extra-params
+                                                      {:action view-action
+                                                       :id     entity-id})}))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID.
@@ -1648,15 +1649,15 @@
                                            :id     entity-id}))
   ([this form-class entity-id extra-params]
    (rad-routing/route-to! this form-class (merge extra-params
-                                            {:action edit-action
-                                             :id     entity-id})))
+                                                 {:action edit-action
+                                                  :id     entity-id})))
   ([this form-class entity-id extra-params dynamic-routing-options]
    (rad-routing/route-to! this (merge
-                                 dynamic-routing-options
-                                 {:target       form-class
-                                  :route-params (merge extra-params
-                                                  {:action edit-action
-                                                   :id     entity-id})}))))
+                                dynamic-routing-options
+                                {:target       form-class
+                                 :route-params (merge extra-params
+                                                      {:action edit-action
+                                                       :id     entity-id})}))))
 
 (defn create!
   "Create a new instance of the given form-class using the provided `entity-id` and then route
@@ -1681,16 +1682,16 @@
                                               :id     (str (new-uuid))}))
   ([app-ish form-class options]
    (rad-routing/route-to! app-ish form-class (merge options
-                                               {:action create-action
-                                                :id     (str (new-uuid))})))
+                                                    {:action create-action
+                                                     :id     (str (new-uuid))})))
   ([app-ish form-class options dynamic-routing-options]
    (rad-routing/route-to! app-ish (merge
-                                    dynamic-routing-options
-                                    {:target       form-class
-                                     :route-params (merge
-                                                     options
-                                                     {:action create-action
-                                                      :id     (str (new-uuid))})}))))
+                                   dynamic-routing-options
+                                   {:target       form-class
+                                    :route-params (merge
+                                                   options
+                                                   {:action create-action
+                                                    :id     (str (new-uuid))})}))))
 
 (def pathom2-server-delete-entity-mutation
   {:com.wsscode.pathom.connect/sym    `delete-entity
@@ -1705,8 +1706,8 @@
    :cljs
    (m/defmutation delete-entity [params]
      (ok-action [{:keys [state]}]
-       (let [target-ident (first params)]
-         (swap! state fns/remove-entity target-ident)))
+                (let [target-ident (first params)]
+                  (swap! state fns/remove-entity target-ident)))
      (remote [_] true)))
 
 (defn delete!
@@ -1723,9 +1724,9 @@
   (let [form-ident (comp/get-ident form-instance)
         asm-id     (comp/get-ident master-form)]
     (uism/trigger! master-form asm-id :event/blur
-      {::attr/qualified-key k
-       :form-ident          form-ident
-       :value               value})))
+                   {::attr/qualified-key k
+                    :form-ident          form-ident
+                    :value               value})))
 
 (defn input-changed!
   "Helper: Informs the form's state machine that an input's value has changed. Requires a form rendering env, attr keyword,
@@ -1743,11 +1744,11 @@
         old-value  (get (comp/props form-instance) k)
         asm-id     (comp/get-ident master-form)]
     (uism/trigger!! form-instance asm-id :event/attribute-changed
-      {::attr/qualified-key k
-       :form-ident          form-ident
-       :form-key            (comp/class->registry-key (comp/react-type form-instance))
-       :old-value           old-value
-       :value               value})))
+                    {::attr/qualified-key k
+                     :form-ident          form-ident
+                     :form-key            (comp/class->registry-key (comp/react-type form-instance))
+                     :old-value           old-value
+                     :value               value})))
 
 (defn computed-value
   "Returns the computed value of the given attribute on the form from `env` (if it is a computed attribute).
@@ -1779,10 +1780,10 @@
         k           (::attr/qualified-key attribute)
         options     (comp/component-options form-instance)
         field-label (?! (or
-                          (get-in options [::field-labels k])
-                          (::field-label attribute)
-                          (ao/label attribute)
-                          (some-> k name str/capitalize (str/replace #"-" " "))) form-instance)]
+                         (get-in options [::field-labels k])
+                         (::field-label attribute)
+                         (ao/label attribute)
+                         (some-> k name str/capitalize (str/replace #"-" " "))) form-instance)]
     field-label))
 
 (defn invalid?
@@ -1807,47 +1808,47 @@
    (let [{::keys [attributes validator]} (comp/component-options form-class-or-instance)
          required-attributes   (filter ::attr/required? attributes)
          all-required-present? (or
-                                 (empty? required-attributes)
-                                 (every?
-                                   (fn [attr]
-                                     (let [k   (ao/qualified-key attr)
-                                           v   (get props k)
-                                           ok? (if (= :ref (ao/type attr))
-                                                 (not (empty? v))
-                                                 (some? v))]
-                                       #?(:cljs
-                                          (when (and goog.DEBUG (not ok?))
-                                            (log/debug "Form is not valid because required attribute is missing:" k)))
-                                       ok?))
-                                   required-attributes))]
+                                (empty? required-attributes)
+                                (every?
+                                 (fn [attr]
+                                   (let [k   (ao/qualified-key attr)
+                                         v   (get props k)
+                                         ok? (if (= :ref (ao/type attr))
+                                               (not (empty? v))
+                                               (some? v))]
+                                     #?(:cljs
+                                        (when (and goog.DEBUG (not ok?))
+                                          (log/debug "Form is not valid because required attribute is missing:" k)))
+                                     ok?))
+                                 required-attributes))]
      (and
-       all-required-present?
-       (or
-         (not validator)
-         (and validator (= :valid ((->arity-tolerant validator) props))))))))
+      all-required-present?
+      (or
+       (not validator)
+       (and validator (= :valid ((->arity-tolerant validator) props))))))))
 
 (>defn field-style-config
-  "Get the value of an overridable field-style-config option. If both the form and attribute set these
+       "Get the value of an overridable field-style-config option. If both the form and attribute set these
 then the result will be a deep merge of the two (with form winning)."
-  [{::keys [form-instance]} attribute config-key]
-  [::form-env ::attr/attribute keyword? => any?]
-  (let [{::attr/keys [qualified-key field-style-config]} attribute
-        form-value      (comp/component-options form-instance ::field-style-configs qualified-key config-key)
-        attribute-value (get field-style-config config-key)]
-    (if (and (map? form-value) (map? attribute-value))
-      (deep-merge attribute-value form-value)
-      (or form-value attribute-value))))
+       [{::keys [form-instance]} attribute config-key]
+       [::form-env ::attr/attribute keyword? => any?]
+       (let [{::attr/keys [qualified-key field-style-config]} attribute
+             form-value      (comp/component-options form-instance ::field-style-configs qualified-key config-key)
+             attribute-value (get field-style-config config-key)]
+         (if (and (map? form-value) (map? attribute-value))
+           (deep-merge attribute-value form-value)
+           (or form-value attribute-value))))
 
 (>defn field-autocomplete
-  "Returns the proper string (or nil) for a given attribute's autocomplete setting"
-  [{::keys [form-instance] :as _env} attribute]
-  [::form-env ::attr/attribute => any?]
-  (let [{::attr/keys [qualified-key]
-         ::keys      [autocomplete]} attribute
-        override     (comp/component-options form-instance ::auto-completes qualified-key)
-        autocomplete (if (nil? override) autocomplete override)
-        autocomplete (if (boolean? autocomplete) (if autocomplete "on" "off") autocomplete)]
-    autocomplete))
+       "Returns the proper string (or nil) for a given attribute's autocomplete setting"
+       [{::keys [form-instance] :as _env} attribute]
+       [::form-env ::attr/attribute => any?]
+       (let [{::attr/keys [qualified-key]
+              ::keys      [autocomplete]} attribute
+             override     (comp/component-options form-instance ::auto-completes qualified-key)
+             autocomplete (if (nil? override) autocomplete override)
+             autocomplete (if (boolean? autocomplete) (if autocomplete "on" "off") autocomplete)]
+         autocomplete))
 
 (defn wrap-env
   "Build a (fn [env] env') that adds RAD form-related data to an env. If `base-wrapper` is supplied, then it will be called
@@ -1873,8 +1874,8 @@ then the result will be a deep merge of the two (with form winning)."
   ([base-wrapper save-middleware delete-middleware]
    (fn [env]
      (cond-> (assoc env
-               ::save-middleware save-middleware
-               ::delete-middleware delete-middleware)
+                    ::save-middleware save-middleware
+                    ::delete-middleware delete-middleware)
        base-wrapper (base-wrapper)))))
 
 (defn pathom-plugin
@@ -1906,9 +1907,9 @@ then the result will be a deep merge of the two (with form winning)."
         required?      (get attribute ao/required? false)
         form-validator (comp/component-options master-form ::validator)
         invalid?       (or
-                         (and checked? required? (or (nil? value) (and (string? value) (empty? value))))
-                         (and checked? (not form-validator) (not (attr/valid-value? attribute value props k)))
-                         (and form-validator (= :invalid ((->arity-tolerant form-validator) props k))))]
+                        (and checked? required? (or (nil? value) (and (string? value) (empty? value))))
+                        (and checked? (not form-validator) (not (attr/valid-value? attribute value props k)))
+                        (and form-validator (= :invalid ((->arity-tolerant form-validator) props k))))]
     invalid?))
 
 (defn validation-error-message
@@ -1919,10 +1920,10 @@ then the result will be a deep merge of the two (with form winning)."
         master-message (comp/component-options master-form ::validation-messages qualified-key)
         local-message  (comp/component-options form-instance ::validation-messages qualified-key)
         message        (or
-                         (?! master-message props qualified-key)
-                         (?! local-message props qualified-key)
-                         (?! validation-message value)
-                         (tr "Invalid value"))]
+                        (?! master-message props qualified-key)
+                        (?! local-message props qualified-key)
+                        (?! validation-message value)
+                        (tr "Invalid value"))]
     message))
 
 (defn field-context
@@ -1943,7 +1944,7 @@ then the result will be a deep merge of the two (with form winning)."
   [{::keys [form-instance] :as env} {::attr/keys [qualified-key] :as attribute}]
   (let [props              (comp/props form-instance)
         value              (or (computed-value env attribute)
-                             (and attribute (get props qualified-key)))
+                               (and attribute (get props qualified-key)))
         addl-props         (?! (field-style-config env attribute :input/props) env)
         invalid?           (invalid-attribute-value? env attribute)
         validation-message (when invalid? (validation-error-message env attribute))
@@ -1982,8 +1983,8 @@ then the result will be a deep merge of the two (with form winning)."
    "
   [bindings & body]
   (let [binding-syntax-error  (str "The binding of with-field-context must START with a destructuring map\n"
-                                "and a call to field-context with the env and attribute for the field.\n"
-                                "e.g. `[{:keys [value]} (field-context env attr)]`")
+                                   "and a call to field-context with the env and attribute for the field.\n"
+                                   "e.g. `[{:keys [value]} (field-context env attr)]`")
         e!                    #(throw (ex-info % {:tag :cljs/analysis-error}))
         all-bindings          (partition 2 bindings)
         form-context-binding  (first all-bindings)
@@ -1998,7 +1999,7 @@ then the result will be a deep merge of the two (with form winning)."
           env-sym          (second source)
           attr-sym         (nth source 2)
           binding-forms    {'value              `(or (computed-value ~env-sym ~attr-sym)
-                                                   (and ~attr-sym (get (comp/props ~'form-instance) ~'qualified-key)))
+                                                     (and ~attr-sym (get (comp/props ~'form-instance) ~'qualified-key)))
                             'invalid?           `(invalid-attribute-value? ~env-sym ~attr-sym)
                             'validation-message `(validation-error-message ~env-sym ~attr-sym)
                             'omit-label?        `(omit-label? ~'form-instance ~attr-sym)
@@ -2070,9 +2071,9 @@ then the result will be a deep merge of the two (with form winning)."
   ([registry-key options render]
    (let [render          (fn [this]
                            (comp/wrapped-render this
-                             (fn []
-                               (let [props (comp/props this)]
-                                 (render this props)))))
+                                                (fn []
+                                                  (let [props (comp/props this)]
+                                                    (render this props)))))
          component-class (volatile! nil)
          get-class       (fn [] @component-class)
          options         (assoc (convert-options get-class {:registry-key registry-key} options) :render render)
@@ -2088,11 +2089,11 @@ then the result will be a deep merge of the two (with form winning)."
 (defn ident-from-props* [id-keys props]
   "Using known id-keys, construct an ident from props"
   (some
-    (fn [k]
-      (let [id (get props k)]
-        (when (or (uuid? id) (int? id) (tempid/tempid? id))
-          [k id])))
-    id-keys))
+   (fn [k]
+     (let [id (get props k)]
+       (when (or (uuid? id) (int? id) (tempid/tempid? id))
+         [k id])))
+   id-keys))
 
 (defn active-rad-form-in-union*
   "Finds the RAD form that has ident-k as the qualified form id
@@ -2100,11 +2101,11 @@ then the result will be a deep merge of the two (with form winning)."
   Returns [ident-k form-class]"
   [RADForms ident-k]
   (some
-    (fn [c]
-      (let [ck (-> c comp/component-options fo/id ao/qualified-key)]
-        (when (= ck ident-k)
-          [ident-k c])))
-    RADForms))
+   (fn [c]
+     (let [ck (-> c comp/component-options fo/id ao/qualified-key)]
+       (when (= ck ident-k)
+         [ident-k c])))
+   RADForms))
 
 #?(:clj
    (defmacro defunion
@@ -2125,12 +2126,12 @@ then the result will be a deep merge of the two (with form winning)."
                                             (active-rad-form-in-union* [~@RADForms] k#)))
                         :render        `(fn [this#]
                                           (comp/wrapped-render this#
-                                            (fn []
-                                              (enc/when-let [props#   (comp/props this#)
-                                                             [k#] (comp/get-ident this#)
-                                                             [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
-                                                             factory# (comp/computed-factory c# {:keyfn k#})]
-                                                (factory# props#)))))}]
+                                                               (fn []
+                                                                 (enc/when-let [props#   (comp/props this#)
+                                                                                [k#] (comp/get-ident this#)
+                                                                                [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
+                                                                                factory# (comp/computed-factory c# {:keyfn k#})]
+                                                                   (factory# props#)))))}]
        (if (comp/cljs? &env)
          `(do
             (declare ~sym)
@@ -2155,8 +2156,8 @@ then the result will be a deep merge of the two (with form winning)."
 (defn subform-rendering-env [parent-form-instance relation-key]
   (let [renv (rendering-env parent-form-instance)]
     (assoc renv
-      ::parent parent-form-instance
-      ::parent-relation relation-key)))
+           ::parent parent-form-instance
+           ::parent-relation relation-key)))
 
 (defn render-subform
   "Render a RAD subform from a parent form. This can be used instead of a normal factory in order to avoid having
