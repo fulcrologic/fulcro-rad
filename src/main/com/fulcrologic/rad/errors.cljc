@@ -3,8 +3,6 @@
   become no-ops in release builds that have zero overhead."
   #?(:cljs (:require-macros [com.fulcrologic.rad.errors]))
   (:require
-    [clojure.spec.alpha :as s]
-    [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 #?(:clj

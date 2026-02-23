@@ -4,26 +4,25 @@
    duplicating code. See com.fulcrologic.rad.report for the full public API."
   #?(:cljs (:require-macros [com.fulcrologic.rad.report.impl]))
   (:require
-   #?@(:clj [[cljs.analyzer :as ana]])
-   [clojure.string :as str]
-   [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
-   [com.fulcrologic.fulcro.application :as app]
-   [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
-   [com.fulcrologic.fulcro.components :as comp]
-   [com.fulcrologic.fulcro.data-fetch :as df]
-   [com.fulcrologic.fulcro.raw.components :as rc]
-   [com.fulcrologic.rad.attributes :as attr]
-   [com.fulcrologic.rad.attributes-options :as ao]
-   [com.fulcrologic.rad.control :as control]
-   [com.fulcrologic.rad.form :as form]
-   [com.fulcrologic.rad.options-util :as opts :refer [?!]]
-   [com.fulcrologic.rad.report-options :as ro]
-   [com.fulcrologic.rad.report-render :as rr]
-   [com.fulcrologic.rad.type-support.date-time :as dt]
-   [com.fulcrologic.rad.type-support.decimal :as math]
-   [taoensso.timbre :as log]
-    ;; :as-alias avoids loading report.cljc (which requires this namespace)
-   [com.fulcrologic.rad.report :as-alias report]))
+    #?@(:clj [[cljs.analyzer :as ana]])
+    [clojure.string :as str]
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
+    [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
+    [com.fulcrologic.fulcro.application :as app]
+    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.fulcro.data-fetch :as df]
+    [com.fulcrologic.fulcro.raw.components :as rc]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.control :as control]
+    [com.fulcrologic.rad.form :as-alias form]
+    [com.fulcrologic.rad.options-util :refer [?!]]
+    [com.fulcrologic.rad.report :as-alias report]
+    [com.fulcrologic.rad.report-options :as ro]
+    [com.fulcrologic.rad.report-render :as rr]
+    [com.fulcrologic.rad.type-support.date-time :as dt]
+    [com.fulcrologic.rad.type-support.decimal :as math]
+    [taoensso.timbre :as log]))
 
 (defn report-ident
   "Returns the ident of a RAD report. The parameter can be a react instance, a class, or the registry key(word)
@@ -99,15 +98,15 @@
                 ::attr/keys   [qualified-key] :as attr}]
             {:column attr
              :help   (or
-                      (?! (get report-column-infos qualified-key) report-instance)
-                      (?! column-info report-instance))
+                       (?! (get report-column-infos qualified-key) report-instance)
+                       (?! column-info report-instance))
              :label  (or
-                      (?! (get report-column-headings qualified-key) report-instance)
-                      (?! column-heading report-instance)
-                      (?! (ao/label attr) report-instance)
-                      (some-> qualified-key name str/capitalize)
-                      "")})
-          columns)))
+                       (?! (get report-column-headings qualified-key) report-instance)
+                       (?! column-heading report-instance)
+                       (?! (ao/label attr) report-instance)
+                       (some-> qualified-key name str/capitalize)
+                       "")})
+      columns)))
 
 (def render-control
   "[report-instance control-key]
@@ -194,27 +193,27 @@
    `style` keyword (e.g. `:default`, `:currency`). Returns nil if no built-in formatter exists."
   [type style]
   (get-in
-   {:string  {:default (fn [_ value] value)}
-    :instant {:default         (fn [_ value] (dt/inst->human-readable-date value))
-              :short-timestamp (fn [_ value] (dt/tformat "MMM d, h:mma" value))
-              :timestamp       (fn [_ value] (dt/tformat "MMM d, yyyy h:mma" value))
-              :date            (fn [_ value] (dt/tformat "MMM d, yyyy" value))
-              :month-day       (fn [_ value] (dt/tformat "MMM d" value))
-              :time            (fn [_ value] (dt/tformat "h:mma" value))}
-    :keyword {:default (fn [_ value _ column-attribute]
-                         (if-let [labels (::attr/enumerated-labels column-attribute)]
-                           (labels value)
-                           (some-> value (name) str/capitalize)))}
-    :enum    {:default (fn [_ value _ column-attribute]
-                         (if-let [labels (::attr/enumerated-labels column-attribute)]
-                           (labels value) (str value)))}
-    :int     {:default (fn [_ value] (str value))}
-    :decimal {:default    (fn [_ value] (math/numeric->str value))
-              :currency   (fn [_ value] (math/numeric->str (math/round value 2)))
-              :percentage (fn [_ value] (math/numeric->percent-str value))
-              :USD        (fn [_ value] (math/numeric->currency-str value))}
-    :boolean {:default (fn [_ value] (if value (tr "true") (tr "false")))}}
-   [type style]))
+    {:string  {:default (fn [_ value] value)}
+     :instant {:default         (fn [_ value] (dt/inst->human-readable-date value))
+               :short-timestamp (fn [_ value] (dt/tformat "MMM d, h:mma" value))
+               :timestamp       (fn [_ value] (dt/tformat "MMM d, yyyy h:mma" value))
+               :date            (fn [_ value] (dt/tformat "MMM d, yyyy" value))
+               :month-day       (fn [_ value] (dt/tformat "MMM d" value))
+               :time            (fn [_ value] (dt/tformat "h:mma" value))}
+     :keyword {:default (fn [_ value _ column-attribute]
+                          (if-let [labels (::attr/enumerated-labels column-attribute)]
+                            (labels value)
+                            (some-> value (name) str/capitalize)))}
+     :enum    {:default (fn [_ value _ column-attribute]
+                          (if-let [labels (::attr/enumerated-labels column-attribute)]
+                            (labels value) (str value)))}
+     :int     {:default (fn [_ value] (str value))}
+     :decimal {:default    (fn [_ value] (math/numeric->str value))
+               :currency   (fn [_ value] (math/numeric->str (math/round value 2)))
+               :percentage (fn [_ value] (math/numeric->percent-str value))
+               :USD        (fn [_ value] (math/numeric->currency-str value))}
+     :boolean {:default (fn [_ value] (if value (tr "true") (tr "false")))}}
+    [type style]))
 
 (defn formatted-column-value
   "Given a report instance, a row of props, and a column attribute for that report:
@@ -225,23 +224,23 @@
                               ::attr/keys   [qualified-key type style] :as column-attribute}]
   (let [value                  (get row-props qualified-key)
         report-field-formatter (or
-                                (comp/component-options report-instance ::report/column-formatters qualified-key)
-                                (comp/component-options report-instance ::report/field-formatters qualified-key))
+                                 (comp/component-options report-instance ::report/column-formatters qualified-key)
+                                 (comp/component-options report-instance ::report/field-formatters qualified-key))
         {::app/keys [runtime-atom]} (comp/any->app report-instance)
         formatter              (cond
                                  report-field-formatter report-field-formatter
                                  column-formatter column-formatter
                                  field-formatter field-formatter
                                  :else (let [style                (or
-                                                                   (comp/component-options report-instance ::report/column-styles qualified-key)
-                                                                   style
-                                                                   :default)
+                                                                    (comp/component-options report-instance ::report/column-styles qualified-key)
+                                                                    style
+                                                                    :default)
                                              installed-formatters (some-> runtime-atom deref :com.fulcrologic.rad/controls ::report/type->style->formatter)
                                              formatter            (get-in installed-formatters [type style])]
                                          (or
-                                          formatter
-                                          (built-in-formatter type style)
-                                          (fn [_ v _ _] (str v)))))
+                                           formatter
+                                           (built-in-formatter type style)
+                                           (fn [_ v _ _] (str v)))))
         formatted-value        ((->arity-tolerant formatter) report-instance value row-props column-attribute)]
     formatted-value))
 
@@ -334,19 +333,19 @@
         normalize?   (not denormalize?)
         row-query    (let [id-attrs (keep #(comp/component-options % ::form/id) (vals form-links))]
                        (vec
-                        (into (set row-query-inclusion)
-                              (map (fn [attr] (or
-                                               (::report/column-EQL attr)
-                                               (::attr/qualified-key attr))) (conj (set (concat id-attrs columns)) row-pk)))))
+                         (into (set row-query-inclusion)
+                           (map (fn [attr] (or
+                                             (::report/column-EQL attr)
+                                             (::attr/qualified-key attr))) (conj (set (concat id-attrs columns)) row-pk)))))
         row-key      (::attr/qualified-key row-pk)
         row-ident    (fn [this props] [row-key (get props row-key)])
         row-actions  (or row-actions [])
         row-render   (fn [this]
                        (comp/wrapped-render this
-                                            (fn []
-                                              (let [props (comp/props this)]
-                                                (render-row this (rc/registry-key->class registry-key) props)))))
-        body-options (cond-> {:query              (fn [this] row-query)
+                         (fn []
+                           (let [props (comp/props this)]
+                             (render-row this (rc/registry-key->class registry-key) props)))))
+        body-options (cond-> {:query               (fn [this] row-query)
                               ::report/row-actions row-actions
                               ::report/columns     columns}
                        normalize? (assoc :ident row-ident)

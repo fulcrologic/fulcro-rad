@@ -7,9 +7,11 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.form.impl]))
   (:refer-clojure :exclude [parse-long])
   (:require
+    #?@(:clj [[cljs.analyzer :as ana]])
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
     [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
@@ -17,27 +19,22 @@
     [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
+    [com.fulcrologic.guardrails.core :refer [=> >def >defn]]
     [com.fulcrologic.guardrails.malli.core :as grm]
     [com.fulcrologic.rad :as rad]
-    [com.fulcrologic.rad.application :as rapp]
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.attributes-options :as ao]
-    [com.fulcrologic.rad.errors :refer [required! warn-once!]]
+    [com.fulcrologic.rad.errors :refer [warn-once!]]
     [com.fulcrologic.rad.form-options :as fo]
     [com.fulcrologic.rad.form-render :as fr]
     [com.fulcrologic.rad.form-render-options :as fro]
-    [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
     [com.fulcrologic.rad.options-util :as opts :refer [?!]]
     [com.fulcrologic.rad.picker-options :as picker-options]
-    [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.type-support.integer :as int]
     [com.fulcrologic.rad.form :as-alias form]
     [edn-query-language.core :as eql]
     [taoensso.encore :as enc]
-    [taoensso.timbre :as log]
-    #?@(:clj [[cljs.analyzer :as ana]])
-    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]))
+    [taoensso.timbre :as log]))
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; Specs (duplicated from form.cljc so they live in the impl namespace too)
@@ -742,10 +739,6 @@
   [top-form-instance]
   (get (comp/props top-form-instance) :com.fulcrologic.rad.form/errors))
 
-(def ^:deprecated install-ui-controls!
-  "Renamed to rad-application/install-ui-controls!"
-  rapp/install-ui-controls!)
-
 (defn install-field-renderer!
   "Install a `renderer` for the given attribute `type`, to be known as field `style`."
   [app type style render]
@@ -781,43 +774,6 @@
                                   :com.fulcrologic.rad.form/element->style->layout
                                   :ref-container
                                   style] render)))
-
-;; ─────────────────────────────────────────────────────────────────────────────
-;; Routing helpers (pure — no UISM)
-;; ─────────────────────────────────────────────────────────────────────────────
-
-(defn view!
-  "Route to the given form in read-only mode."
-  ([this form-class entity-id]
-   (rad-routing/route-to! this form-class {:action view-action :id entity-id}))
-  ([this form-class entity-id extra-params]
-   (rad-routing/route-to! this form-class (merge extra-params {:action view-action :id entity-id})))
-  ([this form-class entity-id extra-params dynamic-routing-options]
-   (rad-routing/route-to! this (merge dynamic-routing-options
-                                 {:target       form-class
-                                  :route-params (merge extra-params {:action view-action :id entity-id})}))))
-
-(defn edit!
-  "Route to the given form for editing the entity with the given ID."
-  ([this form-class entity-id]
-   (rad-routing/route-to! this form-class {:action edit-action :id entity-id}))
-  ([this form-class entity-id extra-params]
-   (rad-routing/route-to! this form-class (merge extra-params {:action edit-action :id entity-id})))
-  ([this form-class entity-id extra-params dynamic-routing-options]
-   (rad-routing/route-to! this (merge dynamic-routing-options
-                                 {:target       form-class
-                                  :route-params (merge extra-params {:action edit-action :id entity-id})}))))
-
-(defn create!
-  "Create a new instance of the given form-class and route to that form for editing."
-  ([app-ish form-class]
-   (rad-routing/route-to! app-ish form-class {:action create-action :id (str (new-uuid))}))
-  ([app-ish form-class options]
-   (rad-routing/route-to! app-ish form-class (merge options {:action create-action :id (str (new-uuid))})))
-  ([app-ish form-class options dynamic-routing-options]
-   (rad-routing/route-to! app-ish (merge dynamic-routing-options
-                                    {:target       form-class
-                                     :route-params (merge options {:action create-action :id (str (new-uuid))})}))))
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; Union helpers
