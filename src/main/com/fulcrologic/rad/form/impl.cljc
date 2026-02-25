@@ -7,54 +7,55 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.form.impl]))
   (:refer-clojure :exclude [parse-long])
   (:require
-   [clojure.set :as set]
-   [clojure.spec.alpha :as s]
-   [clojure.string :as str]
-   [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
-   [com.fulcrologic.fulcro.algorithms.form-state :as fs]
-   [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
-   [com.fulcrologic.fulcro.algorithms.merge :as merge]
-   [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
-   [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
-   [com.fulcrologic.fulcro.components :as comp]
-   [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
-   [com.fulcrologic.guardrails.malli.core :as grm]
-   [com.fulcrologic.rad :as rad]
-   [com.fulcrologic.rad.application :as rapp]
-   [com.fulcrologic.rad.attributes :as attr]
-   [com.fulcrologic.rad.attributes-options :as ao]
-   [com.fulcrologic.rad.errors :refer [required! warn-once!]]
-   [com.fulcrologic.rad.form-options :as fo]
-   [com.fulcrologic.rad.form-render :as fr]
-   [com.fulcrologic.rad.form-render-options :as fro]
-   [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
-   [com.fulcrologic.rad.options-util :as opts :refer [?!]]
-   [com.fulcrologic.rad.picker-options :as picker-options]
-   [com.fulcrologic.rad.routing :as rad-routing]
-   [com.fulcrologic.rad.type-support.integer :as int]
-   [edn-query-language.core :as eql]
-   [taoensso.encore :as enc]
-   [taoensso.timbre :as log]
-   #?@(:clj [[cljs.analyzer :as ana]])
-   [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]))
+    [clojure.set :as set]
+    [clojure.spec.alpha :as s]
+    [clojure.string :as str]
+    [com.fulcrologic.fulcro.algorithms.do-not-use :refer [deep-merge]]
+    [com.fulcrologic.fulcro.algorithms.form-state :as fs]
+    [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
+    [com.fulcrologic.fulcro.algorithms.merge :as merge]
+    [com.fulcrologic.fulcro.algorithms.normalized-state :as fns]
+    [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
+    [com.fulcrologic.fulcro.components :as comp]
+    [com.fulcrologic.guardrails.core :refer [>defn >def => ?]]
+    [com.fulcrologic.guardrails.malli.core :as grm]
+    [com.fulcrologic.rad :as rad]
+    [com.fulcrologic.rad.application :as rapp]
+    [com.fulcrologic.rad.attributes :as attr]
+    [com.fulcrologic.rad.attributes-options :as ao]
+    [com.fulcrologic.rad.errors :refer [required! warn-once!]]
+    [com.fulcrologic.rad.form-options :as fo]
+    [com.fulcrologic.rad.form-render :as fr]
+    [com.fulcrologic.rad.form-render-options :as fro]
+    [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
+    [com.fulcrologic.rad.options-util :as opts :refer [?!]]
+    [com.fulcrologic.rad.picker-options :as picker-options]
+    [com.fulcrologic.rad.routing :as rad-routing]
+    [com.fulcrologic.rad.type-support.integer :as int]
+    [com.fulcrologic.rad.form :as-alias form]
+    [edn-query-language.core :as eql]
+    [taoensso.encore :as enc]
+    [taoensso.timbre :as log]
+    #?@(:clj [[cljs.analyzer :as ana]])
+    [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]))
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; Specs (duplicated from form.cljc so they live in the impl namespace too)
 ;; ─────────────────────────────────────────────────────────────────────────────
 
-(>def ::id any?)
-(>def ::master-pk qualified-keyword?)
-(>def ::delta (s/map-of eql/ident? map?))
-(>def ::params (s/keys :req [::id ::master-pk ::delta]))
-(>def ::save-middleware fn?)
-(>def ::form-env map?)
+(>def ::form/id any?)
+(>def ::form/master-pk qualified-keyword?)
+(>def ::form/delta (s/map-of eql/ident? map?))
+(>def ::form/params (s/keys :req [::form/id ::form/master-pk ::form/delta]))
+(>def ::form/save-middleware fn?)
+(>def ::form/form-env map?)
 
-(grm/>def ::id any?)
-(grm/>def ::master-pk :qualified-keyword)
-(grm/>def ::delta [:map-of [:fn eql/ident?] :map])
-(grm/>def ::params [:map ::id ::master-pk ::delta])
-(grm/>def ::save-middleware fn?)
-(grm/>def ::form-env :map)
+(grm/>def ::form/id any?)
+(grm/>def ::form/master-pk :qualified-keyword)
+(grm/>def ::form/delta [:map-of [:fn eql/ident?] :map])
+(grm/>def ::form/params [:map ::form/id ::form/master-pk ::form/delta])
+(grm/>def ::form/save-middleware fn?)
+(grm/>def ::form/form-env map?)
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; Constants
@@ -81,12 +82,12 @@
 ;; ─────────────────────────────────────────────────────────────────────────────
 
 (>defn picker-join-key
-       "Returns a :ui/picker keyword customized to the qualified keyword"
-       [qualified-key]
-       [qualified-keyword? => qualified-keyword?]
-       (keyword "ui" (str (namespace qualified-key) "-"
-                          (name qualified-key)
-                          "-picker")))
+  "Returns a :ui/picker keyword customized to the qualified keyword"
+  [qualified-key]
+  [qualified-keyword? => qualified-keyword?]
+  (keyword "ui" (str (namespace qualified-key) "-"
+                  (name qualified-key)
+                  "-picker")))
 
 (defn master-form
   "Return the master form for the given component instance."
@@ -145,9 +146,9 @@
         copts                  (comp/component-options form-instance)
         id-attr                (fo/id copts)
         layout-style           (or
-                                (get-in copts style-path)
-                                (?! (fro/style copts) id-attr form-env)
-                                :default)
+                                 (get-in copts style-path)
+                                 (?! (fro/style copts) id-attr form-env)
+                                 :default)
         element->style->layout (some-> runtime-atom deref ::rad/controls ::element->style->layout)
         render-fn              (some-> element->style->layout (get element) (get layout-style))
         default-render-fn      (some-> element->style->layout (get element) :default)]
@@ -178,32 +179,32 @@
             {:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
             element      :ref-container
             layout-style (or
-                          (get layout-styles element)
-                          (get target-styles element)
-                          :default)
+                           (get layout-styles element)
+                           (get target-styles element)
+                           :default)
             render-fn    (some-> runtime-atom deref ::rad/controls ::element->style->layout
-                                 (get-in [element layout-style]))]
+                           (get-in [element layout-style]))]
         render-fn))))
 
 (defn attr->renderer
   "Given a form rendering environment and an attribute: returns the renderer that can render the given attribute."
   [{:com.fulcrologic.rad.form/keys [form-instance master-form]}
-   {::attr/keys [type qualified-key style]
+   {::attr/keys                    [type qualified-key style]
     :com.fulcrologic.rad.form/keys [field-style] :as attr}]
   (let [{:com.fulcrologic.fulcro.application/keys [runtime-atom]} (comp/any->app form-instance)
         field-style (?! (or
-                         (some-> master-form comp/component-options :com.fulcrologic.rad.form/field-styles qualified-key)
-                         (some-> form-instance comp/component-options :com.fulcrologic.rad.form/field-styles qualified-key)
-                         field-style
-                         style
-                         :default)
-                        form-instance)
+                          (some-> master-form comp/component-options :com.fulcrologic.rad.form/field-styles qualified-key)
+                          (some-> form-instance comp/component-options :com.fulcrologic.rad.form/field-styles qualified-key)
+                          field-style
+                          style
+                          :default)
+                      form-instance)
         control-map (some-> runtime-atom deref ::rad/controls ::type->style->control)
         control     (or
-                     (get-in control-map [type field-style])
-                     (do
-                       (warn-once! "Renderer not found: " type field-style)
-                       (get-in control-map [type :default])))]
+                      (get-in control-map [type field-style])
+                      (do
+                        (warn-once! "Renderer not found: " type field-style)
+                        (get-in control-map [type :default])))]
     (if control
       control
       (log/error "Unable to find control (no default) for attribute " attr))))
@@ -237,17 +238,17 @@
    (let [props  (comp/props form-instance)
          cprops (comp/get-computed props)]
      (merge cprops
-            {:com.fulcrologic.rad.form/master-form    (master-form form-instance)
-             :com.fulcrologic.rad.form/form-instance  form-instance
-             :com.fulcrologic.rad.form/props          props
-             :com.fulcrologic.rad.form/computed-props cprops})))
+       {:com.fulcrologic.rad.form/master-form    (master-form form-instance)
+        :com.fulcrologic.rad.form/form-instance  form-instance
+        :com.fulcrologic.rad.form/props          props
+        :com.fulcrologic.rad.form/computed-props cprops})))
   ([form-instance props]
    (let [cprops (comp/get-computed props)]
      (merge cprops
-            {:com.fulcrologic.rad.form/master-form    (master-form form-instance)
-             :com.fulcrologic.rad.form/form-instance  form-instance
-             :com.fulcrologic.rad.form/props          props
-             :com.fulcrologic.rad.form/computed-props cprops}))))
+       {:com.fulcrologic.rad.form/master-form    (master-form form-instance)
+        :com.fulcrologic.rad.form/form-instance  form-instance
+        :com.fulcrologic.rad.form/props          props
+        :com.fulcrologic.rad.form/computed-props cprops}))))
 
 (defn render-form-fields
   "Render JUST the form fields (and subforms). Skips the header/controls on the top-level form."
@@ -280,8 +281,8 @@
 (defn subform-rendering-env [parent-form-instance relation-key]
   (let [renv (rendering-env parent-form-instance)]
     (assoc renv
-           :com.fulcrologic.rad.form/parent parent-form-instance
-           :com.fulcrologic.rad.form/parent-relation relation-key)))
+      :com.fulcrologic.rad.form/parent parent-form-instance
+      :com.fulcrologic.rad.form/parent-relation relation-key)))
 
 (defn render-subform
   "Render a RAD subform from a parent form."
@@ -302,8 +303,8 @@
    that match `(pred attribute)`"
   [form-class pred]
   (let [attributes        (or
-                           (comp/component-options form-class :com.fulcrologic.rad.form/attributes)
-                           [])
+                            (comp/component-options form-class ::attr/attributes)
+                            [])
         local-optional    (into #{} (comp (filter pred) (map ::attr/qualified-key)) attributes)
         children          (some->> form-class comp/get-query eql/query->ast :children (keep :component))
         children-optional (map #(find-fields % pred) children)]
@@ -324,35 +325,35 @@
    or `[]` for the statecharts engine). Defaults to no extra elements."
   ([form-options]
    (form-options->form-query form-options []))
-  ([{id-attr :com.fulcrologic.rad.form/id
+  ([{id-attr                        :com.fulcrologic.rad.form/id
      :com.fulcrologic.rad.form/keys [attributes] :as form-options}
     extra-query-elements]
    (let [id-key             (::attr/qualified-key id-attr)
          {refs true scalars false} (group-by #(= :ref (::attr/type %)) attributes)
          query-with-scalars (into
-                             [id-key
-                              :ui/confirmation-message
-                              :ui/route-denied?
-                              :com.fulcrologic.rad.form/errors
-                              [::picker-options/options-cache '_]
-                              [:com.fulcrologic.fulcro.application/active-remotes '_]
-                              fs/form-config-join]
-                             (concat
-                              extra-query-elements
-                              (map ::attr/qualified-key
-                                   (remove #{id-attr} scalars))))
+                              [id-key
+                               :ui/confirmation-message
+                               :ui/route-denied?
+                               :com.fulcrologic.rad.form/errors
+                               [::picker-options/options-cache '_]
+                               [:com.fulcrologic.fulcro.application/active-remotes '_]
+                               fs/form-config-join]
+                              (concat
+                                extra-query-elements
+                                (map ::attr/qualified-key
+                                  (remove #{id-attr} scalars))))
          full-query         (into query-with-scalars
-                                  (mapcat (fn [{::attr/keys [qualified-key] :as attr}]
-                                            (if-let [subform (subform-ui form-options attr)]
-                                              [{qualified-key (comp/get-query subform)}]
-                                              (let [k->attr        (into {} (map (fn [{::attr/keys [qualified-key] :as attr}] [qualified-key attr])) attributes)
-                                                    target-id-key  (::attr/target (k->attr qualified-key))
-                                                    fake-component (sc qualified-key {:query (fn [_] [target-id-key])
-                                                                                      :ident (fn [_ props] [target-id-key (get props target-id-key)])})]
-                                                (when-not target-id-key
-                                                  (log/warn "Reference attribute" qualified-key "in form has no subform ::form/ui, and no ::attr/target."))
-                                                [{qualified-key (comp/get-query fake-component)}]))))
-                                  refs)]
+                              (mapcat (fn [{::attr/keys [qualified-key] :as attr}]
+                                        (if-let [subform (subform-ui form-options attr)]
+                                          [{qualified-key (comp/get-query subform)}]
+                                          (let [k->attr        (into {} (map (fn [{::attr/keys [qualified-key] :as attr}] [qualified-key attr])) attributes)
+                                                target-id-key  (::attr/target (k->attr qualified-key))
+                                                fake-component (sc qualified-key {:query (fn [_] [target-id-key])
+                                                                                  :ident (fn [_ props] [target-id-key (get props target-id-key)])})]
+                                            (when-not target-id-key
+                                              (log/warn "Reference attribute" qualified-key "in form has no subform ::form/ui, and no ::attr/target."))
+                                            [{qualified-key (comp/get-query fake-component)}]))))
+                              refs)]
      full-query)))
 
 (def ^:deprecated parse-long "moved to integer.cljs" int/parse-long)
@@ -366,24 +367,24 @@
   pre-merge fn, or `nil` if none is needed."
   [component-options key->attribute]
   (let [sorters-by-k (into {}
-                           (keep (fn [k]
-                                   (when-let [sorter (:com.fulcrologic.rad.form/sort-children (subform-options component-options (key->attribute k)))]
-                                     [k sorter])) (keys key->attribute)))]
+                       (keep (fn [k]
+                               (when-let [sorter (:com.fulcrologic.rad.form/sort-children (subform-options component-options (key->attribute k)))]
+                                 [k sorter])) (keys key->attribute)))]
     (when (seq sorters-by-k)
       (fn [{:keys [data-tree]}]
         (let [ks (keys sorters-by-k)]
           (log/debug "Form system sorting data tree children for keys " ks)
           (reduce
-           (fn [tree k]
-             (if (vector? (get tree k))
-               (try
-                 (update tree k (comp vec (get sorters-by-k k)))
-                 (catch #?(:clj Exception :cljs :default) e
-                   (log/error "Sort failed: " (str e))
-                   tree))
-               tree))
-           data-tree
-           ks))))))
+            (fn [tree k]
+              (if (vector? (get tree k))
+                (try
+                  (update tree k (comp vec (get sorters-by-k k)))
+                  (catch #?(:clj Exception :cljs :default) e
+                    (log/error "Sort failed: " (str e))
+                    tree))
+                tree))
+            data-tree
+            ks))))))
 
 (defn form-and-subform-attributes
   "Find all attributes that are referenced by a form and all of its subforms, recursively."
@@ -392,7 +393,7 @@
         base-attributes (fo/attributes options)
         subforms        (keep (fn [a] (fo/ui (subform-options options a))) base-attributes)]
     (into (set base-attributes)
-          (mapcat form-and-subform-attributes subforms))))
+      (mapcat form-and-subform-attributes subforms))))
 
 (declare default-state)
 
@@ -408,7 +409,7 @@
       (do
         (when-not SubClass
           (log/error "Subforms for class" (comp/component-name FormClass)
-                     "must include a ::form/ui entry for" qualified-key))
+            "must include a ::form/ui entry for" qualified-key))
         (if (or (nil? default-value) (vector? default-value))
           (mapv (fn [v]
                   (let [id          (tempid/tempid)
@@ -421,10 +422,10 @@
                     (when-not ChildForm
                       (log/error "Union subform's default-value function failed to assign the ID. Cannot determine which kind of thing we are creating"))
                     (merge
-                     (default-state ChildForm id)
-                     base-entity
-                     {id-key id})))
-                default-value)
+                      (default-state ChildForm id)
+                      base-entity
+                      {id-key id})))
+            default-value)
           (do
             (log/error "Default value for" qualified-key "MUST be a vector.")
             nil)))
@@ -446,15 +447,15 @@
     (when-not (comp/union-component? SubClass)
       (when-not SubClass
         (log/error "Subforms for class" (comp/component-name FormClass)
-                   "must include a ::form/ui entry for" qualified-key))
+          "must include a ::form/ui entry for" qualified-key))
       (when-not (keyword? id-key)
         (log/error "Subform class" (comp/component-name SubClass)
-                   "must include a ::form/id that is an attr/attribute"))
+          "must include a ::form/id that is an attr/attribute"))
       (if id-key
         (merge
-         (default-state SubClass new-id)
-         (when (map? default-value) default-value)
-         {id-key new-id})
+          (default-state SubClass new-id)
+          (when (map? default-value) default-value)
+          {id-key new-id})
         {}))))
 
 (defn default-state
@@ -463,30 +464,30 @@
   [FormClass new-id]
   (when-not (tempid/tempid? new-id)
     (throw (ex-info (str "Default state received " new-id " for a new form ID. It MUST be a Fulcro tempid.")
-                    {})))
+             {})))
   (if (comp/union-component? FormClass)
     {}
     (let [{:com.fulcrologic.rad.form/keys [id attributes default-values initialize-ui-props field-styles]}
           (comp/component-options FormClass)
           {id-key ::attr/qualified-key} id
           entity (reduce
-                  (fn [result {::attr/keys [qualified-key type field-style]
-                               :com.fulcrologic.rad.form/keys [default-value] :as attr}]
-                    (let [field-style   (?! (or (get field-styles qualified-key) field-style))
-                          default-value (?! (get default-values qualified-key default-value))]
-                      (cond
-                        (and (not field-style) (= :ref type) (attr/to-many? attr))
-                        (assoc result qualified-key (default-to-many FormClass attr))
+                   (fn [result {::attr/keys                    [qualified-key type field-style]
+                                :com.fulcrologic.rad.form/keys [default-value] :as attr}]
+                     (let [field-style   (?! (or (get field-styles qualified-key) field-style))
+                           default-value (?! (get default-values qualified-key default-value))]
+                       (cond
+                         (and (not field-style) (= :ref type) (attr/to-many? attr))
+                         (assoc result qualified-key (default-to-many FormClass attr))
 
-                        (and default-value (not field-style) (= :ref type) (not (attr/to-many? attr)))
-                        (assoc result qualified-key (default-to-one FormClass attr))
+                         (and default-value (not field-style) (= :ref type) (not (attr/to-many? attr)))
+                         (assoc result qualified-key (default-to-one FormClass attr))
 
-                        :otherwise
-                        (if-not (nil? default-value)
-                          (assoc result qualified-key default-value)
-                          result))))
-                  {id-key new-id}
-                  attributes)]
+                         :otherwise
+                         (if-not (nil? default-value)
+                           (assoc result qualified-key default-value)
+                           result))))
+                   {id-key new-id}
+                   attributes)]
       (merge (?! initialize-ui-props FormClass entity) entity))))
 
 (defn mark-fields-complete*
@@ -505,11 +506,11 @@
 
 (defn- all-keys [m]
   (reduce-kv
-   (fn [result k v]
-     (cond-> (conj result k)
-       (map? v) (into (all-keys v))))
-   #{}
-   m))
+    (fn [result k v]
+      (cond-> (conj result k)
+        (map? v) (into (all-keys v))))
+    #{}
+    m))
 
 (defn update-tree*
   "Run the given `(xform ui-props)` against the current ui props of `component-class`'s instance at
@@ -539,30 +540,30 @@
         k           (::attr/qualified-key attribute)
         options     (comp/component-options form-instance)
         field-label (?! (or
-                         (get-in options [:com.fulcrologic.rad.form/field-labels k])
-                         (:com.fulcrologic.rad.form/field-label attribute)
-                         (ao/label attribute)
-                         (some-> k name str/capitalize (str/replace #"-" " "))) form-instance)]
+                          (get-in options [:com.fulcrologic.rad.form/field-labels k])
+                          (:com.fulcrologic.rad.form/field-label attribute)
+                          (ao/label attribute)
+                          (some-> k name str/capitalize (str/replace #"-" " "))) form-instance)]
     field-label))
 
-(defn field-visible?
+(>defn field-visible?
   "Should the `attr` on the given `form-instance` be visible?"
   [form-instance {:com.fulcrologic.rad.form/keys [field-visible?]
                   ::attr/keys                    [qualified-key] :as attr}]
-  [comp/component? :com.fulcrologic.rad.form/attribute => boolean?]
+  [comp/component? ::attr/attribute => boolean?]
   (let [form-field-visible? (?! (comp/component-options form-instance :com.fulcrologic.rad.form/fields-visible? qualified-key) form-instance attr)
         field-visible?      (?! field-visible? form-instance attr)]
     (boolean
-     (or
-      (true? form-field-visible?)
-      (and (nil? form-field-visible?) (true? field-visible?))
-      (and (nil? form-field-visible?) (nil? field-visible?))))))
+      (or
+        (true? form-field-visible?)
+        (and (nil? form-field-visible?) (true? field-visible?))
+        (and (nil? form-field-visible?) (nil? field-visible?))))))
 
-(defn omit-label?
+(>defn omit-label?
   "Should the `attr` on the given `form-instance` refrain from including a field label?"
   [form-instance {:com.fulcrologic.rad.form/keys [omit-label?]
                   ::attr/keys                    [qualified-key] :as attr}]
-  [comp/component? :com.fulcrologic.rad.form/attribute => boolean?]
+  [comp/component? ::attr/attribute => boolean?]
   (let [form-omit?  (?! (comp/component-options form-instance :com.fulcrologic.rad.form/omit-label? qualified-key) form-instance attr)
         field-omit? (?! omit-label? form-instance attr)]
     (cond
@@ -571,26 +572,26 @@
       :else false)))
 
 (>defn field-style-config
-       "Get the value of an overridable field-style-config option."
-       [{:com.fulcrologic.rad.form/keys [form-instance]} attribute config-key]
-       [:com.fulcrologic.rad.form/form-env :com.fulcrologic.rad.form/attribute keyword? => any?]
-       (let [{::attr/keys [qualified-key field-style-config]} attribute
-             form-value      (comp/component-options form-instance :com.fulcrologic.rad.form/field-style-configs qualified-key config-key)
-             attribute-value (get field-style-config config-key)]
-         (if (and (map? form-value) (map? attribute-value))
-           (deep-merge attribute-value form-value)
-           (or form-value attribute-value))))
+  "Get the value of an overridable field-style-config option."
+  [{:com.fulcrologic.rad.form/keys [form-instance]} attribute config-key]
+  [:com.fulcrologic.rad.form/form-env ::attr/attribute keyword? => any?]
+  (let [{::attr/keys [qualified-key field-style-config]} attribute
+        form-value      (comp/component-options form-instance :com.fulcrologic.rad.form/field-style-configs qualified-key config-key)
+        attribute-value (get field-style-config config-key)]
+    (if (and (map? form-value) (map? attribute-value))
+      (deep-merge attribute-value form-value)
+      (or form-value attribute-value))))
 
 (>defn field-autocomplete
-       "Returns the proper string (or nil) for a given attribute's autocomplete setting."
-       [{:com.fulcrologic.rad.form/keys [form-instance] :as _env} attribute]
-       [:com.fulcrologic.rad.form/form-env :com.fulcrologic.rad.form/attribute => any?]
-       (let [{::attr/keys [qualified-key]
-              :com.fulcrologic.rad.form/keys [autocomplete]} attribute
-             override     (comp/component-options form-instance :com.fulcrologic.rad.form/auto-completes qualified-key)
-             autocomplete (if (nil? override) autocomplete override)
-             autocomplete (if (boolean? autocomplete) (if autocomplete "on" "off") autocomplete)]
-         autocomplete))
+  "Returns the proper string (or nil) for a given attribute's autocomplete setting."
+  [{:com.fulcrologic.rad.form/keys [form-instance] :as _env} attribute]
+  [:com.fulcrologic.rad.form/form-env ::attr/attribute => any?]
+  (let [{::attr/keys                    [qualified-key]
+         :com.fulcrologic.rad.form/keys [autocomplete]} attribute
+        override     (comp/component-options form-instance :com.fulcrologic.rad.form/auto-completes qualified-key)
+        autocomplete (if (nil? override) autocomplete override)
+        autocomplete (if (boolean? autocomplete) (if autocomplete "on" "off") autocomplete)]
+    autocomplete))
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; Validation
@@ -616,24 +617,24 @@
    (let [{:com.fulcrologic.rad.form/keys [attributes validator]} (comp/component-options form-class-or-instance)
          required-attributes   (filter ::attr/required? attributes)
          all-required-present? (or
-                                (empty? required-attributes)
-                                (every?
-                                 (fn [attr]
-                                   (let [k   (ao/qualified-key attr)
-                                         v   (get props k)
-                                         ok? (if (= :ref (ao/type attr))
-                                               (not (empty? v))
-                                               (some? v))]
-                                     #?(:cljs
-                                        (when (and goog.DEBUG (not ok?))
-                                          (log/debug "Form is not valid because required attribute is missing:" k)))
-                                     ok?))
-                                 required-attributes))]
+                                 (empty? required-attributes)
+                                 (every?
+                                   (fn [attr]
+                                     (let [k   (ao/qualified-key attr)
+                                           v   (get props k)
+                                           ok? (if (= :ref (ao/type attr))
+                                                 (not (empty? v))
+                                                 (some? v))]
+                                       #?(:cljs
+                                          (when (and goog.DEBUG (not ok?))
+                                            (log/debug "Form is not valid because required attribute is missing:" k)))
+                                       ok?))
+                                   required-attributes))]
      (and
-      all-required-present?
-      (or
-       (not validator)
-       (and validator (= :valid ((->arity-tolerant validator) props))))))))
+       all-required-present?
+       (or
+         (not validator)
+         (and validator (= :valid ((->arity-tolerant validator) props))))))))
 
 (defn invalid-attribute-value?
   "Returns true if the given `attribute` is invalid in the given form `env` context."
@@ -645,9 +646,9 @@
         required?      (get attribute ao/required? false)
         form-validator (comp/component-options master-form :com.fulcrologic.rad.form/validator)
         invalid?       (or
-                        (and checked? required? (or (nil? value) (and (string? value) (empty? value))))
-                        (and checked? (not form-validator) (not (attr/valid-value? attribute value props k)))
-                        (and form-validator (= :invalid ((->arity-tolerant form-validator) props k))))]
+                         (and checked? required? (or (nil? value) (and (string? value) (empty? value))))
+                         (and checked? (not form-validator) (not (attr/valid-value? attribute value props k)))
+                         (and form-validator (= :invalid ((->arity-tolerant form-validator) props k))))]
     invalid?))
 
 (defn validation-error-message
@@ -659,10 +660,10 @@
         master-message (comp/component-options master-form :com.fulcrologic.rad.form/validation-messages qualified-key)
         local-message  (comp/component-options form-instance :com.fulcrologic.rad.form/validation-messages qualified-key)
         message        (or
-                        (?! master-message props qualified-key)
-                        (?! local-message props qualified-key)
-                        (?! validation-message value)
-                        (tr "Invalid value"))]
+                         (?! master-message props qualified-key)
+                         (?! local-message props qualified-key)
+                         (?! validation-message value)
+                         (tr "Invalid value"))]
     message))
 
 ;; ─────────────────────────────────────────────────────────────────────────────
@@ -703,7 +704,7 @@
 
 (def pathom2-server-save-as-form-mutation
   (assoc pathom2-server-save-form-mutation
-         :com.wsscode.pathom.connect/sym 'com.fulcrologic.rad.form/save-as-form))
+    :com.wsscode.pathom.connect/sym 'com.fulcrologic.rad.form/save-as-form))
 
 (def pathom2-server-delete-entity-mutation
   {:com.wsscode.pathom.connect/sym    'com.fulcrologic.rad.form/delete-entity
@@ -719,8 +720,8 @@
   ([base-wrapper save-middleware delete-middleware]
    (fn [env]
      (cond-> (assoc env
-                    :com.fulcrologic.rad.form/save-middleware save-middleware
-                    :com.fulcrologic.rad.form/delete-middleware delete-middleware)
+               :com.fulcrologic.rad.form/save-middleware save-middleware
+               :com.fulcrologic.rad.form/delete-middleware delete-middleware)
        base-wrapper (base-wrapper)))))
 
 (defn pathom-plugin
@@ -793,8 +794,8 @@
    (rad-routing/route-to! this form-class (merge extra-params {:action view-action :id entity-id})))
   ([this form-class entity-id extra-params dynamic-routing-options]
    (rad-routing/route-to! this (merge dynamic-routing-options
-                                      {:target       form-class
-                                       :route-params (merge extra-params {:action view-action :id entity-id})}))))
+                                 {:target       form-class
+                                  :route-params (merge extra-params {:action view-action :id entity-id})}))))
 
 (defn edit!
   "Route to the given form for editing the entity with the given ID."
@@ -804,8 +805,8 @@
    (rad-routing/route-to! this form-class (merge extra-params {:action edit-action :id entity-id})))
   ([this form-class entity-id extra-params dynamic-routing-options]
    (rad-routing/route-to! this (merge dynamic-routing-options
-                                      {:target       form-class
-                                       :route-params (merge extra-params {:action edit-action :id entity-id})}))))
+                                 {:target       form-class
+                                  :route-params (merge extra-params {:action edit-action :id entity-id})}))))
 
 (defn create!
   "Create a new instance of the given form-class and route to that form for editing."
@@ -815,8 +816,8 @@
    (rad-routing/route-to! app-ish form-class (merge options {:action create-action :id (str (new-uuid))})))
   ([app-ish form-class options dynamic-routing-options]
    (rad-routing/route-to! app-ish (merge dynamic-routing-options
-                                         {:target       form-class
-                                          :route-params (merge options {:action create-action :id (str (new-uuid))})}))))
+                                    {:target       form-class
+                                     :route-params (merge options {:action create-action :id (str (new-uuid))})}))))
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; Union helpers
@@ -825,21 +826,21 @@
 (defn ident-from-props* [id-keys props]
   "Using known id-keys, construct an ident from props"
   (some
-   (fn [k]
-     (let [id (get props k)]
-       (when (or (uuid? id) (int? id) (tempid/tempid? id))
-         [k id])))
-   id-keys))
+    (fn [k]
+      (let [id (get props k)]
+        (when (or (uuid? id) (int? id) (tempid/tempid? id))
+          [k id])))
+    id-keys))
 
 (defn active-rad-form-in-union*
   "Finds the RAD form that has ident-k as the qualified form id. Returns [ident-k form-class]."
   [RADForms ident-k]
   (some
-   (fn [c]
-     (let [ck (-> c comp/component-options fo/id ao/qualified-key)]
-       (when (= ck ident-k)
-         [ident-k c])))
-   RADForms))
+    (fn [c]
+      (let [ck (-> c comp/component-options fo/id ao/qualified-key)]
+        (when (= ck ident-k)
+          [ident-k c])))
+    RADForms))
 
 (defn rad-form-of-union-from-props
   "Finds the RAD form in union-class that matches props. Returns a vector: [ident-k form-class]."
@@ -863,12 +864,12 @@
                                             (active-rad-form-in-union* [~@RADForms] k#)))
                         :render        `(fn [this#]
                                           (comp/wrapped-render this#
-                                                               (fn []
-                                                                 (enc/when-let [props#   (comp/props this#)
-                                                                                [k#] (comp/get-ident this#)
-                                                                                [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
-                                                                                factory# (comp/computed-factory c# {:keyfn k#})]
-                                                                   (factory# props#)))))}]
+                                            (fn []
+                                              (enc/when-let [props#   (comp/props this#)
+                                                             [k#] (comp/get-ident this#)
+                                                             [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
+                                                             factory# (comp/computed-factory c# {:keyfn k#})]
+                                                (factory# props#)))))}]
        (if (comp/cljs? &env)
          `(do
             (declare ~sym)
@@ -888,14 +889,14 @@
 
 #?(:clj
    (s/def ::defsc-form-args (s/cat
-                             :sym symbol?
-                             :doc (s/? string?)
-                             :arglist (s/and vector? #(<= 2 (count %) 5))
-                             :options map?
-                             :body (s/* any?))))
+                              :sym symbol?
+                              :doc (s/? string?)
+                              :arglist (s/and vector? #(<= 2 (count %) 5))
+                              :options map?
+                              :body (s/* any?))))
 
 #?(:clj
-   (s/def ::defsc-form-options (s/keys :req [:com.fulcrologic.rad.form/attributes])))
+   (s/def ::defsc-form-options (s/keys :req [::attr/attributes])))
 
 #?(:clj
    (defn form-body [argslist body]
@@ -912,9 +913,9 @@
      (let [{:keys [sym doc arglist options body]} (s/conform ::defsc-form-args args)
            options      (if (map? options)
                           (opts/macro-optimize-options env options
-                                                       #{:com.fulcrologic.rad.form/subforms
-                                                         :com.fulcrologic.rad.form/validation-messages
-                                                         :com.fulcrologic.rad.form/field-styles} {})
+                            #{:com.fulcrologic.rad.form/subforms
+                              :com.fulcrologic.rad.form/validation-messages
+                              :com.fulcrologic.rad.form/field-styles} {})
                           options)
            hooks?       (and (comp/cljs? env) (:use-hooks? options))
            nspc         (if (comp/cljs? env) (-> env :ns :name str) (name (ns-name *ns*)))
@@ -927,8 +928,8 @@
                           (#'comp/build-render sym thissym propsym computedsym extra-args body))
            options-expr `(let [get-class# (fn [] ~sym)]
                            (assoc (~convert-options-sym get-class# ~location ~options)
-                                  :render ~render-form
-                                  :componentName ~fqkw))]
+                             :render ~render-form
+                             :componentName ~fqkw))]
        (when (some #(= '_ %) arglist)
          (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
        (cond
