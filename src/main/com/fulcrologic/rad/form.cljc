@@ -80,7 +80,7 @@
 
 (def standard-action-buttons
   "The standard ::form/action-buttons button layout. Requires you include stardard-controls in your ::control/controls key."
-  [::done ::undo ::save])
+  form-impl/standard-action-buttons)
 
 (def standard-controls
   "The default value of ::control/controls for forms. Includes a ::done, ::undo, and ::save button."
@@ -1555,7 +1555,7 @@
                     ::child-ident child-ident)]
      (delete-child! env))))
 
-(defn read-only?
+(>defn read-only?
   "Returns true if the given attribute is meant to show up as read only on the given form instance. Attributes
   configure this by placing a boolean value (or function returning boolean) on the attribute at `::attr/read-only?`.
 
@@ -1585,7 +1585,7 @@
         (and (set? read-only-fields) (contains? read-only-fields qualified-key)))
       (view-mode? form-instance)))))
 
-(defn field-visible?
+(>defn field-visible?
   "Should the `attr` on the given `form-instance` be visible? This is controlled:
 
   * On the attribute at `::form/field-visible?`. A boolean or `(fn [form-instance attr] boolean?)`
@@ -1605,7 +1605,7 @@
       (and (nil? form-field-visible?) (true? field-visible?))
       (and (nil? form-field-visible?) (nil? field-visible?))))))
 
-(defn omit-label?
+(>defn omit-label?
   "Should the `attr` on the given `form-instance` refrain from including a field label?
 
   * On the attribute at `::form/omit-label?`. A boolean or `(fn [form-instance attr] boolean?)`
