@@ -303,7 +303,7 @@
    that match `(pred attribute)`"
   [form-class pred]
   (let [attributes        (or
-                            (comp/component-options form-class ::attr/attributes)
+                            (comp/component-options form-class ::form/attributes)
                             [])
         local-optional    (into #{} (comp (filter pred) (map ::attr/qualified-key)) attributes)
         children          (some->> form-class comp/get-query eql/query->ast :children (keep :component))
