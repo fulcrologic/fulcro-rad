@@ -1,4 +1,4 @@
-test:
+tests:
 	shadow-cljs compile ci-tests
 	karma start --single-run
 	clojure -A:dev:tests:clj-tests
