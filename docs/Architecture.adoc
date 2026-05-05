@@ -1,0 +1,142 @@
+= Fulcro RAD Architecture
+:toc:
+:toc-placement!:
+
+toc::[]
+
+== Overview
+
+Fulcro RAD (Rapid Application Development) is built on a layered architecture where
+**attributes** serve as the universal schema, carrying extensible facts that drive
+every other subsystem.
+
+image::architecture.svg[Fulcro RAD Architecture,width=100%]
+
+NOTE: Source diagram is in `architecture.d2` (https://d2lang.com[D2 language]).
+Regenerate with: `d2 --layout=dagre architecture.d2 architecture.svg`
+
+== Attributes: The Universal Schema
+
+Attributes are open maps that carry **core facts** (qualified key, type, target, cardinality,
+identities, schema) plus **contextual metadata** under namespaced keys.
+
+Any subsystem can attach its own keys:
+
+[cols="1,2,3"]
+|===
+|Context |Prefix |Examples
+
+|Form
+|`fo/*`
+|`fo/fields`, `fo/validator`, `fo/subforms`, `fo/field-styles`
+
+|Report
+|`ro/*`
+|`ro/columns`, `ro/column-headings`, `ro/column-formatters`, `ro/row-actions`
+
+|Database
+|`ao/*`
+|`ao/identities`, `ao/schema`, `ao/cardinality`
+
+|Resolver
+|`ao/*` / `pco/*`
+|`ao/pc-resolve`, `ao/pc-output`, Pathom 2/3 options
+
+|Custom
+|_any namespace_
+|DB adapters, auth, renderers attach their own metadata
+|===
+
+This open-map design means **two facts about the same attribute at the same time**
+can coexist without conflict -- the form context and the report context are simply
+different namespaced keys on the same attribute.
+
+== Contextual Elements: Forms & Reports
+
+Forms and Reports are **application behavior components** that read their configuration
+from attribute metadata. Each has:
+
+Pluggable UI:: A render plugin provides platform-specific rendering (Semantic UI, MUI, etc.).
+  The abstract component says _what_ to render; the plugin says _how_.
+
+Pluggable State Machine:: A UISM (UI State Machine) controls the lifecycle.
+  Forms: `create -> load -> edit -> submit -> success/fail`. +
+  Reports: `load -> filter -> sort -> paginate`. +
+  Override via `fo/machine` or `ro/machine` to customize behavior.
+
+Each layer does its own job. The composition of middleware _is_ the feature.
+
+== Minimum Form Delta
+
+RAD provides you with a **minimum diff**:
+
+[source,clojure]
+----
+{[:person/id 1]
+  {:person/name {:before "Alice"
+                 :after  "Bob"}}}
+----
+
+Only actually-changed attributes are transmitted. This matters for concurrency:
+
+* Two users editing different fields on the same entity will **not** collide.
+* The `:before` value is a **hint**, not a guarantee -- the server must verify
+  it against the real DB state before applying the change.
+* Maps directly to the Datomic fact model: retract old value, assert new value.
+
+[IMPORTANT]
+====
+**`:before` values are hints, not guarantees.**
+
+The server's "truths" at various points in time could be cached on different clients.
+You're trying to reason about operations from those distributed clients, to make sure
+your final state is always valid.
+
+The server should verify the value being retracted actually exists at that time.
+====
+
+== Save Middleware
+
+The save path is a **composable middleware pipeline** where each layer wraps the next handler:
+
+[source,text]
+----
+gc-orphans → BT save-middleware → datomic
+----
+
+Separation of concerns applies to middleware too.
+
+Each middleware can:
+
+* **Rewrite values** -- type coercion, encryption, format conversion
+* **Validate** -- business rules, authorization checks
+* **GC orphans** -- clean up component entities on retraction (via `ao/component? true`)
+* **Detect conflicts** -- verify `:before` values against current DB state
+
+Don't reimplement lifecycle management that the framework already provides.
+
+== Resolvers: Generalized Read
+
+Resolvers are the **parameterizable read mechanism**:
+
+Auto-generated:: Attributes with `ao/pc-resolve` / `ao/pc-output` automatically produce
+  Pathom resolvers. Schema + identities -> CRUD.
+
+DB Adapter Plugins:: Datomic, SQL, etc. provide resolver generators that read attribute
+  schema metadata to build queries.
+
+EQL Processing:: Resolvers compose into a Pathom graph. The client sends EQL;
+  the graph satisfies it from available resolvers. No hand-written endpoints needed.
+
+== Data Flow Summary
+
+[source,text]
+----
+  Attributes ──fo/──→ Forms ──dirty-fields──→ Minimum Delta
+      │                                            │
+      ├──ro/──→ Reports                            ▼
+      │           ▲                         Save Middleware
+      └──schema──→ Resolvers ───EQL read──→ Forms / Reports
+                       ▲                          │
+                       └────── mutations ─────────┘
+----

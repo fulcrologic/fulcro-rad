@@ -3037,12 +3037,12 @@ A sample report might look like this:
                                                           :label "Show Past Employees?"}}
    ro/initial-parameters       (fn [report-env] {:include-disabled? false})
    ro/run-on-mount?            true
-   :route-segment ["employee-list"]})
+   ro/route                    "employee-list"})
 -----
 
 The report component has the following options, and of course this list is extensible:
 
-`:route-segment`:: Dynamic-router parameter.
+`ro/route`:: Dynamic-router parameter.
 A report is a normal component, and has hooks for route enter and exit.
 Use this option to set the route's target segment.
 `ro/BodyItem`:: The UI component that renders the row of a report.
