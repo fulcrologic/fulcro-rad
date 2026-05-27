@@ -18,7 +18,6 @@
   (:require
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.resolvers-common :as resolvers-common]
-    [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 (defn just-pc-keys [m]
@@ -34,17 +33,17 @@
   "Generate a resolver for an attribute that specifies a :com.wsscode.pathom.connect/resolve key. Returns a resolver
   or nil."
   [attr]
-  (enc/when-let [resolver (:com.wsscode.pathom.connect/resolve attr)
-                 k        (::attr/qualified-key attr)
-                 output   [k]]
-    (log/info "Building attribute resolver for" (::attr/qualified-key attr))
-    (let [transform (:com.wsscode.pathom.connect/transform attr)]
-      (cond-> (merge
-                {:com.wsscode.pathom.connect/output output}
-                (just-pc-keys attr)
-                {:com.wsscode.pathom.connect/sym     (symbol (str k "-resolver"))
-                 :com.wsscode.pathom.connect/resolve (resolvers-common/secure-resolver resolver)})
-        transform transform))))
+  (when-let [resolver (:com.wsscode.pathom.connect/resolve attr)]
+    (when-let [k (::attr/qualified-key attr)]
+      (let [output [k]]
+        (log/info "Building attribute resolver for" (::attr/qualified-key attr))
+        (let [transform (:com.wsscode.pathom.connect/transform attr)]
+          (cond-> (merge
+                    {:com.wsscode.pathom.connect/output output}
+                    (just-pc-keys attr)
+                    {:com.wsscode.pathom.connect/sym     (symbol (str k "-resolver"))
+                     :com.wsscode.pathom.connect/resolve (resolvers-common/secure-resolver resolver)})
+            transform transform))))))
 
 (defn generate-resolvers
   "Generate resolvers for attributes that directly define pathom :com.wsscode.pathom.connect/resolve keys"

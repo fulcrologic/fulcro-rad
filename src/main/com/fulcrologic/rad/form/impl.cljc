@@ -7,7 +7,6 @@
   #?(:cljs (:require-macros [com.fulcrologic.rad.form.impl]))
   (:refer-clojure :exclude [parse-long])
   (:require
-    #?@(:clj [[cljs.analyzer :as ana]])
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
@@ -33,7 +32,6 @@
     [com.fulcrologic.rad.type-support.integer :as int]
     [com.fulcrologic.rad.form :as-alias form]
     [edn-query-language.core :as eql]
-    [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 ;; ─────────────────────────────────────────────────────────────────────────────
@@ -402,7 +400,7 @@
   (let [form-options  (comp/component-options FormClass)
         {::attr/keys [qualified-key]} attribute
         default-value (fo/get-default-value form-options attribute)]
-    (enc/if-let [SubClass (subform-ui form-options attribute)]
+    (if-let [SubClass (subform-ui form-options attribute)]
       (do
         (when-not SubClass
           (log/error "Subforms for class" (comp/component-name FormClass)
@@ -821,11 +819,11 @@
                         :render        `(fn [this#]
                                           (comp/wrapped-render this#
                                             (fn []
-                                              (enc/when-let [props#   (comp/props this#)
-                                                             [k#] (comp/get-ident this#)
-                                                             [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
-                                                             factory# (comp/computed-factory c# {:keyfn k#})]
-                                                (factory# props#)))))}]
+                                              (when-let [props# (comp/props this#)]
+                                                (when-let [[k#] (comp/get-ident this#)]
+                                                  (when-let [[_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)]
+                                                    (when-let [factory# (comp/computed-factory c# {:keyfn k#})]
+                                                      (factory# props#))))))))}]
        (if (comp/cljs? &env)
          `(do
             (declare ~sym)
@@ -887,7 +885,7 @@
                              :render ~render-form
                              :componentName ~fqkw))]
        (when (some #(= '_ %) arglist)
-         (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
+         (throw (opts/compiler-error env "The arguments of defsc-form must be unique symbols other than _.")))
        (cond
          hooks?
          `(do

@@ -1,14 +1,16 @@
 (ns com.fulcrologic.rad.attributes
   #?(:cljs (:require-macros com.fulcrologic.rad.attributes))
   (:require
-    #?(:clj [com.fulcrologic.rad.registered-maps :refer [registered-map]])
+    ;; `:bb` MUST precede `:clj` (babashka satisfies both features, matching the first branch). This keeps
+    ;; the potemkin-backed registered-maps ns — a dev-only hot-reload aid — out of babashka entirely.
+    #?@(:bb  []
+        :clj [[com.fulcrologic.rad.registered-maps :refer [registered-map]]])
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [clojure.walk :as walk]
     [taoensso.timbre :as log]
     [com.fulcrologic.guardrails.core :refer [>defn => >def >fdef ?]]
     [com.fulcrologic.fulcro.algorithms.form-state :as fs]
-    [com.fulcrologic.rad.ids :refer [new-uuid]]
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.fulcro.components :as comp])
   #?(:clj
@@ -47,7 +49,9 @@
       (log/warn "NON-Reference attribute" kw "was given referential target(s). This could cause errors in code that generates code from the attribute."))
     (when (and (= :ref type) (not (contains? m ::targets)) (not (contains? m ::target)))
       (log/warn "Reference attribute" kw "does not list target(s). Resolver generation will not be accurate."))
-    #?(:clj  (registered-map (or (-> m meta :registration-key) kw) v)
+    ;; `:bb` first: babashka has no registered-maps, so it uses the value directly like cljs.
+    #?(:bb   v
+       :clj  (registered-map (or (-> m meta :registration-key) kw) v)
        :cljs v)))
 
 #?(:clj

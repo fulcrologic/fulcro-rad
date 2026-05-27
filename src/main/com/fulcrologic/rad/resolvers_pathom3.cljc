@@ -30,7 +30,6 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.rad.resolvers-common :as resolvers-common]
     [com.wsscode.pathom3.connect.operation :as pco]
-    [taoensso.encore :as enc]
     [taoensso.timbre :as log]))
 
 (defn just-pathom3-keys [m]
@@ -47,19 +46,19 @@
   Accepts any keys in the com.wsscode.pathom3.connect.operation ns,
   thus any keys defresolver accepts are valid."
   [attr]
-  (enc/when-let [resolver    (::pco/resolve attr)
-                 k           (::attr/qualified-key attr)
-                 output      [k]
-                 resolve-sym (symbol (namespace k) (str (name k) "-resolver"))]
-    (log/info "Building Pathom3 attribute resolver for" (::attr/qualified-key attr))
-    (pco/resolver
-      (merge
-        {::pco/output output}
-        ; Allow output to be overridden
-        (just-pathom3-keys attr)
-        ; But not op-name or resolve
-        {::pco/op-name resolve-sym
-         ::pco/resolve (resolvers-common/secure-resolver resolver)}))))
+  (when-let [resolver (::pco/resolve attr)]
+    (when-let [k (::attr/qualified-key attr)]
+      (let [output      [k]
+            resolve-sym (symbol (namespace k) (str (name k) "-resolver"))]
+        (log/info "Building Pathom3 attribute resolver for" (::attr/qualified-key attr))
+        (pco/resolver
+          (merge
+            {::pco/output output}
+            ; Allow output to be overridden
+            (just-pathom3-keys attr)
+            ; But not op-name or resolve
+            {::pco/op-name resolve-sym
+             ::pco/resolve (resolvers-common/secure-resolver resolver)}))))))
 
 (defn generate-resolvers
   "Generate resolvers for attributes that directly define pathom3 :com.wsscode.pathom3.connect.operation/resolve keys"

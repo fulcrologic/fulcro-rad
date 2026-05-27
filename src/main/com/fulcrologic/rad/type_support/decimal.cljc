@@ -15,7 +15,10 @@
     [cognitect.transit :as ct]
     [clojure.string :as str]
     [taoensso.timbre :as log])
-  #?(:clj (:import (java.math RoundingMode)
+  ;; `:bb` first (babashka also satisfies `:clj`): babashka's native image lacks java.text.NumberFormat and
+  ;; java.util.Locale, which are only needed by the deprecated formatting fns below (also elided under :bb).
+  #?(:bb  (:import (java.math RoundingMode))
+     :clj (:import (java.math RoundingMode)
                    (java.text NumberFormat)
                    (java.util Locale))))
 
@@ -105,6 +108,9 @@
   [v]
   (< (numeric v) 0))
 
+;; These deprecated locale-formatting fns rely on java.text.NumberFormat/Locale, which babashka lacks. The fns
+;; must still EXIST under :bb (they are referenced as default report formatters), so only their bodies are gated:
+;; `:bb` (which precedes :clj, since babashka also satisfies :clj) produces a simple, non-localized result.
 (defn numeric->currency-str
   "DEPRECATED: Use fulcro i18n support with something like js/Intl instead. js-joda locales are no longer the way to go,
    and this is not really a concern of numerics themselves.
@@ -113,7 +119,10 @@
   ([n]
    (numeric->currency-str n "en" "US" "USD"))
   ([n language country currency-code]
-   #?(:clj
+   #?(:bb
+      ;; babashka lacks java.text.NumberFormat, so fall back to a simple, non-localized "CODE 1234.50".
+      (str currency-code " " (.setScale (bigdec (numeric n)) 2 RoundingMode/HALF_UP))
+      :clj
       (.format (NumberFormat/getCurrencyInstance (Locale. language country)) (numeric n))
       :cljs
       (when n
@@ -128,7 +137,11 @@
 (defn numeric->percent-str
   "DEPRECATED: Use localization functions from i18n or js/Intl. This functions should never have been added here."
   [n]
-  #?(:clj
+  #?(:bb
+     ;; babashka lacks java.text.NumberFormat; produce a simple, non-localized percent (trailing zeros stripped).
+     (when n
+       (str (.toPlainString (.stripTrailingZeros (bigdec (clojure.core/* (numeric n) (numeric 100))))) "%"))
+     :clj
      (let [formatter (NumberFormat/getPercentInstance (Locale. "en" "US"))]
        (.setMaximumFractionDigits formatter 3)
        (.format formatter (numeric n)))

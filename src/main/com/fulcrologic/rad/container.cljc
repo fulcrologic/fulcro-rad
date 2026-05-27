@@ -11,21 +11,15 @@
   (:require
     [com.fulcrologic.fulcro.components :as comp]
     [com.fulcrologic.fulcro.application :as app]
-    [com.fulcrologic.fulcro.mutations :refer [defmutation]]
     [com.fulcrologic.fulcro.ui-state-machines :as uism :refer [defstatemachine]]
     [com.fulcrologic.fulcro.algorithms.merge :as merge]
     [com.fulcrologic.fulcro.routing.dynamic-routing :as dr]
     [com.fulcrologic.rad.report :as report]
-    [com.fulcrologic.rad.routing :as rad-routing]
     [com.fulcrologic.rad.routing.history :as history]
     [com.fulcrologic.rad.control :as control :refer [Control]]
-    [com.fulcrologic.rad.options-util :as opts :refer [?! debounce]]
-    #?@(:clj
-        [[cljs.analyzer :as ana]])
+    [com.fulcrologic.rad.options-util :as opts :refer [?!]]
     [com.fulcrologic.fulcro.data-fetch :as df]
-    [taoensso.timbre :as log]
-    [taoensso.encore :as enc]
-    [clojure.spec.alpha :as s]))
+    [taoensso.timbre :as log]))
 
 (defn id-child-pairs
   "Returns a sequence of [id cls] pairs for each child (i.e. the seq of the children setting)"
@@ -149,15 +143,15 @@
            {::control/keys [controls]
             ::keys         [children route] :as options} options]
        (when-not (map? children)
-         (throw (ana/error &env (str "defsc-container " sym " has no declared children."))))
+         (throw (opts/compiler-error &env (str "defsc-container " sym " has no declared children."))))
        (when (and route (not (string? route)))
-         (throw (ana/error &env (str "defsc-container " sym " ::route, when defined, must be a string."))))
+         (throw (opts/compiler-error &env (str "defsc-container " sym " ::route, when defined, must be a string."))))
        (let [query-expr (into [:ui/parameters
                                {:ui/controls `(comp/get-query Control)}
                                [df/marker-table '(quote _)]]
                           (map (fn [[id child-sym]] `{~id (comp/get-query ~child-sym)}) children))
              query      (list 'fn '[] query-expr)
-             nspc       (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
+             nspc       (if (:ns &env) (-> &env :ns :name str) (name (ns-name *ns*)))
              fqkw       (keyword (str nspc) (name sym))
              options    (cond-> (assoc options
                                   :query query

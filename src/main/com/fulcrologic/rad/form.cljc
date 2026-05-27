@@ -28,9 +28,7 @@
    [com.fulcrologic.rad.ids :as ids :refer [new-uuid]]
    [com.fulcrologic.rad.type-support.integer :as int]
    [edn-query-language.core :as eql]
-   [taoensso.encore :as enc]
    [taoensso.timbre :as log]
-   #?@(:clj [[cljs.analyzer :as ana]])
    [com.fulcrologic.rad.options-util :as opts :refer [?!]]
    [com.fulcrologic.rad.picker-options :as picker-options]
    [com.fulcrologic.rad.form-options :as fo]
@@ -581,13 +579,13 @@
                                                                   (filter form-field?)
                                                                   (map ::attr/qualified-key))
                                                                  attributes)}
-                                      pre-merge (assoc :pre-merge pre-merge)
-                                      route-prefix (merge {:route-segment       [route-prefix :action :id]
-                                                           :allow-route-change? form-allow-route-change
-                                                           :will-leave          (fn [this props] (form-will-leave this))
-                                                           :will-enter          (or will-enter
-                                                                                    (fn [app route-params]
-                                                                                      (form-will-enter app route-params (get-class))))})))
+                                     pre-merge    (assoc :pre-merge pre-merge)
+                                     route-prefix (merge {:route-segment       [route-prefix :action :id]
+                                                          :allow-route-change? form-allow-route-change
+                                                          :will-leave          (fn [this props] (form-will-leave this))
+                                                          :will-enter          (or will-enter
+                                                                                   (fn [app route-params]
+                                                                                     (form-will-enter app route-params (get-class))))})))
         attribute-query-inclusions (set (mapcat ::query-inclusion attributes))
         inclusions                 (set/union attribute-query-inclusions (set query-inclusion))]
     (when (and #?(:cljs goog.DEBUG :clj true) will-enter (not route-prefix))
@@ -621,7 +619,7 @@
                            (assoc (convert-options get-class# ~location ~options) :render ~render-form
                                   :componentName ~fqkw))]
        (when (some #(= '_ %) arglist)
-         (throw (ana/error env "The arguments of defsc-form must be unique symbols other than _.")))
+         (throw (opts/compiler-error env "The arguments of defsc-form must be unique symbols other than _.")))
        (cond
          hooks?
          `(do
@@ -673,7 +671,7 @@
        (catch Exception e
          (if (contains? (ex-data e) :tag)
            (throw e)
-           (throw (ana/error &env "Unexpected internal error while processing defsc. Please check your syntax." e)))))))
+           (throw (opts/compiler-error &env "Unexpected internal error while processing defsc. Please check your syntax." e)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LOGIC
@@ -827,7 +825,7 @@
   (let [form-options  (comp/component-options FormClass)
         {::attr/keys [qualified-key]} attribute
         default-value (fo/get-default-value form-options attribute)]
-    (enc/if-let [SubClass (subform-ui form-options attribute)]
+    (if-let [SubClass (subform-ui form-options attribute)]
       (do
         (when-not SubClass
           (log/error "Subforms for class" (comp/component-name FormClass)
@@ -2127,11 +2125,11 @@ then the result will be a deep merge of the two (with form winning)."
                         :render        `(fn [this#]
                                           (comp/wrapped-render this#
                                                                (fn []
-                                                                 (enc/when-let [props#   (comp/props this#)
-                                                                                [k#] (comp/get-ident this#)
-                                                                                [_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)
-                                                                                factory# (comp/computed-factory c# {:keyfn k#})]
-                                                                   (factory# props#)))))}]
+                                                                 (when-let [props# (comp/props this#)]
+                                                                   (when-let [[k#] (comp/get-ident this#)]
+                                                                     (when-let [[_ck# c#] (active-rad-form-in-union* [~@RADForms] k#)]
+                                                                       (when-let [factory# (comp/computed-factory c# {:keyfn k#})]
+                                                                         (factory# props#))))))))}]
        (if (comp/cljs? &env)
          `(do
             (declare ~sym)

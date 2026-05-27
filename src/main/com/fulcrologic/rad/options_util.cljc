@@ -2,17 +2,29 @@
   "Utilities for interpreting and coping with form/report options."
   #?(:cljs (:require-macros com.fulcrologic.rad.options-util))
   (:require
-    #?(:clj  [cljs.analyzer :as ana]
-       :cljs [goog.functions :as gf])
+    ;; `:bb` first: babashka cannot load the cljs compiler (cljs.analyzer -> cljs.js-deps catches a class
+    ;; that bb's native image lacks). `compiler-error` below degrades to a plain ex-info under :bb.
+    #?@(:bb  []
+        :clj [[cljs.analyzer :as ana]])
+    #?@(:cljs [[goog.functions :as gf]])
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
     [com.fulcrologic.fulcro.raw.components :as rc]
     [edn-query-language.core :as eql]
     [com.fulcrologic.fulcro.components :as comp]
-    [com.fulcrologic.guardrails.core :refer [>defn => ?]]
-    [taoensso.encore :as enc]
-    [taoensso.timbre :as log]))
+    [com.fulcrologic.guardrails.core :refer [>defn => ?]]))
+
+#?(:clj
+   (defn compiler-error
+     "Returns (does not throw) an exception describing a macro-expansion error `msg`. On the JVM it uses
+      `cljs.analyzer/error`, so the ClojureScript compiler reports the offending source location; under
+      babashka (which cannot load the cljs compiler) it falls back to a plain `ex-info`. `env` is the macro
+      `&env`. Callers should `throw` the returned value."
+     ([env msg] (compiler-error env msg nil))
+     ([env msg cause]
+      #?(:bb  (ex-info msg {} cause)
+         :clj (ana/error env msg cause)))))
 
 #?(:clj
    (defn resolve-cljc
@@ -88,7 +100,7 @@ Returns the value if is passed unless it is a map, in which case it returns the 
    left alone."
   [v]
   (if (map? v)
-    (enc/map-keys qkey v)
+    (update-keys v qkey)
     v))
 
 #?(:clj
@@ -120,7 +132,7 @@ Returns the value if is passed unless it is a map, in which case it returns the 
          {}
          options)
        (catch Exception e
-         (throw (ana/error env (str "Cannot transform macro options map: " (.getMessage e))))))))
+         (throw (compiler-error env (str "Cannot transform macro options map: " (.getMessage e))))))))
 
 (>defn form-class
   "Attempt to coerce into a Fulcro component class. If the argument is a keyword it will look it up in Fulcro's
@@ -190,7 +202,7 @@ Requires that the incoming keyword already have a namespace.
       `(def bar \"An option\" :com.example.foo/bar)`
       "
      [sym & docstring]
-     (let [nspc         (if (enc/compiling-cljs?) (-> &env :ns :name str) (name (ns-name *ns*)))
+     (let [nspc         (if (:ns &env) (-> &env :ns :name str) (name (ns-name *ns*)))
            docstring    (str (first docstring))
            corrected-ns (str/replace nspc #"-options$" "")]
        `(def ~(with-meta sym {:docstring docstring}) ~(keyword corrected-ns (name sym))))))

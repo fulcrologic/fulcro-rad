@@ -4,7 +4,6 @@
    duplicating code. See com.fulcrologic.rad.report for the full public API."
   #?(:cljs (:require-macros [com.fulcrologic.rad.report.impl]))
   (:require
-    #?@(:clj [[cljs.analyzer :as ana]])
     [clojure.string :as str]
     [com.fulcrologic.fulcro-i18n.i18n :refer [tr]]
     [com.fulcrologic.fulcro.algorithms.lambda :refer [->arity-tolerant]]
@@ -16,7 +15,7 @@
     [com.fulcrologic.rad.attributes-options :as ao]
     [com.fulcrologic.rad.control :as control]
     [com.fulcrologic.rad.form :as-alias form]
-    [com.fulcrologic.rad.options-util :refer [?!]]
+    [com.fulcrologic.rad.options-util :as opts :refer [?!]]
     [com.fulcrologic.rad.report :as-alias report]
     [com.fulcrologic.rad.report-options :as ro]
     [com.fulcrologic.rad.report-render :as rr]
@@ -134,10 +133,10 @@
    (defn req!
      ([env sym options k pred?]
       (when-not (and (contains? options k) (pred? (get options k)))
-        (throw (ana/error env (str "defsc-report " sym " is missing or invalid option " k)))))
+        (throw (opts/compiler-error env (str "defsc-report " sym " is missing or invalid option " k)))))
      ([env sym options k]
       (when-not (contains? options k)
-        (throw (ana/error env (str "defsc-report " sym " is missing option " k)))))))
+        (throw (opts/compiler-error env (str "defsc-report " sym " is missing option " k)))))))
 
 (defn default-compare-rows
   "Default row comparison function used for sorting. Takes a `sort-params` map (with `:sort-by` and `:ascending?` keys)
