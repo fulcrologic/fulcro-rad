@@ -1,6 +1,6 @@
 tests:
-	shadow-cljs compile ci-tests
-	karma start --single-run
+	pnpm exec shadow-cljs compile ci-tests
+	pnpm exec karma start --single-run
 	clojure -A:dev:tests:clj-tests
 
 docs/DevelopersGuide.html: docs/DevelopersGuide.adoc

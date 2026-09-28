@@ -4,21 +4,31 @@ orbs:
 jobs:
   cljs:
     docker:
-      - image: cimg/clojure:1.12.0-openjdk-21.0-browsers
+      - image: cimg/clojure:1.12.6-openjdk-21.0-browsers
+    environment:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
 
     steps:
       - checkout
       - browser-tools/install_browser_tools
+      - run:
+          name: Enable pnpm
+          command: |
+            node --version
+            mkdir -p ~/bin
+            corepack enable --install-directory ~/bin
+            pnpm --version
+            pnpm store path
       - restore_cache:
-          key: cljs-{{ checksum "deps.edn" }}-{{ checksum "package.json" }}
-      - run: npm install
-      - run: npx shadow-cljs -v compile ci-tests
-      - run: npx karma start --single-run
+          key: cljs-{{ checksum "deps.edn" }}-{{ checksum "pnpm-lock.yaml" }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec shadow-cljs -v compile ci-tests
+      - run: pnpm exec karma start --single-run
       - save_cache:
           paths:
-            - node_modules
+            - ~/.local/share/pnpm/store
             - ~/.m2
-          key: cljs-{{ checksum "deps.edn" }}-{{ checksum "package.json" }}
+          key: cljs-{{ checksum "deps.edn" }}-{{ checksum "pnpm-lock.yaml" }}
   clj:
     docker:
       - image: cimg/clojure:1.12.0-openjdk-21.0-browsers
